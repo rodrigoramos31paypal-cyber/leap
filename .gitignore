@@ -36,3 +36,6 @@ next-env.d.ts
 # IDE
 .vscode/
 .idea/
+
+.perf-audit-backup/
+public/images/.orig_backup/

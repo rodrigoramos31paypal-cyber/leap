@@ -96,37 +96,7 @@ async function ClientList({ q, tab, page }: { q: string; tab: Tab; page: number 
     clients = (data ?? []) as ClientRow[];
     total = count ?? clients.length;
   } else if (tab === "upcoming" || tab === "past") {
-    const nowIso = new Date().toISOString();
-    let bq = supabase
-      .from("bookings")
-      .select("client_id, starts_at")
-      .in("trainer_id", trainerScope)
-      .in("status", ["booked", "confirmed"]);
-    if (tab === "upcoming") {
-      bq = bq.gte("starts_at", nowIso).order("starts_at", { ascending: true });
-    } else {
-      bq = bq.lt("starts_at", nowIso).order("starts_at", { ascending: false });
-    }
-    const { data: bookings } = await bq.limit(1000);
-
-    const orderedIds: string[] = [];
-    const seen = new Set<string>();
-    for (const b of (bookings ?? []) as any[]) {
-      if (seen.has(b.client_id)) continue;
-      seen.add(b.client_id);
-      orderedIds.push(b.client_id);
-    }
-    total = orderedIds.length;
-    const pageIds = orderedIds.slice(from, from + PAGE_SIZE);
-
-    if (pageIds.length > 0) {
-      const { data: profs } = await supabase
-        .from("profiles")
-        .select("id, full_name, email, phone")
-        .in("id", pageIds);
-      const map = new Map((profs ?? []).map((p: any) => [p.id, p]));
-      clients = pageIds.map((id) => map.get(id)).filter(Boolean) as ClientRow[];
-    }
+    ({ clients, total } = await loadScopedClientPage(tab, trainerIds, trainerScope, from));
   } else if (tab === "new") {
     const { data, count } = await supabase
       .from("profiles")
@@ -138,44 +108,7 @@ async function ClientList({ q, tab, page }: { q: string; tab: Tab; page: number 
     total = count ?? clients.length;
   } else {
     // tab === "esgotar"
-    const { data: rows } = await supabase
-      .from("purchases")
-      .select("client_id, sessions_remaining, expires_at")
-      .in("trainer_id", trainerScope)
-      .eq("status", "confirmed");
-    const now = Date.now();
-    const totalsByClient = new Map<string, number>();
-    for (const r of (rows ?? []) as any[]) {
-      if (r.expires_at && new Date(r.expires_at).getTime() < now) continue;
-      totalsByClient.set(
-        r.client_id,
-        (totalsByClient.get(r.client_id) ?? 0) + Number(r.sessions_remaining ?? 0),
-      );
-    }
-    const { data: anyPurchases } = await supabase
-      .from("purchases")
-      .select("client_id")
-      .in("trainer_id", trainerScope);
-    for (const r of (anyPurchases ?? []) as any[]) {
-      if (!totalsByClient.has(r.client_id)) {
-        totalsByClient.set(r.client_id, 0);
-      }
-    }
-    const lowList = Array.from(totalsByClient.entries())
-      .filter(([_, n]) => n <= 2)
-      .sort((a, b) => a[1] - b[1])
-      .map(([id]) => id);
-    total = lowList.length;
-    const pageIds = lowList.slice(from, from + PAGE_SIZE);
-
-    if (pageIds.length > 0) {
-      const { data: profs } = await supabase
-        .from("profiles")
-        .select("id, full_name, email, phone")
-        .in("id", pageIds);
-      const map = new Map((profs ?? []).map((p: any) => [p.id, p]));
-      clients = pageIds.map((id) => map.get(id)).filter(Boolean) as ClientRow[];
-    }
+    ({ clients, total } = await loadScopedClientPage("esgotar", trainerIds, trainerScope, from));
   }
 
   const ids = clients.map((c) => c.id);
@@ -240,6 +173,133 @@ async function ClientList({ q, tab, page }: { q: string; tab: Tab; page: number 
       />
     </>
   );
+}
+
+// ════════════════════════════════════════════════════════════════
+// PERF: páginas "upcoming/past/esgotar" — agregação + paginação feita
+// no Postgres (migration 0024). Devolve a página de client_ids + total;
+// o resto (perfis + chip de sessões) mantém-se igual a jusante.
+//
+// SEGURANÇA/ROBUSTEZ: se a RPC ainda não existir (migration não aplicada)
+// ou falhar por qualquer motivo, caímos para a lógica antiga em JS —
+// idêntica ao comportamento anterior. Zero breakage no deploy.
+// ════════════════════════════════════════════════════════════════
+async function loadScopedClientPage(
+  tab: "upcoming" | "past" | "esgotar",
+  trainerIds: string[],
+  trainerScope: string[],
+  from: number,
+): Promise<{ clients: ClientRow[]; total: number }> {
+  const supabase = createClient();
+  const { pageIds, total } = await getScopedPageIds(tab, trainerIds, trainerScope, from);
+
+  let clients: ClientRow[] = [];
+  if (pageIds.length > 0) {
+    const { data: profs } = await supabase
+      .from("profiles")
+      .select("id, full_name, email, phone")
+      .in("id", pageIds);
+    const map = new Map((profs ?? []).map((p: any) => [p.id, p]));
+    clients = pageIds.map((id) => map.get(id)).filter(Boolean) as ClientRow[];
+  }
+  return { clients, total };
+}
+
+async function getScopedPageIds(
+  tab: "upcoming" | "past" | "esgotar",
+  trainerIds: string[],
+  trainerScope: string[],
+  from: number,
+): Promise<{ pageIds: string[]; total: number }> {
+  const supabase = createClient();
+  try {
+    // `as any`: estas RPCs ainda não estão nos tipos gerados do Supabase.
+    // O runtime é correcto; evitamos só novos erros de `tsc`.
+    if (tab === "esgotar") {
+      const { data, error } = await (supabase as any).rpc("clients_low_sessions", {
+        p_trainer_ids: trainerIds,
+        p_offset: from,
+        p_limit: PAGE_SIZE,
+      });
+      if (error) throw error;
+      const rows = (data ?? []) as Array<{ client_id: string; total_count: number }>;
+      return { pageIds: rows.map((r) => r.client_id), total: Number(rows[0]?.total_count ?? 0) };
+    }
+    const { data, error } = await (supabase as any).rpc("clients_by_booking", {
+      p_trainer_ids: trainerIds,
+      p_upcoming: tab === "upcoming",
+      p_offset: from,
+      p_limit: PAGE_SIZE,
+    });
+    if (error) throw error;
+    const rows = (data ?? []) as Array<{ client_id: string; total_count: number }>;
+    return { pageIds: rows.map((r) => r.client_id), total: Number(rows[0]?.total_count ?? 0) };
+  } catch {
+    // Fallback — lógica original (idêntica ao comportamento anterior).
+    return getScopedPageIdsFallback(tab, trainerScope, from);
+  }
+}
+
+async function getScopedPageIdsFallback(
+  tab: "upcoming" | "past" | "esgotar",
+  trainerScope: string[],
+  from: number,
+): Promise<{ pageIds: string[]; total: number }> {
+  const supabase = createClient();
+
+  if (tab === "upcoming" || tab === "past") {
+    const nowIso = new Date().toISOString();
+    let bq = supabase
+      .from("bookings")
+      .select("client_id, starts_at")
+      .in("trainer_id", trainerScope)
+      .in("status", ["booked", "confirmed"]);
+    if (tab === "upcoming") {
+      bq = bq.gte("starts_at", nowIso).order("starts_at", { ascending: true });
+    } else {
+      bq = bq.lt("starts_at", nowIso).order("starts_at", { ascending: false });
+    }
+    const { data: bookings } = await bq.limit(1000);
+
+    const orderedIds: string[] = [];
+    const seen = new Set<string>();
+    for (const b of (bookings ?? []) as any[]) {
+      if (seen.has(b.client_id)) continue;
+      seen.add(b.client_id);
+      orderedIds.push(b.client_id);
+    }
+    return { pageIds: orderedIds.slice(from, from + PAGE_SIZE), total: orderedIds.length };
+  }
+
+  // esgotar
+  const { data: rows } = await supabase
+    .from("purchases")
+    .select("client_id, sessions_remaining, expires_at")
+    .in("trainer_id", trainerScope)
+    .eq("status", "confirmed");
+  const now = Date.now();
+  const totalsByClient = new Map<string, number>();
+  for (const r of (rows ?? []) as any[]) {
+    if (r.expires_at && new Date(r.expires_at).getTime() < now) continue;
+    totalsByClient.set(
+      r.client_id,
+      (totalsByClient.get(r.client_id) ?? 0) + Number(r.sessions_remaining ?? 0),
+    );
+  }
+  const { data: anyPurchases } = await supabase
+    .from("purchases")
+    .select("client_id")
+    .in("trainer_id", trainerScope);
+  for (const r of (anyPurchases ?? []) as any[]) {
+    if (!totalsByClient.has(r.client_id)) {
+      totalsByClient.set(r.client_id, 0);
+    }
+  }
+  const lowList = Array.from(totalsByClient.entries())
+    .filter(([_, n]) => n <= 2)
+    .sort((a, b) => a[1] - b[1])
+    .map(([id]) => id);
+  return { pageIds: lowList.slice(from, from + PAGE_SIZE), total: lowList.length };
 }
 
 function TabLink({ current, value, label }: { current: Tab; value: Tab; label: string }) {

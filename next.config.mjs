@@ -1,6 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // PERF: serve modern formats from the Vercel image optimizer. AVIF is
+  // opt-in (Next defaults to webp only); adding it shaves ~20-30% off the
+  // logo lock-ups for supporting browsers. Pure delivery optimization —
+  // next/image falls back to png/webp automatically when unsupported.
+  images: {
+    formats: ["image/avif", "image/webp"],
+  },
   // Pre-existing supabase typed-client errors leak from postgrest-js v2.108
   // package drift after the latest npm install. Runtime behaviour is correct
   // (JS is untyped at runtime); only `tsc --noEmit` complains. We unblock
@@ -9,8 +16,8 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   // Pre-existing react/no-unescaped-entities lint errors em strings PT
-  // (aspas a marcar termos como "actual"). Não afectam runtime; só
-  // bloqueiam o build. Limpar a dívida depois — por agora, unblock.
+  // (aspas a marcar termos como "actual"). Nao afectam runtime; so
+  // bloqueiam o build. Limpar a divida depois — por agora, unblock.
   eslint: {
     ignoreDuringBuilds: true,
   },
