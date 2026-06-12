@@ -97,7 +97,9 @@ export async function GET(
   const events: Event[] = [];
 
   if (profile.role === "trainer" || profile.role === "owner") {
-    // Trainer: descobre o(s) trainer_id que o profile representa.
+    // Scope: o feed é pessoal — owner E trainer só veem o que está
+    // marcado contra a sua própria conta. Owners que queiram ver as
+    // sessões dos outros trainers usam a app, não o feed do telemóvel.
     const { data: trainerRows } = await admin
       .from("trainers")
       .select("id")
