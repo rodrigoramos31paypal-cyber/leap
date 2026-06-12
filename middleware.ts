@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 import { rateLimit, getRequestIp, type RateLimitKind } from "@/lib/rate-limit";
+import { generateNonce, applyCsp } from "@/lib/security-headers";
 
 // ────────────────────────────────────────────────────────────────
 // Rate limit map (H1) — path prefix → bucket kind.
@@ -37,14 +38,24 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // H2: gera nonce CSP por request. O nonce viaja:
+  //   • via request header `x-nonce` → server components (layout)
+  //     leem-no com `headers()` e aplicam ao `<script>` inline.
+  //   • via response header CSP `script-src 'nonce-X' 'strict-dynamic'`
+  //     → browser executa só scripts com o nonce certo (e os que eles
+  //     carregam, via strict-dynamic).
+  const nonce = generateNonce();
+
   // PERF: prefetch RSC requests (next/link na bottom-nav, fired quando os
   // links entram em viewport) tambem passam por middleware. Nao ha motivo
   // para revalidar a sessao num prefetch — a navegacao real valida-a.
-  // Saltamos directos.
+  // Saltamos directos (mas continuamos a aplicar CSP — não custa nada).
   if (request.headers.get("next-router-prefetch") === "1") {
-    return NextResponse.next();
+    return applyCsp(NextResponse.next(), nonce);
   }
-  return await updateSession(request);
+
+  const response = await updateSession(request, { "x-nonce": nonce });
+  return applyCsp(response, nonce);
 }
 
 export const config = {

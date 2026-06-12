@@ -26,6 +26,16 @@ const nextConfig = {
       bodySizeLimit: "2mb",
     },
   },
+  // ──────────────────────────────────────────────────────────────
+  // H2 do audit · security headers
+  //
+  // Estes são os headers ESTÁTICOS que o Vercel pode setar a nível
+  // de edge (sem precisar do middleware). O CSP é dinâmico (depende
+  // de um nonce por request) e vive em `middleware.ts`.
+  //
+  // Headers omitidos aqui (geridos em middleware):
+  //   • Content-Security-Policy — nonce-based
+  // ──────────────────────────────────────────────────────────────
   headers: async () => [
     {
       source: "/manifest.json",
@@ -37,6 +47,34 @@ const nextConfig = {
         { key: "Content-Type", value: "application/javascript; charset=utf-8" },
         { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
         { key: "Service-Worker-Allowed", value: "/" },
+      ],
+    },
+    {
+      // Aplica-se a TODAS as rotas. Os assets estáticos do _next/static
+      // recebem-nos na mesma — não há razão para os excluir.
+      source: "/:path*",
+      headers: [
+        // HSTS: força HTTPS por 2 anos + subdomínios + preload list.
+        // Só faz efeito quando servido sob HTTPS (Vercel sempre).
+        { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
+        // Bloqueia embed em iframes (clickjacking sobre botões de
+        // cancelar/atribuir/etc.). Redundante com `frame-ancestors 'none'`
+        // no CSP mas mantemos para browsers antigos.
+        { key: "X-Frame-Options", value: "DENY" },
+        // Impede o browser de "adivinhar" Content-Type → bloqueia
+        // ataques de MIME-sniff que dependem de servir .json com
+        // payload script.
+        { key: "X-Content-Type-Options", value: "nosniff" },
+        // Não envia o URL completo como Referer para domínios
+        // externos — só o origin. Protege PII em query strings.
+        { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        // Desactiva APIs do browser que não usamos. Reduz superfície
+        // se um XSS escapar ao CSP. `interest-cohort=()` opta-out do
+        // FLoC do Chrome.
+        { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()" },
+        // Bloqueia que browsers velhos exponham informação cross-origin
+        // sobre o documento.
+        { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
       ],
     },
   ],
