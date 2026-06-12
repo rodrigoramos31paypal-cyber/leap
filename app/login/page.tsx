@@ -29,7 +29,7 @@ export default async function LoginPage({
           width={500}
           height={375}
           priority
-          className="h-auto w-72 dark:invert sm:w-80"
+          className="h-auto w-80 dark:invert sm:w-[22rem]"
         />
       </Link>
 

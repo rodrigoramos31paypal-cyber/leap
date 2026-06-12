@@ -8,15 +8,19 @@ export default function RegisterPage({
   searchParams: { error?: string; success?: string };
 }) {
   return (
-    <main className="flex min-h-screen flex-col items-center bg-bone-50 p-6 pt-16 sm:pt-24 dark:bg-ink-900">
-      <Link href="/" className="mb-10 flex flex-col items-center gap-2">
+    // Mobile: padding-top moderado para não bater na barra do teclado
+    //         quando o user toca no input.
+    // Desktop (sm+): justify-center vertical para o card aterrar na
+    //                metade superior do viewport sem ficar colado ao topo.
+    <main className="flex min-h-screen flex-col items-center bg-bone-50 p-6 pt-12 dark:bg-ink-900 sm:justify-center sm:pt-6">
+      <Link href="/" className="mb-6 flex flex-col items-center gap-2 sm:mb-8">
         <Image
           src="/images/logo-slogan.png"
           alt="LEAP-FITNESS STUDIO"
           width={500}
           height={375}
           priority
-          className="h-auto w-96 dark:invert"
+          className="h-auto w-80 dark:invert sm:w-[22rem]"
         />
       </Link>
 
