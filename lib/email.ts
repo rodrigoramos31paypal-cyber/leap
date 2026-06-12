@@ -1,0 +1,159 @@
+// ════════════════════════════════════════════════════════════════
+// Email dispatcher · Resend
+// ════════════════════════════════════════════════════════════════
+// Liga via NOTIFICATIONS_EMAIL_ENABLED + RESEND_API_KEY no .env.local.
+// Se não configurado, sendEmail() é no-op (loga e segue).
+
+type SendArgs = {
+  to: string;
+  subject: string;
+  html: string;
+  text?: string;
+  replyTo?: string;
+};
+
+export function emailEnabled(): boolean {
+  return (
+    process.env.NOTIFICATIONS_EMAIL_ENABLED === "true" &&
+    !!process.env.RESEND_API_KEY
+  );
+}
+
+export async function sendEmail(args: SendArgs): Promise<{ ok: boolean; error?: string }> {
+  if (!emailEnabled()) {
+    if (process.env.NODE_ENV !== "production") {
+      // eslint-disable-next-line no-console
+      console.log("[email] skipped (disabled):", args.subject, "→", args.to);
+    }
+    return { ok: false, error: "disabled" };
+  }
+
+  const from = process.env.NOTIFICATION_FROM_EMAIL ?? "no-reply@leap-fitness.pt";
+
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      },
+      body: JSON.stringify({
+        from,
+        to: args.to,
+        subject: args.subject,
+        html: args.html,
+        text: args.text,
+        reply_to: args.replyTo,
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      return { ok: false, error: `${res.status} ${body}` };
+    }
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err?.message ?? "fetch_failed" };
+  }
+}
+
+// ─── Templates ───────────────────────────────────────────────────────
+
+function shell(title: string, body: string) {
+  const appName = process.env.NEXT_PUBLIC_APP_NAME ?? "LEAP-FITNESS STUDIO";
+  return `<!doctype html>
+<html><body style="margin:0;padding:0;background:#faf8f4;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;color:#1a1a1a">
+<table width="100%" cellpadding="0" cellspacing="0" style="padding:24px 16px">
+  <tr><td align="center">
+    <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#fff;border:1px solid #e6e3dc;border-radius:12px;overflow:hidden">
+      <tr><td style="padding:24px 28px;border-bottom:1px solid #f1ede4">
+        <div style="font-weight:700;font-size:14px;letter-spacing:.04em">${escapeHtml(appName)}</div>
+      </td></tr>
+      <tr><td style="padding:28px">
+        <h1 style="margin:0 0 12px 0;font-size:20px;font-weight:800">${escapeHtml(title)}</h1>
+        ${body}
+      </td></tr>
+      <tr><td style="padding:18px 28px;background:#faf8f4;color:#7a7466;font-size:11px;line-height:1.5">
+        Este é um email automático. Se tiveres dúvidas responde a esta mensagem.
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>`;
+}
+
+function escapeHtml(s: string) {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
+}
+
+export const emailTemplates = {
+  bookingCreated(args: { clientName: string; when: string; type: string }) {
+    return {
+      subject: "Sessão marcada",
+      html: shell(
+        "Sessão marcada",
+        `<p style="margin:0 0 10px">Olá ${escapeHtml(args.clientName)},</p>
+         <p style="margin:0 0 10px">A tua sessão <strong>${escapeHtml(args.type)}</strong> ficou marcada para <strong>${escapeHtml(args.when)}</strong>.</p>
+         <p style="margin:0 0 0">Vê as tuas sessões e próximas marcações no portal.</p>`,
+      ),
+      text: `Sessão marcada para ${args.when} (${args.type}).`,
+    };
+  },
+  bookingCancelled(args: { clientName: string; when: string; refunded: boolean }) {
+    return {
+      subject: "Sessão cancelada",
+      html: shell(
+        "Sessão cancelada",
+        `<p style="margin:0 0 10px">Olá ${escapeHtml(args.clientName)},</p>
+         <p style="margin:0 0 10px">A tua sessão de <strong>${escapeHtml(args.when)}</strong> foi cancelada.</p>
+         <p style="margin:0">${args.refunded ? "A sessão foi devolvida ao teu saldo." : "Por cancelamento tardio, a sessão não foi devolvida."}</p>`,
+      ),
+      text: `Sessão de ${args.when} cancelada. ${args.refunded ? "Sessão devolvida." : "Sem devolução."}`,
+    };
+  },
+  bookingConfirmed(args: { clientName: string; when: string }) {
+    return {
+      subject: "Presença confirmada",
+      html: shell(
+        "Presença confirmada",
+        `<p style="margin:0 0 10px">Olá ${escapeHtml(args.clientName)},</p>
+         <p style="margin:0">A tua sessão de <strong>${escapeHtml(args.when)}</strong> foi confirmada pelo treinador. Bom trabalho!</p>`,
+      ),
+      text: `Sessão de ${args.when} confirmada.`,
+    };
+  },
+  purchaseConfirmed(args: { clientName: string; packName: string; sessions: number }) {
+    return {
+      subject: "Pack ativo",
+      html: shell(
+        "Pack ativo",
+        `<p style="margin:0 0 10px">Olá ${escapeHtml(args.clientName)},</p>
+         <p style="margin:0 0 10px">O pack <strong>${escapeHtml(args.packName)}</strong> foi ativado.</p>
+         <p style="margin:0"><strong>${args.sessions} sessões</strong> disponíveis para marcar.</p>`,
+      ),
+      text: `${args.packName} ativo (${args.sessions} sessões).`,
+    };
+  },
+  adminBookingCreated(args: { clientName: string; when: string; type: string }) {
+    return {
+      subject: "Nova marcação",
+      html: shell(
+        "Nova marcação no portal",
+        `<p style="margin:0 0 10px">${escapeHtml(args.clientName)} marcou uma sessão <strong>${escapeHtml(args.type)}</strong>.</p>
+         <p style="margin:0">Horário: <strong>${escapeHtml(args.when)}</strong></p>`,
+      ),
+      text: `${args.clientName} marcou ${args.type} para ${args.when}.`,
+    };
+  },
+  adminPurchasePending(args: { clientName: string; packName: string; amountEur: string }) {
+    return {
+      subject: "Pagamento pendente",
+      html: shell(
+        "Pagamento pendente de confirmação",
+        `<p style="margin:0 0 10px">${escapeHtml(args.clientName)} iniciou a compra <strong>${escapeHtml(args.packName)}</strong> (${escapeHtml(args.amountEur)}).</p>
+         <p style="margin:0">Confirma o recebimento em /admin/pagamentos.</p>`,
+      ),
+      text: `${args.clientName} → ${args.packName} (${args.amountEur}). Confirmar em /admin/pagamentos.`,
+    };
+  },
+};

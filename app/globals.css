@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 250 250 247;
+  --foreground: 10 10 10;
+  --primary: 207 179 37;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  background: rgb(var(--background));
+  color: rgb(var(--foreground));
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Reserva sempre o espaço da scrollbar vertical, mesmo em páginas curtas.
+   Sem isto, páginas que cabem no viewport (ex: /login, /recuperar) ficam
+   ~8px mais largas que páginas com scroll (ex: /registar), e qualquer
+   elemento centrado (logo) parece "saltar" ao mudar de página. */
+html {
+  scrollbar-gutter: stable;
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 focus-visible:ring-offset-2;
+  }
+  .btn-primary {
+    @apply btn bg-ink-900 text-bone-50 hover:bg-ink-700 active:bg-ink-800 dark:bg-bone-50 dark:text-ink-900 dark:hover:bg-bone-100 dark:active:bg-bone-200;
+  }
+  .btn-gold {
+    @apply btn bg-gold-400 text-ink-900 hover:bg-gold-300 active:bg-gold-500 font-semibold;
+  }
+  .btn-outline {
+    @apply btn border border-ink-900/15 bg-transparent text-ink-900 hover:bg-ink-900/5 dark:border-white/15 dark:text-bone-50 dark:hover:bg-white/10;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-ink-900 hover:bg-ink-900/5 dark:text-bone-50 dark:hover:bg-white/10;
+  }
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-700;
+  }
+  .card {
+    @apply rounded-xl border border-ink-900/10 bg-white shadow-soft dark:border-white/10 dark:bg-ink-800 dark:text-bone-50;
+  }
+  .card-dark {
+    @apply rounded-xl border border-white/5 bg-ink-900 text-bone-50;
+  }
+  .input {
+    @apply w-full rounded-lg border border-ink-900/15 bg-white px-3.5 py-2.5 text-sm text-ink-900 placeholder-ink-500/60 focus:border-gold-400 focus:outline-none focus:ring-2 focus:ring-gold-400/30 dark:border-white/15 dark:bg-ink-800 dark:text-bone-50 dark:placeholder-bone-100/40;
+  }
+  .label {
+    @apply block text-xs font-medium uppercase tracking-wide text-ink-500 mb-1.5 dark:text-bone-100/70;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  .chip-gold {
+    @apply chip bg-gold-100 text-gold-700;
+  }
+  .chip-ok {
+    @apply chip bg-emerald-100 text-emerald-700;
+  }
+  .chip-warn {
+    @apply chip bg-amber-100 text-amber-800;
+  }
+  .chip-danger {
+    @apply chip bg-red-100 text-red-700;
+  }
+  .chip-mute {
+    @apply chip bg-ink-900/5 text-ink-600;
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Dark mode · cobertura ampla para utilities `text-ink-*` usadas
+   por toda a app sem ter de adicionar `dark:` em cada componente.
+   ────────────────────────────────────────────────────────────── */
+.dark .text-ink-900 { color: #FAFAF7; }
+.dark .text-ink-700 { color: #F2F1EA; }
+.dark .text-ink-600 { color: rgb(242 241 234 / 0.85); }
+.dark .text-ink-500 { color: rgb(242 241 234 / 0.65); }
+.dark .hover\:text-ink-900:hover { color: #FAFAF7; }
+
+/* Bone backgrounds e bordes claros precisam de inverter para escuros */
+.dark .bg-bone-50 { background-color: #0A0A0A; }
+.dark .bg-bone-100 { background-color: #1A1A1A; }
+.dark .bg-bone-200 { background-color: #262626; }
+.dark .border-ink-900\/5 { border-color: rgb(255 255 255 / 0.05); }
+.dark .border-ink-900\/10 { border-color: rgb(255 255 255 / 0.1); }
+.dark .border-ink-900\/15 { border-color: rgb(255 255 255 / 0.15); }
+
+/* Safe area for iOS PWA */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .safe-bottom {
+    padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
+  }
+  .safe-top {
+    padding-top: max(env(safe-area-inset-top), 0.5rem);
+  }
+}

@@ -1,0 +1,17 @@
+-- ════════════════════════════════════════════════════════════════
+-- 0023 · (intencionalmente vazia)
+--
+-- Originalmente esta migration ia substituir "crédito" por "sessão"
+-- em mensagens user-facing de `create_booking`, mas verificámos que
+-- esse trabalho já estava feito em migrations anteriores:
+--   - 0017_recurring_bookings.sql · body "Sessão descontada."
+--   - 0020_auto_confirm_bookings.sql · "Sem sessões para este treinador…"
+--     e bodies sem qualquer menção a "crédito".
+--
+-- A única string user-facing com "crédito" que sobrava era o body de
+-- `cancel_booking` — já tratado dentro de 0022 (reescreve a função
+-- completa com a terminologia "sessão").
+--
+-- Migration mantida para preservar a numeração sequencial.
+-- ════════════════════════════════════════════════════════════════
+select 1;
