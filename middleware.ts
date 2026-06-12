@@ -46,14 +46,19 @@ export async function middleware(request: NextRequest) {
   //     carregam, via strict-dynamic).
   const nonce = generateNonce();
 
-  // PERF: prefetch RSC requests (next/link na bottom-nav, fired quando os
-  // links entram em viewport) tambem passam por middleware. Nao ha motivo
-  // para revalidar a sessao num prefetch — a navegacao real valida-a.
-  // Saltamos directos (mas continuamos a aplicar CSP — não custa nada).
-  if (request.headers.get("next-router-prefetch") === "1") {
-    return applyCsp(NextResponse.next(), nonce);
-  }
-
+  // H3 (audit): ANTERIORMENTE saltávamos `updateSession` se o header
+  // `next-router-prefetch: 1` estivesse presente, por motivos de PERF.
+  // PROBLEMA: o header é trivialmente forjável — um atacante com
+  // `curl -H "next-router-prefetch: 1"` escapava completamente à
+  // validação de sessão no middleware. Rotas sem layout (server
+  // actions, API routes) ficavam dependentes só do auth check
+  // interno; RSC streams pré-renderizados podiam ser servidos sem
+  // a sessão ser revalidada.
+  //
+  // Decisão: corremos sempre o `updateSession`. O custo é uma chamada
+  // ao Supabase auth server por request, com React `cache()` a
+  // deduplicar dentro do mesmo request. Para o volume do LEAP, é
+  // negligível comparado com o ganho de segurança.
   const response = await updateSession(request, { "x-nonce": nonce });
   return applyCsp(response, nonce);
 }
