@@ -1,7 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
-import { saveSettingsAction, saveTrainerBioAction, addAvailabilityAction, deleteAvailabilityAction, addBlockAction, deleteBlockAction } from "./actions";
+import { saveSettingsAction, saveTrainerBioAction, addAvailabilityAction, deleteAvailabilityAction, deleteBlockAction } from "./actions";
 import { googleEnabled, microsoftEnabled } from "@/lib/calendar-sync";
 import { getCurrentTrainer } from "@/lib/trainer";
+import { CopyButton } from "@/components/copy-button";
+import { Smartphone } from "lucide-react";
 
 const DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
@@ -24,6 +26,19 @@ export default async function DefinicoesPage({
     .eq("user_id", user?.id ?? "");
   const googleConnected = integrations?.some((i) => i.provider === "google");
   const microsoftConnected = integrations?.some((i) => i.provider === "microsoft");
+
+  // Per-user iCal feed token (subscrição no telemóvel).
+  const { data: feedRow } = await supabase
+    .from("profiles")
+    .select("calendar_feed_token")
+    .eq("id", user?.id ?? "")
+    .maybeSingle();
+  const feedToken = (feedRow as any)?.calendar_feed_token as string | undefined;
+  const appBase = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+  const feedHttpUrl = feedToken && appBase
+    ? `${appBase}/api/calendar/feed/${feedToken}.ics`
+    : null;
+  const feedWebcalUrl = feedHttpUrl ? feedHttpUrl.replace(/^https?:\/\//, "webcal://") : null;
 
   const [
     { data: settings },
@@ -183,19 +198,28 @@ export default async function DefinicoesPage({
             connectHref="/api/integrations/microsoft/connect"
             disconnectAction="/api/integrations/microsoft/disconnect"
           />
+          <PhoneCalendarRow
+            httpUrl={feedHttpUrl}
+            webcalUrl={feedWebcalUrl}
+          />
         </div>
       </div>
 
       <div className="card p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Bloqueios / férias</h2>
+        <p className="mt-1 text-xs text-ink-500">
+          Para adicionar novos bloqueios, usa <a href="/admin/agenda" className="font-medium text-ink-900 underline hover:no-underline">Agenda → Marcar-me indisponível</a>. Aqui só removes os existentes.
+        </p>
         <ul className="mt-3 space-y-2">
           {(blocks ?? []).length === 0 && <li className="text-sm text-ink-500">Sem bloqueios.</li>}
           {(blocks ?? []).map((b) => (
-            <li key={b.id} className="flex items-center justify-between border-b border-ink-900/5 pb-2 text-sm last:border-0">
-              <div>
-                {new Date(b.starts_at).toLocaleString("pt-PT", { hour12: false })} →{" "}
-                {new Date(b.ends_at).toLocaleString("pt-PT", { hour12: false })}
-                {b.reason && <span className="text-ink-500"> · {b.reason}</span>}
+            <li key={b.id} className="flex items-center justify-between gap-3 border-b border-ink-900/5 pb-2 text-sm last:border-0">
+              <div className="min-w-0">
+                <div className="tabular-nums">
+                  {new Date(b.starts_at).toLocaleString("pt-PT", { hour12: false })} →{" "}
+                  {new Date(b.ends_at).toLocaleString("pt-PT", { hour12: false })}
+                </div>
+                {b.reason && <div className="text-xs text-ink-500">{b.reason}</div>}
               </div>
               <form action={deleteBlockAction}>
                 <input type="hidden" name="id" value={b.id} />
@@ -204,13 +228,6 @@ export default async function DefinicoesPage({
             </li>
           ))}
         </ul>
-        <form action={addBlockAction} className="mt-4 grid gap-2 sm:grid-cols-4">
-          <input type="hidden" name="trainerId" value={trainer.id} />
-          <input name="starts_at" type="datetime-local" required className="input" />
-          <input name="ends_at" type="datetime-local" required className="input" />
-          <input name="reason" placeholder="Motivo" className="input" />
-          <button className="btn-primary">Adicionar</button>
-        </form>
       </div>
     </div>
   );
@@ -249,6 +266,78 @@ function IntegrationRow({
         </form>
       ) : (
         <a href={connectHref} className="btn-primary">Ligar</a>
+      )}
+    </div>
+  );
+}
+
+function PhoneCalendarRow({
+  httpUrl,
+  webcalUrl,
+}: {
+  httpUrl: string | null;
+  webcalUrl: string | null;
+}) {
+  // Linha de subscrição iCal para o calendário do telemóvel.
+  // Sem OAuth — basta o user adicionar o URL ao seu Calendário.
+  const disabled = !httpUrl || !webcalUrl;
+  return (
+    <div className="border-b border-ink-900/5 pb-3 last:border-0">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 text-sm font-medium">
+            <Smartphone size={14} className="text-ink-500" />
+            Calendário do telemóvel (iPhone / Android)
+          </div>
+          <div className="text-xs text-ink-500">
+            {disabled
+              ? "Indisponível: definir NEXT_PUBLIC_APP_URL no .env."
+              : "Subscreve esta URL no telemóvel para receber as sessões automaticamente."}
+          </div>
+        </div>
+        {webcalUrl && (
+          <a href={webcalUrl} className="btn-primary shrink-0">
+            Subscrever
+          </a>
+        )}
+      </div>
+
+      {httpUrl && (
+        <details className="mt-3 rounded-md border border-ink-900/10 bg-bone-50 p-3 text-xs dark:border-white/10 dark:bg-white/[0.02]">
+          <summary className="cursor-pointer font-medium text-ink-700 dark:text-bone-100">
+            Como subscrever passo a passo
+          </summary>
+
+          <div className="mt-3 space-y-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <code className="min-w-0 flex-1 break-all rounded bg-white px-2 py-1.5 text-[11px] text-ink-700 dark:bg-ink-900 dark:text-bone-100">
+                {httpUrl}
+              </code>
+              <CopyButton value={httpUrl} label="Copiar URL" />
+            </div>
+
+            <div>
+              <div className="font-semibold text-ink-700 dark:text-bone-100">iPhone</div>
+              <ol className="ml-4 list-decimal space-y-0.5 text-ink-500 dark:text-bone-100/70">
+                <li>Toca em <strong>Subscrever</strong> em cima (abre o app Calendário automaticamente), OU</li>
+                <li>Definições → Calendário → Contas → Adicionar conta → Outro → Adicionar Calendário Subscrito → cola o URL acima.</li>
+              </ol>
+            </div>
+
+            <div>
+              <div className="font-semibold text-ink-700 dark:text-bone-100">Android</div>
+              <ol className="ml-4 list-decimal space-y-0.5 text-ink-500 dark:text-bone-100/70">
+                <li>Abre <a href="https://calendar.google.com/calendar/r/settings/addbyurl" className="text-ink-900 underline dark:text-bone-50" target="_blank" rel="noopener noreferrer">calendar.google.com → Adicionar por URL</a> no telemóvel ou PC.</li>
+                <li>Cola o URL acima → Adicionar calendário.</li>
+                <li>O Google Calendar do telemóvel sincroniza-o ao fim de alguns minutos.</li>
+              </ol>
+            </div>
+
+            <p className="text-[11px] text-ink-500">
+              O telemóvel atualiza o feed periodicamente (≈ a cada hora). Não dá acesso à app — só leitura dos eventos.
+            </p>
+          </div>
+        </details>
       )}
     </div>
   );

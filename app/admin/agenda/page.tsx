@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { formatTime, BOOKING_STATUS } from "@/lib/utils";
 import { confirmAttendanceAction, markNoShowAction, cancelAdminAction, addBlockQuickAction, deleteBlockAction } from "./actions";
-import { ChevronLeft, ChevronRight, CalendarPlus, Ban, NotebookPen } from "lucide-react";
+import { ChevronLeft, ChevronRight, Ban, NotebookPen } from "lucide-react";
 import { NoteEditor } from "@/components/note-editor";
 import { getMyNotesMapForBookings } from "@/lib/notes";
 import { getCurrentTrainerId, getAccessibleTrainerIds } from "@/lib/trainer";
@@ -195,12 +195,6 @@ function BookingItem({ b, note }: { b: any; note?: { body: string } | null }) {
               Cancelar
             </button>
           </form>
-          <a
-            href={`/api/bookings/${b.id}/ics`}
-            className="rounded border border-ink-900/10 px-2 py-1 text-[10px] font-semibold text-ink-600 inline-flex items-center gap-1"
-          >
-            <CalendarPlus size={10} /> .ics
-          </a>
         </div>
       )}
       <details className="mt-2 border-t border-ink-900/10 pt-2">
@@ -561,7 +555,7 @@ function MonthView({ gridStart, anchor, bookings, blocks, reserved }: { gridStar
                 {dayBookings.slice(0, 3).map((b) => (
                   <div
                     key={b.id}
-                    className="truncate whitespace-nowrap rounded bg-gold-50 px-1 py-0.5 text-[10px] text-ink-900 tabular-nums"
+                    className="truncate whitespace-nowrap rounded bg-gold-50 px-0.5 py-0.5 text-[9px] leading-tight text-ink-900 tabular-nums sm:px-1 sm:text-[10px]"
                   >
                     <span>{formatTime(b.starts_at)}</span>
                     <span className="hidden sm:inline">
@@ -571,10 +565,10 @@ function MonthView({ gridStart, anchor, bookings, blocks, reserved }: { gridStar
                   </div>
                 ))}
                 {dayBookings.length > 3 && (
-                  <div className="text-[10px] text-ink-500">+{dayBookings.length - 3}</div>
+                  <div className="text-[9px] leading-tight text-ink-500 sm:text-[10px]">+{dayBookings.length - 3}</div>
                 )}
                 {dayBlocks.length > 0 && (
-                  <div className="truncate whitespace-nowrap rounded bg-red-50 px-1 py-0.5 text-[10px] text-red-700">
+                  <div className="truncate whitespace-nowrap rounded bg-red-50 px-0.5 py-0.5 text-[9px] leading-tight text-red-700 sm:px-1 sm:text-[10px]">
                     <span className="sm:hidden">{dayBlocks.length}× ind.</span>
                     <span className="hidden sm:inline">
                       {dayBlocks.length} bloqueio{dayBlocks.length > 1 ? "s" : ""}
@@ -582,7 +576,7 @@ function MonthView({ gridStart, anchor, bookings, blocks, reserved }: { gridStar
                   </div>
                 )}
                 {dayReserved.length > 0 && (
-                  <div className="truncate whitespace-nowrap rounded border border-dashed border-ink-900/20 bg-bone-100 px-1 py-0.5 text-[10px] text-ink-600">
+                  <div className="truncate whitespace-nowrap rounded border border-dashed border-ink-900/20 bg-bone-100 px-0.5 py-0.5 text-[9px] leading-tight text-ink-600 sm:px-1 sm:text-[10px]">
                     <span className="sm:hidden">{dayReserved.length}× res.</span>
                     <span className="hidden sm:inline">
                       {dayReserved.length} reservado{dayReserved.length > 1 ? "s" : ""}

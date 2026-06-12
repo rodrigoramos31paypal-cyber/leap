@@ -522,6 +522,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          calendar_feed_token: string
           created_at: string
           email: string
           full_name: string
@@ -532,6 +533,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          calendar_feed_token?: string
           created_at?: string
           email: string
           full_name: string
@@ -542,6 +544,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          calendar_feed_token?: string
           created_at?: string
           email?: string
           full_name?: string

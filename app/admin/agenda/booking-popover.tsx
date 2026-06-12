@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CalendarPlus, NotebookPen } from "lucide-react";
+import { NotebookPen } from "lucide-react";
 import { formatTime, BOOKING_STATUS } from "@/lib/utils";
 import { NoteEditor } from "@/components/note-editor";
 import { confirmAttendanceAction, markNoShowAction, cancelAdminAction } from "./actions";
@@ -135,12 +135,6 @@ export function BookingBlock({
                   </button>
                 </form>
               </details>
-              <a
-                href={`/api/bookings/${b.id}/ics`}
-                className="inline-flex items-center gap-1 rounded border border-ink-900/10 px-2 py-1 text-[10px] font-semibold text-ink-600"
-              >
-                <CalendarPlus size={10} /> .ics
-              </a>
             </div>
           )}
 
