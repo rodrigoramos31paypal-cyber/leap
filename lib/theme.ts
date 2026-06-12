@@ -9,7 +9,7 @@ import { cookies } from "next/headers";
 
 export type Theme = "light" | "dark";
 export const THEME_COOKIE = "leap_theme";
-export const DEFAULT_THEME: Theme = "dark";
+export const DEFAULT_THEME: Theme = "light";
 
 /** Lê a preferência do utilizador (server-side). */
 export function getTheme(): Theme {

@@ -149,7 +149,7 @@ async function Kpis({ year, month }: { year: number; month: number }) {
 
   return (
     <>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat icon={<TrendingUp size={16} />} label="Receita do mês" value={eur(revenue)} />
         <Stat icon={<Users size={16} />} label="Clientes ativos no mês" value={String(activeClients)} />
         <Stat icon={<Package size={16} />} label="Packs vendidos" value={String(packsSold)} />
@@ -162,7 +162,7 @@ async function Kpis({ year, month }: { year: number; month: number }) {
         />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat icon={<Users size={16} />} label="Total de clientes" value={String(totalClientsInScope)} />
         <Stat icon={<Calendar size={16} />} label="Sessões marcadas no mês" value={String(sessionsBooked)} />
         <Stat icon={<TrendingUp size={16} />} label="Receita média por cliente activo" value={eur(avgRevenuePerClient)} />
@@ -231,13 +231,16 @@ function Stat({
 }: {
   icon: React.ReactNode; label: string; value: string; accent?: "gold"; href?: string;
 }) {
+  // Mobile: 2 cards por linha → reduz padding, encolhe label e número
+  // para caber confortavelmente em ecrãs 360-390px. Em sm+ volta ao
+  // tamanho original (4 cards por linha em lg).
   const inner = (
-    <div className={`card p-4 ${accent === "gold" ? "border-gold-400 bg-gold-50" : ""}`}>
-      <div className="flex items-center justify-between text-ink-500">
-        <span className="text-xs uppercase tracking-wide">{label}</span>
+    <div className={`card p-3 sm:p-4 ${accent === "gold" ? "border-gold-400 bg-gold-50" : ""}`}>
+      <div className="flex items-start justify-between gap-2 text-ink-500">
+        <span className="text-[10px] uppercase tracking-wide leading-tight sm:text-xs">{label}</span>
         {icon}
       </div>
-      <div className="mt-2 font-display text-2xl font-bold">{value}</div>
+      <div className="mt-1.5 font-display text-xl font-bold sm:mt-2 sm:text-2xl">{value}</div>
     </div>
   );
   return href ? <Link href={href}>{inner}</Link> : inner;
