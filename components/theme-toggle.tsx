@@ -10,7 +10,7 @@ import { Moon, Sun } from "lucide-react";
 const COOKIE = "leap_theme";
 
 function readCurrent(): "light" | "dark" {
-  if (typeof document === "undefined") return "dark";
+  if (typeof document === "undefined") return "light";
   return document.documentElement.classList.contains("dark") ? "dark" : "light";
 }
 
@@ -30,7 +30,7 @@ export function ThemeToggle({
    *  "dark-surface" optimiza para superfícies escuras (landing/login). */
   tone?: "auto" | "dark-surface";
 }) {
-  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
 
   // Sincroniza com o estado real do <html> depois da hidratação.
   useEffect(() => {
