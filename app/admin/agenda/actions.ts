@@ -57,6 +57,27 @@ export async function deleteBlockAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   const supabase = createClient();
+
+  // SEC (C4): trainer_blocked_times não passa por RPC com scope check
+  // — a RLS de admin write deixa qualquer trainer/owner apagar
+  // qualquer bloqueio. Verificamos aqui que o bloqueio pertence a um
+  // trainer dentro do scope do caller. Sem este check, trainer A
+  // podia apagar bloqueios de trainer B só com o id.
+  const { data: blk } = await supabase
+    .from("trainer_blocked_times")
+    .select("trainer_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!blk) {
+    setFlash("Bloqueio não encontrado", "error");
+    return;
+  }
+  const accessible = await getAccessibleTrainerIds();
+  if (!accessible.includes((blk as any).trainer_id)) {
+    setFlash("Sem permissão para remover este bloqueio", "error");
+    return;
+  }
+
   await supabase.from("trainer_blocked_times").delete().eq("id", id);
   setFlash("Bloqueio removido");
   revalidatePath("/admin/agenda");

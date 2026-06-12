@@ -139,6 +139,17 @@ export async function createIfthenpayPayment({ purchaseId, method }: StartArgs):
  * Verifica callback IfthenPay (anti-phishing) e marca purchase como confirmada.
  * IfthenPay envia parâmetros via query string. O `key` recebido tem de bater
  * com o nosso IFTHENPAY_ANTI_PHISHING_KEY.
+ *
+ * SEC (C2 hardening — migration 0026):
+ *   1. A anti-phishing `key` é REMOVIDA do payload antes de persistir.
+ *      Antes ficava em `payments.gateway_payload` e a RLS de payments
+ *      deixava o próprio cliente lê-la → leak da credencial partilhada.
+ *   2. O `amount` é validado contra `payments.amount_cents` dentro da
+ *      RPC `confirm_ifthenpay_callback` (atómica, com FOR UPDATE).
+ *   3. Idempotência: callbacks repetidos no mesmo payment já pago
+ *      devolvem ok = true sem disparar `confirm_purchase` outra vez.
+ *   4. Anti-replay forte: o `FOR UPDATE` na RPC serializa pedidos
+ *      concorrentes para o mesmo orderId.
  */
 export async function handleIfthenpayCallback(params: URLSearchParams): Promise<{ ok: boolean; message?: string }> {
   const keys = requireKeys();
@@ -151,29 +162,45 @@ export async function handleIfthenpayCallback(params: URLSearchParams): Promise<
   const orderId = params.get("orderId") ?? params.get("OrderId") ?? "";
   if (!orderId) return { ok: false, message: "orderId em falta" };
 
+  // SEC: amount é OBRIGATÓRIO. IfthenPay envia em euros (string com `.`).
+  // Sem amount válido, a RPC recusa — não tem fallback inseguro.
+  const amountRaw = params.get("amount") ?? params.get("Amount") ?? "";
+  const amountEuros = Number(amountRaw);
+  if (!amountRaw || !Number.isFinite(amountEuros) || amountEuros <= 0) {
+    return { ok: false, message: "amount inválido" };
+  }
+  const amountCents = Math.round(amountEuros * 100);
+
+  // SEC: filtra a anti-phishing key (e variantes de case) ANTES de
+  // construir o payload que vai para a BD. Defesa em camadas: a RPC
+  // também não precisa do `key`, mas filtrar aqui garante que mesmo
+  // que um devolver futuro guarde o payload directamente, a key não
+  // viaja.
+  const safePayload: Record<string, string> = {};
+  for (const [k, v] of params.entries()) {
+    if (/^key$/i.test(k)) continue;
+    safePayload[k] = v;
+  }
+
   const supabase = createAdminClient();
-  const { data: payment } = await supabase
-    .from("payments")
-    .select("*, purchases:purchase_id(*)")
-    .eq("gateway_ref", orderId)
-    .eq("status", "pending")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .single();
+  const { data, error } = await supabase.rpc("confirm_ifthenpay_callback", {
+    p_order_id: orderId,
+    p_amount_cents: amountCents,
+    p_payload: safePayload as any,
+  });
 
-  if (!payment) return { ok: false, message: "Pagamento não encontrado" };
+  if (error) {
+    // Log server-side para alerting (Sentry/Vercel). Nunca expomos a
+    // razão exacta no body de resposta — atacante não precisa de saber
+    // se foi mismatch de amount, payment inexistente, etc.
+    console.error("[ifthenpay] callback rpc error:", error.message, { orderId });
+    return { ok: false, message: "Erro ao processar callback" };
+  }
 
-  await supabase
-    .from("payments")
-    .update({
-      status: "paid",
-      paid_at: new Date().toISOString(),
-      gateway_payload: Object.fromEntries(params.entries()),
-    })
-    .eq("id", payment.id);
-
-  // confirma compra
-  await supabase.rpc("confirm_purchase", { p_purchase_id: payment.purchase_id });
-
+  const result = (data ?? {}) as { ok?: boolean; reason?: string };
+  if (!result.ok) {
+    console.warn("[ifthenpay] callback rejeitado:", result.reason ?? "unknown", { orderId });
+    return { ok: false, message: "Callback rejeitado" };
+  }
   return { ok: true };
 }
