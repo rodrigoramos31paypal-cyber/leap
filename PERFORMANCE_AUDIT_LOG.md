@@ -104,3 +104,28 @@ Revert:
 - Note bodies were NOT lazy-fetched (an alternative optimization) because a failed
   lazy fetch could risk overwriting a note with an empty save — column narrowing
   was the safe win instead.
+
+---
+
+# Round 2 (2026-06-12) — perceived-navigation speed
+
+## 7. Added loading.tsx skeletons to 9 routes (perceived speed; additive, zero risk)
+Routes: admin/clientes/[id], admin/pagamentos, admin/relatorios, admin/notas,
+admin/equipa, admin/definicoes, app/historico, app/comprar, app/perfil.
+Next.js renders loading.tsx INSTANTLY on navigation while the server component
+fetches, so these pages now show a skeleton immediately instead of a blank wait.
+Purely additive (new files) — cannot affect existing behavior.
+Revert: delete the loading.tsx files in those folders.
+
+## 8. app/admin/clientes/[id]/page.tsx — parallelized data fetch
+The detail page ran 6 Supabase calls in series. Collapsed into:
+  - profile (must be first, for notFound check)
+  - wave 1 (Promise.all): trainerIds, credits, purchases, bookings
+  - wave 2 (Promise.all): packs (needs trainerIds), notesMap (needs bookings)
+Same data, same columns (select * left intact to avoid dropping a column the JSX
+uses) — only the execution is parallel now.
+Revert: git checkout eb22b9b -- app/admin/clientes/[id]/page.tsx
+
+## Verification (round 2)
+tsc --noEmit: total project errors unchanged at 250 (pre-existing baseline);
+zero new errors introduced. All new/edited files end cleanly, braces balanced.

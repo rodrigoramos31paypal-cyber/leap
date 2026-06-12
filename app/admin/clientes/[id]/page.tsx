@@ -21,33 +21,42 @@ export default async function ClientDetail({ params }: { params: { id: string } 
     notFound();
   }
   const profileId = profile.id;
-  const trainerIds = await getAccessibleTrainerIds();
 
-  const credits = await getClientCredits(profileId);
-  const { data: purchasesRaw } = await supabase
-    .from("purchases")
-    .select("*")
-    .eq("client_id", profileId)
-    .order("created_at", { ascending: false })
-    .limit(20);
+  // PERF: estas 4 chamadas sao independentes — antes corriam em serie
+  // (4 round-trips sequenciais). Agora em paralelo (1 vaga).
+  const [trainerIds, credits, { data: purchasesRaw }, { data: bookingsRaw }] =
+    await Promise.all([
+      getAccessibleTrainerIds(),
+      getClientCredits(profileId),
+      supabase
+        .from("purchases")
+        .select("*")
+        .eq("client_id", profileId)
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabase
+        .from("bookings")
+        .select("*")
+        .eq("client_id", profileId)
+        .order("starts_at", { ascending: false })
+        .limit(20),
+    ]);
   const purchases = (purchasesRaw ?? []) as any[];
-  const { data: bookingsRaw } = await supabase
-    .from("bookings")
-    .select("*")
-    .eq("client_id", profileId)
-    .order("starts_at", { ascending: false })
-    .limit(20);
   const bookings = (bookingsRaw ?? []) as any[];
-  const { data: packsRaw } = await supabase
-    .from("packs")
-    .select("id, name, session_type, sessions, price_cents, validity_days, trainer_id")
-    .in("trainer_id", trainerIds.length > 0 ? trainerIds : [""])
-    .eq("active", true)
-    .order("session_type")
-    .order("sort_order");
-  const packs = (packsRaw ?? []) as any[];
 
-  const notesMap = await getMyNotesMapForBookings(bookings.map((b) => b.id));
+  // 2a vaga: packs depende de trainerIds; notesMap depende de bookings.
+  // Independentes entre si — corremos em paralelo.
+  const [{ data: packsRaw }, notesMap] = await Promise.all([
+    supabase
+      .from("packs")
+      .select("id, name, session_type, sessions, price_cents, validity_days, trainer_id")
+      .in("trainer_id", trainerIds.length > 0 ? trainerIds : [""])
+      .eq("active", true)
+      .order("session_type")
+      .order("sort_order"),
+    getMyNotesMapForBookings(bookings.map((b) => b.id)),
+  ]);
+  const packs = (packsRaw ?? []) as any[];
 
   return (
     <div className="space-y-5">
