@@ -58,6 +58,10 @@ export async function updateSession(
     path.startsWith("/recuperar") ||
     path.startsWith("/auth") ||
     path.startsWith("/api/webhooks") ||
+    // iCal subscription feeds: autenticados pelo token UUID na URL.
+    // iOS Calendar / Google Calendar não enviam cookies de sessão, e
+    // o redirect para /login do middleware faz a validação falhar.
+    path.startsWith("/api/calendar/feed") ||
     path.startsWith("/manifest.json") ||
     path.startsWith("/sw.js") ||
     path.startsWith("/icons");

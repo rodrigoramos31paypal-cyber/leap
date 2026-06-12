@@ -186,9 +186,11 @@ export async function GET(
   return new NextResponse(ics, {
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",
-      // Não anexar como download — os clients de subscrição precisam
-      // de servir como conteúdo direto.
-      "Cache-Control": "public, max-age=300, s-maxage=300",
+      // Per-user via token → NÃO partilhar em CDN/proxy intermédio.
+      // private + no-store força o consumidor (iOS Calendar, Google
+      // Calendar) a manter a sua própria cache local com o ritmo
+      // sinalizado pelo REFRESH-INTERVAL dentro do ICS.
+      "Cache-Control": "private, max-age=0, must-revalidate",
     },
   });
 }
