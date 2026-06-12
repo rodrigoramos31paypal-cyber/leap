@@ -35,7 +35,11 @@ export default async function EquipaPage() {
         <summary className="cursor-pointer text-sm font-semibold inline-flex items-center gap-2">
           <Plus size={16} /> Adicionar trainer
         </summary>
-        <form action={addTrainerAction} className="mt-4 grid gap-3 sm:grid-cols-2">
+        {/* H4: addTrainerAction tipa estritamente Promise<{error?,ok?}>
+            (sem `| void`), portanto o cast directo dá TS2352 — usar
+            `as unknown as` para forçar. O return value não é consumido
+            por useFormState aqui. */}
+        <form action={addTrainerAction as unknown as (fd: FormData) => Promise<void>} className="mt-4 grid gap-3 sm:grid-cols-2">
           <div>
             <label className="label">Nome completo</label>
             <input name="full_name" required minLength={2} className="input" />

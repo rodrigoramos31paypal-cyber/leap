@@ -1,256 +1,1254 @@
-// ════════════════════════════════════════════════════════════════
-// Types da base de dados.
-// Após teres a BD montada, podes regerar este ficheiro com:
-//   npx supabase gen types typescript --project-id <id> > types/database.ts
-// ════════════════════════════════════════════════════════════════
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
 
-export type UserRole = "client" | "trainer" | "owner";
-export type SessionType = "individual" | "dupla";
-export type PurchaseStatus =
-  | "pending_payment"
-  | "awaiting_confirmation"
-  | "confirmed"
-  | "rejected"
-  | "cancelled";
-export type PaymentMethod =
-  | "manual_mbway"
-  | "manual_cash"
-  | "manual_transfer"
-  | "complimentary"
-  | "mbway"
-  | "multibanco"
-  | "card";
-export type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
-export type PaymentGateway = "manual" | "ifthenpay";
-export type BookingStatus = "booked" | "confirmed" | "cancelled" | "no_show";
-export type CreditReason =
-  | "purchase"
-  | "booking_deduction"
-  | "late_cancel"
-  | "no_show"
-  | "refund"
-  | "admin_adjust";
-
-export type Profile = {
-  id: string;
-  role: UserRole;
-  full_name: string;
-  email: string;
-  phone: string | null;
-  trainer_id: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-export type Trainer = {
-  id: string;
-  profile_id: string;
-  slug: string;
-  bio: string | null;
-  active: boolean;
-  created_at: string;
-  updated_at: string;
-};
-
-export type TrainerSettings = {
-  trainer_id: string;
-  slot_durations_min: number[];
-  default_slot_duration_min: number;
-  cancellation_window_hours: number;
-  default_pack_validity_days: number | null;
-  charge_late_cancel: boolean;
-  charge_no_show: boolean;
-  low_credits_threshold: number;
-  buffer_between_sessions_min: number;
-  auto_confirm_bookings: boolean;
-  updated_at: string;
-};
-
-export type TrainerAvailability = {
-  id: string;
-  trainer_id: string;
-  day_of_week: number;
-  start_time: string;
-  end_time: string;
-  active: boolean;
-  created_at: string;
-};
-
-export type TrainerBlockedTime = {
-  id: string;
-  trainer_id: string;
-  starts_at: string;
-  ends_at: string;
-  reason: string | null;
-  created_at: string;
-};
-
-export type Pack = {
-  id: string;
-  trainer_id: string;
-  name: string;
-  description: string | null;
-  session_type: SessionType;
-  sessions: number;
-  price_cents: number;
-  validity_days: number | null;
-  active: boolean;
-  sort_order: number;
-  created_at: string;
-  updated_at: string;
-};
-
-export type Purchase = {
-  id: string;
-  client_id: string;
-  trainer_id: string;
-  pack_id: string | null;
-  pack_snapshot: { name: string; sessions: number; price_cents: number; session_type: SessionType };
-  session_type: SessionType;
-  sessions_total: number;
-  sessions_remaining: number;
-  amount_cents: number;
-  status: PurchaseStatus;
-  payment_method: PaymentMethod;
-  expires_at: string | null;
-  confirmed_at: string | null;
-  confirmed_by: string | null;
-  rejection_reason: string | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-export type Payment = {
-  id: string;
-  purchase_id: string;
-  method: PaymentMethod;
-  amount_cents: number;
-  status: PaymentStatus;
-  gateway: PaymentGateway;
-  gateway_ref: string | null;
-  gateway_request_id: string | null;
-  gateway_payload: Record<string, unknown> | null;
-  paid_at: string | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-export type Booking = {
-  id: string;
-  client_id: string;
-  trainer_id: string;
-  purchase_id: string;
-  session_type: SessionType;
-  starts_at: string;
-  ends_at: string;
-  status: BookingStatus;
-  confirmed_at: string | null;
-  confirmed_by: string | null;
-  cancelled_at: string | null;
-  cancelled_by: string | null;
-  cancellation_reason: string | null;
-  credit_charged: boolean;
-  notes: string | null;
-  series_id: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-export type BookingSeries = {
-  id: string;
-  client_id: string;
-  trainer_id: string;
-  purchase_id: string;
-  session_type: SessionType;
-  duration_min: number;
-  first_starts_at: string;
-  last_starts_at: string;
-  status: "active" | "cancelled";
-  created_at: string;
-  updated_at: string;
-};
-
-export type ReservedSlot = {
-  series_id: string;
-  client_id: string;
-  trainer_id: string;
-  session_type: SessionType;
-  duration_min: number;
-  starts_at: string;
-  ends_at: string;
-  client_name: string | null;
-};
-
-export type CreditTransaction = {
-  id: string;
-  purchase_id: string;
-  booking_id: string | null;
-  delta: number;
-  reason: CreditReason;
-  notes: string | null;
-  created_by: string | null;
-  created_at: string;
-};
-
-export type Notification = {
-  id: string;
-  user_id: string;
-  type: string;
-  title: string;
-  body: string | null;
-  link: string | null;
-  read_at: string | null;
-  created_at: string;
-};
-
-// Esquema simplificado compatível com @supabase/ssr
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
+  }
   public: {
     Tables: {
-      profiles: { Row: Profile; Insert: Partial<Profile> & Pick<Profile, "id" | "email" | "full_name">; Update: Partial<Profile>; Relationships: [] };
-      trainers: { Row: Trainer; Insert: Partial<Trainer> & Pick<Trainer, "profile_id" | "slug">; Update: Partial<Trainer>; Relationships: [] };
-      trainer_settings: { Row: TrainerSettings; Insert: Partial<TrainerSettings> & Pick<TrainerSettings, "trainer_id">; Update: Partial<TrainerSettings>; Relationships: [] };
-      trainer_availability: { Row: TrainerAvailability; Insert: Partial<TrainerAvailability> & Pick<TrainerAvailability, "trainer_id" | "day_of_week" | "start_time" | "end_time">; Update: Partial<TrainerAvailability>; Relationships: [] };
-      trainer_blocked_times: { Row: TrainerBlockedTime; Insert: Partial<TrainerBlockedTime> & Pick<TrainerBlockedTime, "trainer_id" | "starts_at" | "ends_at">; Update: Partial<TrainerBlockedTime>; Relationships: [] };
-      packs: { Row: Pack; Insert: Partial<Pack> & Pick<Pack, "trainer_id" | "name" | "session_type" | "sessions" | "price_cents">; Update: Partial<Pack>; Relationships: [] };
-      purchases: { Row: Purchase; Insert: Partial<Purchase>; Update: Partial<Purchase>; Relationships: [] };
-      payments: { Row: Payment; Insert: Partial<Payment>; Update: Partial<Payment>; Relationships: [] };
-      bookings: { Row: Booking; Insert: Partial<Booking>; Update: Partial<Booking>; Relationships: [] };
-      booking_series: { Row: BookingSeries; Insert: Partial<BookingSeries> & Pick<BookingSeries, "client_id" | "trainer_id" | "purchase_id" | "session_type" | "duration_min" | "first_starts_at" | "last_starts_at">; Update: Partial<BookingSeries>; Relationships: [] };
-      credit_transactions: { Row: CreditTransaction; Insert: Partial<CreditTransaction>; Update: Partial<CreditTransaction>; Relationships: [] };
-      notifications: { Row: Notification; Insert: Partial<Notification> & Pick<Notification, "user_id" | "type" | "title">; Update: Partial<Notification>; Relationships: [] };
-      audit_log: { Row: { id: string; actor_id: string | null; action: string; target_table: string | null; target_id: string | null; payload: Record<string, unknown> | null; created_at: string }; Insert: { actor_id?: string; action: string; target_table?: string; target_id?: string; payload?: Record<string, unknown> }; Update: Partial<{ action: string }> };
-    };
+      audit_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          id: string
+          payload: Json | null
+          target_id: string | null
+          target_table: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          payload?: Json | null
+          target_id?: string | null
+          target_table?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          payload?: Json | null
+          target_id?: string | null
+          target_table?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_log_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      booking_calendar_events: {
+        Row: {
+          booking_id: string
+          created_at: string
+          external_event_id: string
+          id: string
+          integration_id: string
+        }
+        Insert: {
+          booking_id: string
+          created_at?: string
+          external_event_id: string
+          id?: string
+          integration_id: string
+        }
+        Update: {
+          booking_id?: string
+          created_at?: string
+          external_event_id?: string
+          id?: string
+          integration_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_calendar_events_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_calendar_events_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      booking_series: {
+        Row: {
+          client_id: string
+          created_at: string
+          duration_min: number
+          first_starts_at: string
+          id: string
+          last_starts_at: string
+          purchase_id: string
+          session_type: Database["public"]["Enums"]["session_type"]
+          status: string
+          trainer_id: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          duration_min: number
+          first_starts_at: string
+          id?: string
+          last_starts_at: string
+          purchase_id: string
+          session_type: Database["public"]["Enums"]["session_type"]
+          status?: string
+          trainer_id: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          duration_min?: number
+          first_starts_at?: string
+          id?: string
+          last_starts_at?: string
+          purchase_id?: string
+          session_type?: Database["public"]["Enums"]["session_type"]
+          status?: string
+          trainer_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_series_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_series_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_series_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bookings: {
+        Row: {
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          client_id: string
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          credit_charged: boolean
+          ends_at: string
+          id: string
+          notes: string | null
+          purchase_id: string
+          series_id: string | null
+          session_type: Database["public"]["Enums"]["session_type"]
+          starts_at: string
+          status: Database["public"]["Enums"]["booking_status"]
+          trainer_id: string
+          updated_at: string
+        }
+        Insert: {
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          client_id: string
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          credit_charged?: boolean
+          ends_at: string
+          id?: string
+          notes?: string | null
+          purchase_id: string
+          series_id?: string | null
+          session_type: Database["public"]["Enums"]["session_type"]
+          starts_at: string
+          status?: Database["public"]["Enums"]["booking_status"]
+          trainer_id: string
+          updated_at?: string
+        }
+        Update: {
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          client_id?: string
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          credit_charged?: boolean
+          ends_at?: string
+          id?: string
+          notes?: string | null
+          purchase_id?: string
+          series_id?: string | null
+          session_type?: Database["public"]["Enums"]["session_type"]
+          starts_at?: string
+          status?: Database["public"]["Enums"]["booking_status"]
+          trainer_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bookings_cancelled_by_fkey"
+            columns: ["cancelled_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_series_id_fkey"
+            columns: ["series_id"]
+            isOneToOne: false
+            referencedRelation: "booking_series"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_series_id_fkey"
+            columns: ["series_id"]
+            isOneToOne: false
+            referencedRelation: "reserved_slots_active"
+            referencedColumns: ["series_id"]
+          },
+          {
+            foreignKeyName: "bookings_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calendar_integrations: {
+        Row: {
+          access_token: string
+          account_email: string | null
+          calendar_id: string | null
+          created_at: string
+          id: string
+          provider: string
+          refresh_token: string | null
+          token_expires_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token: string
+          account_email?: string | null
+          calendar_id?: string | null
+          created_at?: string
+          id?: string
+          provider: string
+          refresh_token?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          account_email?: string | null
+          calendar_id?: string | null
+          created_at?: string
+          id?: string
+          provider?: string
+          refresh_token?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calendar_integrations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credit_transactions: {
+        Row: {
+          booking_id: string | null
+          created_at: string
+          created_by: string | null
+          delta: number
+          id: string
+          notes: string | null
+          purchase_id: string
+          reason: Database["public"]["Enums"]["credit_reason"]
+        }
+        Insert: {
+          booking_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          delta: number
+          id?: string
+          notes?: string | null
+          purchase_id: string
+          reason: Database["public"]["Enums"]["credit_reason"]
+        }
+        Update: {
+          booking_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          delta?: number
+          id?: string
+          notes?: string | null
+          purchase_id?: string
+          reason?: Database["public"]["Enums"]["credit_reason"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_transactions_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_transactions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_transactions_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          link: string | null
+          read_at: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          link?: string | null
+          read_at?: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          link?: string | null
+          read_at?: string | null
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      packs: {
+        Row: {
+          active: boolean
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          price_cents: number
+          session_type: Database["public"]["Enums"]["session_type"]
+          sessions: number
+          sort_order: number
+          trainer_id: string
+          updated_at: string
+          validity_days: number | null
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          price_cents: number
+          session_type: Database["public"]["Enums"]["session_type"]
+          sessions: number
+          sort_order?: number
+          trainer_id: string
+          updated_at?: string
+          validity_days?: number | null
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          price_cents?: number
+          session_type?: Database["public"]["Enums"]["session_type"]
+          sessions?: number
+          sort_order?: number
+          trainer_id?: string
+          updated_at?: string
+          validity_days?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "packs_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payments: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          gateway: Database["public"]["Enums"]["payment_gateway"]
+          gateway_payload: Json | null
+          gateway_ref: string | null
+          gateway_request_id: string | null
+          id: string
+          method: Database["public"]["Enums"]["payment_method"]
+          notes: string | null
+          paid_at: string | null
+          purchase_id: string
+          status: Database["public"]["Enums"]["payment_status"]
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          gateway: Database["public"]["Enums"]["payment_gateway"]
+          gateway_payload?: Json | null
+          gateway_ref?: string | null
+          gateway_request_id?: string | null
+          id?: string
+          method: Database["public"]["Enums"]["payment_method"]
+          notes?: string | null
+          paid_at?: string | null
+          purchase_id: string
+          status?: Database["public"]["Enums"]["payment_status"]
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          gateway?: Database["public"]["Enums"]["payment_gateway"]
+          gateway_payload?: Json | null
+          gateway_ref?: string | null
+          gateway_request_id?: string | null
+          id?: string
+          method?: Database["public"]["Enums"]["payment_method"]
+          notes?: string | null
+          paid_at?: string | null
+          purchase_id?: string
+          status?: Database["public"]["Enums"]["payment_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          phone: string | null
+          role: Database["public"]["Enums"]["user_role"]
+          trainer_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          full_name: string
+          id: string
+          phone?: string | null
+          role?: Database["public"]["Enums"]["user_role"]
+          trainer_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          full_name?: string
+          id?: string
+          phone?: string | null
+          role?: Database["public"]["Enums"]["user_role"]
+          trainer_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_profiles_trainer"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchases: {
+        Row: {
+          amount_cents: number
+          client_id: string
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          expires_at: string | null
+          id: string
+          notes: string | null
+          pack_id: string | null
+          pack_snapshot: Json
+          payment_method: Database["public"]["Enums"]["payment_method"]
+          rejection_reason: string | null
+          session_type: Database["public"]["Enums"]["session_type"]
+          sessions_remaining: number
+          sessions_total: number
+          status: Database["public"]["Enums"]["purchase_status"]
+          trainer_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          client_id: string
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          notes?: string | null
+          pack_id?: string | null
+          pack_snapshot: Json
+          payment_method: Database["public"]["Enums"]["payment_method"]
+          rejection_reason?: string | null
+          session_type: Database["public"]["Enums"]["session_type"]
+          sessions_remaining: number
+          sessions_total: number
+          status?: Database["public"]["Enums"]["purchase_status"]
+          trainer_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          client_id?: string
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          notes?: string | null
+          pack_id?: string | null
+          pack_snapshot?: Json
+          payment_method?: Database["public"]["Enums"]["payment_method"]
+          rejection_reason?: string | null
+          session_type?: Database["public"]["Enums"]["session_type"]
+          sessions_remaining?: number
+          sessions_total?: number
+          status?: Database["public"]["Enums"]["purchase_status"]
+          trainer_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchases_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchases_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchases_pack_id_fkey"
+            columns: ["pack_id"]
+            isOneToOne: false
+            referencedRelation: "packs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchases_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      session_notes: {
+        Row: {
+          author_id: string
+          body: string
+          booking_id: string | null
+          created_at: string
+          id: string
+          subject_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          author_id: string
+          body: string
+          booking_id?: string | null
+          created_at?: string
+          id?: string
+          subject_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          booking_id?: string | null
+          created_at?: string
+          id?: string
+          subject_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_notes_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_notes_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_notes_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trainer_availability: {
+        Row: {
+          active: boolean
+          created_at: string
+          day_of_week: number
+          end_time: string
+          id: string
+          start_time: string
+          trainer_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          day_of_week: number
+          end_time: string
+          id?: string
+          start_time: string
+          trainer_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          day_of_week?: number
+          end_time?: string
+          id?: string
+          start_time?: string
+          trainer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trainer_availability_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trainer_blocked_times: {
+        Row: {
+          created_at: string
+          ends_at: string
+          id: string
+          reason: string | null
+          starts_at: string
+          trainer_id: string
+        }
+        Insert: {
+          created_at?: string
+          ends_at: string
+          id?: string
+          reason?: string | null
+          starts_at: string
+          trainer_id: string
+        }
+        Update: {
+          created_at?: string
+          ends_at?: string
+          id?: string
+          reason?: string | null
+          starts_at?: string
+          trainer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trainer_blocked_times_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trainer_settings: {
+        Row: {
+          auto_confirm_bookings: boolean
+          buffer_between_sessions_min: number
+          cancellation_window_hours: number
+          charge_late_cancel: boolean
+          charge_no_show: boolean
+          default_pack_validity_days: number | null
+          default_slot_duration_min: number
+          low_credits_threshold: number
+          slot_durations_min: number[]
+          trainer_id: string
+          updated_at: string
+        }
+        Insert: {
+          auto_confirm_bookings?: boolean
+          buffer_between_sessions_min?: number
+          cancellation_window_hours?: number
+          charge_late_cancel?: boolean
+          charge_no_show?: boolean
+          default_pack_validity_days?: number | null
+          default_slot_duration_min?: number
+          low_credits_threshold?: number
+          slot_durations_min?: number[]
+          trainer_id: string
+          updated_at?: string
+        }
+        Update: {
+          auto_confirm_bookings?: boolean
+          buffer_between_sessions_min?: number
+          cancellation_window_hours?: number
+          charge_late_cancel?: boolean
+          charge_no_show?: boolean
+          default_pack_validity_days?: number | null
+          default_slot_duration_min?: number
+          low_credits_threshold?: number
+          slot_durations_min?: number[]
+          trainer_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trainer_settings_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: true
+            referencedRelation: "trainers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trainers: {
+        Row: {
+          active: boolean
+          bio: string | null
+          created_at: string
+          id: string
+          profile_id: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          bio?: string | null
+          created_at?: string
+          id?: string
+          profile_id: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          bio?: string | null
+          created_at?: string
+          id?: string
+          profile_id?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trainers_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+    }
     Views: {
-      reserved_slots_active: { Row: ReservedSlot; Relationships: [] };
-    };
+      public_blocked_times: {
+        Row: {
+          ends_at: string | null
+          id: string | null
+          starts_at: string | null
+          trainer_id: string | null
+        }
+        Insert: {
+          ends_at?: string | null
+          id?: string | null
+          starts_at?: string | null
+          trainer_id?: string | null
+        }
+        Update: {
+          ends_at?: string | null
+          id?: string | null
+          starts_at?: string | null
+          trainer_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trainer_blocked_times_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reserved_slots_active: {
+        Row: {
+          client_id: string | null
+          client_name: string | null
+          duration_min: number | null
+          ends_at: string | null
+          series_id: string | null
+          session_type: Database["public"]["Enums"]["session_type"] | null
+          starts_at: string | null
+          trainer_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_series_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_series_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+    }
     Functions: {
-      get_active_credits: { Args: { p_client_id: string }; Returns: number };
-      create_purchase: { Args: { p_pack_id: string; p_payment_method: PaymentMethod; p_client_id?: string }; Returns: string };
-      confirm_purchase: { Args: { p_purchase_id: string; p_confirmed_by?: string }; Returns: void };
-      reject_purchase: { Args: { p_purchase_id: string; p_reason?: string }; Returns: void };
-      create_booking: { Args: { p_trainer_id: string; p_starts_at: string; p_duration_min: number; p_session_type?: SessionType; p_client_id?: string }; Returns: string };
-      create_recurring_booking: { Args: { p_trainer_id: string; p_starts_at: string; p_duration_min: number; p_sessions_count: number; p_session_type?: SessionType; p_client_id?: string }; Returns: { ok: boolean; series_id: string | null; booking_ids: string[]; conflicts: Array<{ week: number; starts_at: string; reason: "booking" | "blocked" | "reserved" }> } };
-      is_reserved_slot_blocked: { Args: { p_trainer_id: string; p_client_id: string; p_starts_at: string; p_ends_at: string }; Returns: boolean };
-      confirm_booking_attendance: { Args: { p_booking_id: string }; Returns: void };
-      cancel_booking: { Args: { p_booking_id: string; p_reason?: string }; Returns: void };
-      mark_no_show: { Args: { p_booking_id: string }; Returns: void };
-      adjust_credits: { Args: { p_purchase_id: string; p_delta: number; p_reason: string }; Returns: void };
-      is_admin: { Args: Record<string, never>; Returns: boolean };
-      current_trainer_id: { Args: Record<string, never>; Returns: string };
-    };
+      _is_service_or_admin: { Args: never; Returns: boolean }
+      _trainer_is_accessible: {
+        Args: { p_trainer_id: string }
+        Returns: boolean
+      }
+      adjust_credits: {
+        Args: { p_delta: number; p_purchase_id: string; p_reason: string }
+        Returns: undefined
+      }
+      bootstrap_trainer: {
+        Args: { p_email: string; p_full_name: string; p_slug: string }
+        Returns: string
+      }
+      cancel_booking: {
+        Args: { p_booking_id: string; p_reason?: string }
+        Returns: undefined
+      }
+      clients_by_booking: {
+        Args: {
+          p_limit: number
+          p_offset: number
+          p_trainer_ids: string[]
+          p_upcoming: boolean
+        }
+        Returns: {
+          client_id: string
+          total_count: number
+        }[]
+      }
+      clients_low_sessions: {
+        Args: { p_limit: number; p_offset: number; p_trainer_ids: string[] }
+        Returns: {
+          client_id: string
+          total_count: number
+        }[]
+      }
+      confirm_booking_attendance: {
+        Args: { p_booking_id: string }
+        Returns: undefined
+      }
+      confirm_ifthenpay_callback: {
+        Args: { p_amount_cents: number; p_order_id: string; p_payload: Json }
+        Returns: Json
+      }
+      confirm_purchase: {
+        Args: { p_confirmed_by?: string; p_purchase_id: string }
+        Returns: undefined
+      }
+      create_booking: {
+        Args: {
+          p_client_id?: string
+          p_duration_min: number
+          p_session_type?: Database["public"]["Enums"]["session_type"]
+          p_starts_at: string
+          p_trainer_id: string
+        }
+        Returns: string
+      }
+      create_custom_purchase: {
+        Args: {
+          p_client_id: string
+          p_name?: string
+          p_payment_method: Database["public"]["Enums"]["payment_method"]
+          p_price_cents: number
+          p_session_type: Database["public"]["Enums"]["session_type"]
+          p_sessions: number
+          p_trainer_id: string
+          p_validity_days?: number
+        }
+        Returns: string
+      }
+      create_purchase: {
+        Args: {
+          p_client_id?: string
+          p_pack_id: string
+          p_payment_method: Database["public"]["Enums"]["payment_method"]
+        }
+        Returns: string
+      }
+      create_recurring_booking: {
+        Args: {
+          p_client_id?: string
+          p_duration_min: number
+          p_session_type?: Database["public"]["Enums"]["session_type"]
+          p_sessions_count: number
+          p_starts_at: string
+          p_trainer_id: string
+        }
+        Returns: Json
+      }
+      current_role_name: {
+        Args: never
+        Returns: Database["public"]["Enums"]["user_role"]
+      }
+      current_trainer_id: { Args: never; Returns: string }
+      get_active_credits: { Args: { p_client_id: string }; Returns: number }
+      is_admin: { Args: never; Returns: boolean }
+      is_reserved_slot_blocked: {
+        Args: {
+          p_client_id: string
+          p_ends_at: string
+          p_starts_at: string
+          p_trainer_id: string
+        }
+        Returns: boolean
+      }
+      mark_no_show: { Args: { p_booking_id: string }; Returns: undefined }
+      pick_purchase_for_booking:
+        | {
+            Args: {
+              p_client_id: string
+              p_session_type: Database["public"]["Enums"]["session_type"]
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_client_id: string
+              p_session_type: Database["public"]["Enums"]["session_type"]
+              p_trainer_id?: string
+            }
+            Returns: string
+          }
+      reject_purchase: {
+        Args: { p_purchase_id: string; p_reason?: string }
+        Returns: undefined
+      }
+    }
     Enums: {
-      user_role: UserRole;
-      session_type: SessionType;
-      purchase_status: PurchaseStatus;
-      payment_method: PaymentMethod;
-      payment_status: PaymentStatus;
-      payment_gateway: PaymentGateway;
-      booking_status: BookingStatus;
-      credit_reason: CreditReason;
-    };
-    CompositeTypes: Record<string, never>;
-  };
-};
+      booking_status: "booked" | "confirmed" | "cancelled" | "no_show"
+      credit_reason:
+        | "purchase"
+        | "booking_deduction"
+        | "late_cancel"
+        | "no_show"
+        | "refund"
+        | "admin_adjust"
+        | "cancel_refund"
+      payment_gateway: "manual" | "ifthenpay"
+      payment_method:
+        | "manual_mbway"
+        | "manual_cash"
+        | "manual_transfer"
+        | "mbway"
+        | "multibanco"
+        | "card"
+        | "complimentary"
+      payment_status: "pending" | "paid" | "failed" | "refunded"
+      purchase_status:
+        | "pending_payment"
+        | "awaiting_confirmation"
+        | "confirmed"
+        | "rejected"
+        | "cancelled"
+      session_type: "individual" | "dupla"
+      user_role: "client" | "trainer" | "owner"
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+}
+
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {
+      booking_status: ["booked", "confirmed", "cancelled", "no_show"],
+      credit_reason: [
+        "purchase",
+        "booking_deduction",
+        "late_cancel",
+        "no_show",
+        "refund",
+        "admin_adjust",
+        "cancel_refund",
+      ],
+      payment_gateway: ["manual", "ifthenpay"],
+      payment_method: [
+        "manual_mbway",
+        "manual_cash",
+        "manual_transfer",
+        "mbway",
+        "multibanco",
+        "card",
+        "complimentary",
+      ],
+      payment_status: ["pending", "paid", "failed", "refunded"],
+      purchase_status: [
+        "pending_payment",
+        "awaiting_confirmation",
+        "confirmed",
+        "rejected",
+        "cancelled",
+      ],
+      session_type: ["individual", "dupla"],
+      user_role: ["client", "trainer", "owner"],
+    },
+  },
+} as const
+
+// ════════════════════════════════════════════════════════════════
+// Legacy named exports (mantidos para retro-compatibilidade com
+// código pré-existente — re-acrescentar se voltares a correr
+// `supabase gen types typescript` para regerar este ficheiro).
+// ════════════════════════════════════════════════════════════════
+export type SessionType = Database["public"]["Enums"]["session_type"];
+export type PaymentMethod = Database["public"]["Enums"]["payment_method"];
+export type Pack = Database["public"]["Tables"]["packs"]["Row"];
