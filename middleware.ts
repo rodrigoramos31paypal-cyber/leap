@@ -4,25 +4,43 @@ import { rateLimit, getRequestIp, type RateLimitKind } from "@/lib/rate-limit";
 import { generateNonce, applyCsp } from "@/lib/security-headers";
 
 // ────────────────────────────────────────────────────────────────
-// Rate limit map (H1) — path prefix → bucket kind.
+// Rate limit map (H1) — path prefix + método → bucket kind.
 // Ordem importa: o primeiro match ganha.
+//
+// IMPORTANTE: os endpoints de auth são limitados APENAS em POST.
+// GET serve só para renderizar o formulário e o browser faz isso
+// (incluindo prefetches RSC) sem qualquer acção do utilizador. Se
+// contássemos GETs, qualquer navegação esgotava o bucket e a
+// página de login deixava de carregar.
+//
+// Webhooks são limitados em qualquer método porque a IfthenPay
+// chama tanto em GET como em POST com payload idêntico.
 // ────────────────────────────────────────────────────────────────
-const RATE_LIMITED: Array<{ test: (p: string) => boolean; kind: RateLimitKind }> = [
-  { test: (p) => p === "/login" || p.startsWith("/login?"), kind: "auth" },
+type RateRule = {
+  test: (path: string, method: string) => boolean;
+  kind: RateLimitKind;
+};
+
+const isPostOnly = (path: string) =>
+  (p: string, m: string) => m === "POST" && (p === path || p.startsWith(`${path}?`) || p.startsWith(`${path}/`));
+
+const RATE_LIMITED: RateRule[] = [
+  // Webhooks — qualquer método
   { test: (p) => p.startsWith("/api/webhooks/"), kind: "webhook" },
-  { test: (p) => p === "/registar" || p.startsWith("/registar?"), kind: "register" },
-  { test: (p) => p === "/recuperar" || p.startsWith("/recuperar?"), kind: "register" },
-  { test: (p) => p.startsWith("/auth/reset"), kind: "register" },
+  // Auth attempts — só POST
+  { test: isPostOnly("/login"), kind: "auth" },
+  { test: isPostOnly("/registar"), kind: "register" },
+  { test: isPostOnly("/recuperar"), kind: "register" },
+  { test: isPostOnly("/auth/reset"), kind: "register" },
 ];
 
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
   // ── Rate limit (H1) ───────────────────────────────────────────
-  // Aplicado SEMPRE, antes da skip-prefetch e antes do updateSession.
-  // Não queremos que um atacante use o header `next-router-prefetch`
-  // para escapar ao limite.
-  const bucket = RATE_LIMITED.find(({ test }) => test(path));
+  // Aplicado SEMPRE, antes do updateSession. Não queremos que um
+  // atacante use o header `next-router-prefetch` para escapar.
+  const bucket = RATE_LIMITED.find(({ test }) => test(path, request.method));
   if (bucket) {
     const ip = getRequestIp(request.headers);
     const r = await rateLimit(bucket.kind, `${path}:${ip}`);
