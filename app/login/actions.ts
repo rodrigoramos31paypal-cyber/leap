@@ -2,11 +2,12 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { isSafePath } from "@/lib/utils";
 
 export async function loginAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
-  const next = String(formData.get("next") ?? "");
+  const next = formData.get("next");
 
   const supabase = createClient();
   const { error, data } = await supabase.auth.signInWithPassword({ email, password });
@@ -21,8 +22,11 @@ export async function loginAction(formData: FormData) {
     .eq("id", data.user!.id)
     .single();
 
-  const target =
-    next && next.startsWith("/") ? next : profile?.role === "client" ? "/app/dashboard" : "/admin/dashboard";
+  // SEC (C3): isSafePath rejeita `//evil.com`, `\\evil.com`, URLs com
+  // scheme e caracteres de controlo. `startsWith("/")` sozinho deixava
+  // passar protocol-relative URLs → open redirect.
+  const fallback = profile?.role === "client" ? "/app/dashboard" : "/admin/dashboard";
+  const target = isSafePath(next) ? next : fallback;
 
   redirect(target);
 }

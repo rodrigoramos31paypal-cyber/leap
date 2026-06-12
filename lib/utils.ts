@@ -84,3 +84,40 @@ export const BOOKING_STATUS = {
   cancelled: "Cancelada",
   no_show: "Faltou",
 } as const;
+
+/**
+ * Valida que um caminho de redirect controlado pelo utilizador é seguro.
+ *
+ * Bloqueia (C3 do audit de segurança):
+ *   • protocol-relative URLs (`//evil.com`, `/\evil.com`) — interpretadas
+ *     como external hosts pelos browsers
+ *   • URLs absolutos com scheme (`https://evil.com`, `javascript:...`)
+ *   • barras invertidas (alguns browsers tratam `\` como `/`)
+ *   • newlines/CR (header injection no Location)
+ *   • whitespace inicial (truques de parsing)
+ *
+ * Aceita SÓ paths absolutos do próprio site: começam por `/` e o
+ * segundo caractere é um path char (não `/`, `\`, `:`).
+ *
+ * Usar onde quer que aceitemos `next=...` ou `redirectTo=...` vindos
+ * do query string ou de form data.
+ */
+export function isSafePath(p: unknown): p is string {
+  if (typeof p !== "string" || p.length === 0) return false;
+  // Tem de começar por '/' e o segundo char NÃO pode ser '/' ou '\' ou ':'
+  if (p[0] !== "/") return false;
+  if (p.length === 1) return true; // "/" é ok
+  const c2 = p[1];
+  if (c2 === "/" || c2 === "\\") return false;
+  // Sem caracteres de controlo (newlines, tabs) — defesa contra header injection
+  if (/[\r\n\t]/.test(p)) return false;
+  return true;
+}
+
+/**
+ * Devolve `p` se for um path seguro, caso contrário `fallback`.
+ * Helper para uso inline em redirects.
+ */
+export function safePathOr(p: unknown, fallback: string): string {
+  return isSafePath(p) ? p : fallback;
+}

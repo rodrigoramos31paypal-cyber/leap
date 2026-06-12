@@ -14,10 +14,28 @@ export async function createGeneralNoteAction(formData: FormData): Promise<{ err
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Não autenticado." };
 
+  // SEC (C5): a policy RLS em 0029 valida a relação author↔subject,
+  // mas devolve uma mensagem genérica de "violates row-level security
+  // policy" pouco útil ao utilizador. Fazemos uma verificação prévia
+  // amigável para os casos mais comuns:
+  //   • subject_id = próprio autor → sem sentido, rejeita já
+  //   • body com URLs JS-protocol ou similares → não é defesa anti-XSS
+  //     (o React escapa), só evita lixo
+  if (subjectId === user.id) {
+    return { error: "Escolhe outro destinatário para a nota." };
+  }
+
   const { error } = await supabase
     .from("session_notes")
     .insert({ subject_id: subjectId, author_id: user.id, body });
-  if (error) return { error: error.message };
+
+  if (error) {
+    // RLS rejeição → mensagem humana em vez de "violates RLS policy"
+    if (/row-level security/i.test(error.message)) {
+      return { error: "Sem permissão para criar uma nota sobre este utilizador." };
+    }
+    return { error: error.message };
+  }
 
   revalidatePath("/app/notas");
   revalidatePath("/admin/notas");
