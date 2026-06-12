@@ -352,12 +352,15 @@ function WeekView({
   const nowInRange = nowMinutes >= HOUR_START * 60 && nowMinutes <= HOUR_END * 60;
   const nowTop = timeOffset(today);
 
-  const GRID_COLS = "56px repeat(7, minmax(110px, 1fr))";
+  // Mobile-friendly track sizing: 44px label + 100px/day = 744px total,
+  // letting ~3 day columns fit fully within a typical iPhone viewport (375-393px)
+  // before horizontal scroll kicks in. Desktop still expands via 1fr.
+  const GRID_COLS = "44px repeat(7, minmax(100px, 1fr))";
 
   return (
     <div className="card overflow-hidden">
       <div className="overflow-x-auto">
-        <div className="min-w-[820px]">
+        <div className="min-w-[744px]">
           {/* Day headers */}
           <div
             className="grid border-b border-ink-900/10 bg-bone-50"
@@ -526,37 +529,64 @@ function MonthView({ gridStart, anchor, bookings, blocks, reserved }: { gridStar
       </div>
       <div className="grid grid-cols-7 gap-1">
         {days.map((d) => {
-          const dayBookings = bookings.filter((b) => sameDay(new Date(b.starts_at), d));
-          const dayBlocks = blocks.filter((b) => sameDay(new Date(b.starts_at), d));
-          const dayReserved = reserved.filter((r) => sameDay(new Date(r.starts_at), d));
           const isCurrent = d.getMonth() === currentMonth;
+          const dayBookings = isCurrent ? bookings.filter((b) => sameDay(new Date(b.starts_at), d)) : [];
+          const dayBlocks = isCurrent ? blocks.filter((b) => sameDay(new Date(b.starts_at), d)) : [];
+          const dayReserved = isCurrent ? reserved.filter((r) => sameDay(new Date(r.starts_at), d)) : [];
           const isToday = sameDay(d, new Date());
+
+          // Out-of-month days: heavily muted, non-interactive, no events.
+          if (!isCurrent) {
+            return (
+              <div
+                key={d.toISOString()}
+                aria-hidden
+                className="min-h-[78px] rounded-md border border-transparent bg-bone-50/40 p-1.5 text-left text-xs opacity-40 dark:bg-white/[0.02]"
+              >
+                <div className="text-[10px] font-semibold text-ink-400">{d.getDate()}</div>
+              </div>
+            );
+          }
+
           return (
             <Link
               key={d.toISOString()}
               href={`/admin/agenda?view=day&d=${isoDate(d)}`}
-              className={`min-h-[78px] rounded-md border p-1.5 text-left text-xs hover:bg-ink-900/5 ${
-                isCurrent ? "bg-white border-ink-900/10" : "bg-bone-50 border-transparent text-ink-400"
-              } ${isToday ? "ring-2 ring-gold-400" : ""}`}
+              className={`min-h-[78px] overflow-hidden rounded-md border bg-white border-ink-900/10 p-1.5 text-left text-xs hover:bg-ink-900/5 ${
+                isToday ? "ring-2 ring-gold-400" : ""
+              }`}
             >
               <div className="text-[10px] font-semibold">{d.getDate()}</div>
               <div className="mt-1 space-y-0.5">
                 {dayBookings.slice(0, 3).map((b) => (
-                  <div key={b.id} className="truncate rounded bg-gold-50 px-1 py-0.5 text-[10px] text-ink-900">
-                    {formatTime(b.starts_at)} {b.profiles?.full_name?.split(" ")[0] ?? ""}
+                  <div
+                    key={b.id}
+                    className="truncate whitespace-nowrap rounded bg-gold-50 px-1 py-0.5 text-[10px] text-ink-900 tabular-nums"
+                  >
+                    <span>{formatTime(b.starts_at)}</span>
+                    <span className="hidden sm:inline">
+                      {" "}
+                      {b.profiles?.full_name?.split(" ")[0] ?? ""}
+                    </span>
                   </div>
                 ))}
                 {dayBookings.length > 3 && (
                   <div className="text-[10px] text-ink-500">+{dayBookings.length - 3}</div>
                 )}
                 {dayBlocks.length > 0 && (
-                  <div className="rounded bg-red-50 px-1 py-0.5 text-[10px] text-red-700">
-                    {dayBlocks.length} bloqueio{dayBlocks.length > 1 ? "s" : ""}
+                  <div className="truncate whitespace-nowrap rounded bg-red-50 px-1 py-0.5 text-[10px] text-red-700">
+                    <span className="sm:hidden">{dayBlocks.length}× ind.</span>
+                    <span className="hidden sm:inline">
+                      {dayBlocks.length} bloqueio{dayBlocks.length > 1 ? "s" : ""}
+                    </span>
                   </div>
                 )}
                 {dayReserved.length > 0 && (
-                  <div className="truncate rounded border border-dashed border-ink-900/20 bg-bone-100 px-1 py-0.5 text-[10px] text-ink-600">
-                    {dayReserved.length} reservado{dayReserved.length > 1 ? "s" : ""}
+                  <div className="truncate whitespace-nowrap rounded border border-dashed border-ink-900/20 bg-bone-100 px-1 py-0.5 text-[10px] text-ink-600">
+                    <span className="sm:hidden">{dayReserved.length}× res.</span>
+                    <span className="hidden sm:inline">
+                      {dayReserved.length} reservado{dayReserved.length > 1 ? "s" : ""}
+                    </span>
                   </div>
                 )}
               </div>
@@ -608,8 +638,11 @@ function BlockTimeForm({
         </div>
 
         {/* Date + From + To */}
+        {/* min-w-0 on each grid item: prevents native iOS date input's
+            intrinsic content width (label + calendar icon) from pushing
+            the column wider than the viewport. */}
         <div className="grid gap-3 sm:grid-cols-[1.4fr_1fr_1fr]">
-          <div>
+          <div className="min-w-0">
             <label className="label" htmlFor="blockDate">Dia</label>
             <input
               id="blockDate"
@@ -617,19 +650,20 @@ function BlockTimeForm({
               type="date"
               defaultValue={defaultDate}
               required
-              className="input"
+              className="input block min-w-0 max-w-full appearance-none"
             />
           </div>
-          <div>
+          <div className="min-w-0">
             <label className="label" htmlFor="blockFrom">Início</label>
-            <select id="blockFrom" name="from" required defaultValue="08:00" className="input">
+            <select id="blockFrom" name="from" required defaultValue="08:00" className="input min-w-0 max-w-full">
               {timeOptions.slice(0, -1).map((t) => (
                 <option key={t} value={t}>{t}</option>
               ))}
             </select>
-          </div>          <div>
+          </div>
+          <div className="min-w-0">
             <label className="label" htmlFor="blockTo">Fim</label>
-            <select id="blockTo" name="to" required defaultValue="12:00" className="input">
+            <select id="blockTo" name="to" required defaultValue="12:00" className="input min-w-0 max-w-full">
               {timeOptions.slice(1).map((t) => (
                 <option key={t} value={t}>{t}</option>
               ))}
@@ -739,3 +773,4 @@ function weekday(d: Date) {
 function fmt(d: Date) {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
+
