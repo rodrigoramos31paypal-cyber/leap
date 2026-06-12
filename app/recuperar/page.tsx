@@ -8,11 +8,10 @@ export default function RecoverPage({
   searchParams: { error?: string; success?: string };
 }) {
   return (
-    // Mobile: padding-top moderado para não bater na barra do teclado
-    //         quando o user toca no input.
-    // Desktop (sm+): justify-center vertical para o card aterrar na
-    //                metade superior do viewport sem ficar colado ao topo.
-    <main className="flex min-h-screen flex-col items-center bg-bone-50 p-6 pt-12 dark:bg-ink-900 sm:justify-center sm:pt-6">
+    // Padding-top fixo em vez de justify-center: assim o logo
+    // aterra na mesma coordenada Y em /login, /recuperar e /registar
+    // (que têm cards de alturas diferentes).
+    <main className="flex min-h-screen flex-col items-center bg-bone-50 p-6 pt-12 dark:bg-ink-900 sm:pt-16">
       <Link href="/" className="mb-6 flex flex-col items-center gap-2 sm:mb-8">
         <Image
           src="/images/logo-slogan.png"
