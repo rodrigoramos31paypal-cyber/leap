@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // H2 hardening: esconde `X-Powered-By: Next.js`. Information
+  // disclosure trivial — diz ao atacante a stack e versão sem ele
+  // ter de pedir. Zero custo a esconder.
+  poweredByHeader: false,
   // PERF: serve modern formats from the Vercel image optimizer. AVIF is
   // opt-in (Next defaults to webp only); adding it shaves ~20-30% off the
   // logo lock-ups for supporting browsers. Pure delivery optimization —
