@@ -1,0 +1,105 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { confirmAttendance, markNoShow, cancelBooking } from "@/lib/credits";
+import { dispatchBookingConfirmed, dispatchBookingCancelled } from "@/lib/email-dispatch";
+import { removeBookingFromCalendars } from "@/lib/calendar-sync";
+import { createClient } from "@/lib/supabase/server";
+import { getAccessibleTrainerIds } from "@/lib/trainer";
+import { setFlash } from "@/lib/flash";
+
+export async function confirmAttendanceAction(formData: FormData) {
+  const id = String(formData.get("bookingId") ?? "");
+  if (!id) return;
+  try {
+    await confirmAttendance(id);
+    await dispatchBookingConfirmed(id).catch(() => {});
+    setFlash("Presença confirmada");
+  } catch (e: any) {
+    setFlash("Não foi possível confirmar", "error", e?.message);
+  }
+  revalidatePath("/admin/agenda");
+  revalidatePath("/admin/dashboard");
+}
+
+export async function markNoShowAction(formData: FormData) {
+  const id = String(formData.get("bookingId") ?? "");
+  if (!id) return;
+  try {
+    await markNoShow(id);
+    setFlash("Marcado como falta");
+  } catch (e: any) {
+    setFlash("Não foi possível marcar como falta", "error", e?.message);
+  }
+  revalidatePath("/admin/agenda");
+}
+
+export async function cancelAdminAction(formData: FormData) {
+  const id = String(formData.get("bookingId") ?? "");
+  if (!id) return;
+  // BUG-FIX: motivo opcional escolhido pelo admin (limitado por segurança).
+  const reasonRaw = String(formData.get("reason") ?? "").trim().slice(0, 500);
+  const reason = reasonRaw.length > 0
+    ? `Cancelado pelo trainer — ${reasonRaw}`
+    : "Cancelado pelo trainer";
+  try {
+    await cancelBooking(id, reason);
+    await dispatchBookingCancelled(id, true).catch(() => {});
+    await removeBookingFromCalendars(id).catch(() => {});
+    setFlash("Sessão cancelada");
+  } catch (e: any) {
+    setFlash("Não foi possível cancelar", "error", e?.message);
+  }
+  revalidatePath("/admin/agenda");
+}
+
+export async function deleteBlockAction(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const supabase = createClient();
+  await supabase.from("trainer_blocked_times").delete().eq("id", id);
+  setFlash("Bloqueio removido");
+  revalidatePath("/admin/agenda");
+  revalidatePath("/admin/definicoes");
+}
+
+export async function addBlockQuickAction(formData: FormData) {
+  const trainerId = String(formData.get("trainerId") ?? "");
+  let startsAt = String(formData.get("starts_at") ?? "");
+  let endsAt = String(formData.get("ends_at") ?? "");
+  const date = String(formData.get("date") ?? "");
+  const from = String(formData.get("from") ?? "");
+  const to = String(formData.get("to") ?? "");
+  // SEC: limitar tamanho do "motivo" para evitar payloads gigantes.
+  const reasonRaw = String(formData.get("reason") ?? "").trim().slice(0, 200);
+  const reason = reasonRaw.length > 0 ? reasonRaw : null;
+
+  // Suporta dois formatos: (starts_at + ends_at) ou (date + from + to).
+  // BUG-FIX: garantir que tem segundos (`:00`) para máxima fiabilidade na parse.
+  if (!startsAt && date && from) startsAt = `${date}T${from}:00`;
+  if (!endsAt && date && to) endsAt = `${date}T${to}:00`;
+
+  if (!trainerId || !startsAt || !endsAt) return;
+
+  // SEC: defense-in-depth — confirmar que o trainerId pertence ao scope
+  // do utilizador autenticado. RLS já bloqueia clientes, mas isto evita
+  // que um trainer crie blocks para outro trainer.
+  const accessible = await getAccessibleTrainerIds();
+  if (!accessible.includes(trainerId)) return;
+
+  const start = new Date(startsAt);
+  const end = new Date(endsAt);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return;
+  if (end <= start) return;
+
+  const supabase = createClient();
+  await supabase.from("trainer_blocked_times").insert({
+    trainer_id: trainerId,
+    starts_at: start.toISOString(),
+    ends_at: end.toISOString(),
+    reason,
+  });
+  setFlash("Bloqueio criado");
+  revalidatePath("/admin/agenda");
+  revalidatePath("/admin/definicoes");
+}
