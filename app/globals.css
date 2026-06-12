@@ -28,6 +28,24 @@ html {
   scrollbar-gutter: stable;
 }
 
+/* iOS Safari: input[type="date"] tem largura intrínseca baseada no
+   conteúdo (placeholder + ícone do calendário) e ignora frequentemente
+   `width: 100%` em layouts apertados, "saltando" para fora do viewport.
+   Forçamos box-sizing, max-width e remoção do estilo nativo para que
+   o campo respeite a largura do contentor no iPhone. */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"] {
+  -webkit-appearance: none;
+  appearance: none;
+  max-width: 100%;
+  min-width: 0;
+}
+input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+  min-width: 0;
+}
+
 @layer components {
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 focus-visible:ring-offset-2;
