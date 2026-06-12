@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import "./globals.css";
 import { InstallPrompt } from "@/components/install-prompt";
 import { getTheme } from "@/lib/theme";
@@ -63,12 +64,17 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const theme = getTheme();
+  // H2: nonce CSP gerado por middleware e propagado via `x-nonce`.
+  // Sem nonce (dev local sem middleware), o CSP no production-build
+  // não permitiria este `<script>` correr.
+  const nonce = headers().get("x-nonce") ?? undefined;
   return (
     <html lang="pt-PT" className={theme === "dark" ? "dark" : ""}>
       <body className="min-h-screen bg-bone-50 text-ink-900 antialiased dark:bg-ink-900 dark:text-bone-50">
         {children}
         <InstallPrompt />
         <script
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `
               if ('serviceWorker' in navigator) {
