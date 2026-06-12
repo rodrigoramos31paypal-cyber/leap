@@ -19,9 +19,13 @@ import {
   UserCog,
   MoreHorizontal,
   X,
+  type LucideIcon,
 } from "lucide-react";
 
-type Item = { href: string; label: string; icon: React.ComponentType<{ size?: number }> };
+// H4: usar `LucideIcon` em vez de `React.ComponentType<{ size?: number }>`
+// — o tipo dos icons lucide-react inclui propTypes que não casam com
+// um ComponentType genérico, causando TS2322 cascaded em todos os usos.
+type Item = { href: string; label: string; icon: LucideIcon };
 
 const clientItems: Item[] = [
   { href: "/app/dashboard", label: "Início", icon: Home },

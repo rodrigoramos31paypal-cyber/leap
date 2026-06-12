@@ -114,8 +114,10 @@ export async function createCustomPurchase(args: {
     p_price_cents: args.priceCents,
     p_session_type: args.sessionType,
     p_payment_method: args.paymentMethod,
-    p_name: args.name ?? null,
-    p_validity_days: args.validityDays ?? null,
+    // H4: a RPC tipa estes parâmetros como `string | undefined` /
+    // `number | undefined` (não `| null`). Passar `null` falha o tipo.
+    p_name: args.name ?? undefined,
+    p_validity_days: args.validityDays ?? undefined,
   });
   if (error) throw error;
   return data as unknown as string;

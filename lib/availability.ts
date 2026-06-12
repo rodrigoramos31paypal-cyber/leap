@@ -61,7 +61,10 @@ export async function getAvailableSlots(args: {
     busy.push({ start: new Date(b.starts_at).getTime(), end: new Date(b.ends_at).getTime() });
   }
   for (const b of blocks ?? []) {
-    busy.push({ start: new Date(b.starts_at).getTime(), end: new Date(b.ends_at).getTime() });
+    // H4: assertion non-null. `public_blocked_times` é uma vista; o
+    // Supabase generator marca colunas de views como nullable por
+    // omissão, mas a vista deriva de colunas NOT NULL na base table.
+    busy.push({ start: new Date(b.starts_at!).getTime(), end: new Date(b.ends_at!).getTime() });
   }
 
   const slots: Slot[] = [];

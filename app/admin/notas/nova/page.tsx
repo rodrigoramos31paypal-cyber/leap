@@ -35,7 +35,8 @@ export default async function NewAdminNotePage({
         <p className="text-xs text-ink-500">
           Sessão: {booking ? `${formatDateTime(booking.starts_at)} · ${booking.session_type}` : "—"}
         </p>
-        <form action={createBookingNoteAction} className="mt-4 space-y-3">
+        {/* H4: cast — action retorna { error? } | void, form tipa Promise<void>. */}
+        <form action={createBookingNoteAction as (fd: FormData) => Promise<void>} className="mt-4 space-y-3">
           <input type="hidden" name="bookingId" value={searchParams.booking} />
           <input type="hidden" name="redirectTo" value="/admin/notas" />
           <textarea
@@ -66,7 +67,8 @@ export default async function NewAdminNotePage({
     return (
       <EditorShell title={`Nota geral · ${profile?.full_name ?? "Cliente"}`}>
         <p className="text-xs text-ink-500">Sem sessão associada. Vai aparecer no diário do cliente.</p>
-        <form action={createGeneralNoteAction} className="mt-4 space-y-3">
+        {/* H4: cast — action retorna { error? } | void, form tipa Promise<void>. */}
+        <form action={createGeneralNoteAction as (fd: FormData) => Promise<void>} className="mt-4 space-y-3">
           <input type="hidden" name="subjectId" value={searchParams.client} />
           <input type="hidden" name="redirectTo" value="/admin/notas" />
           <textarea
