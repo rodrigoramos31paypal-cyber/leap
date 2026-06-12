@@ -123,17 +123,21 @@ export async function getRecentSessionsForClient(
   return data ?? [];
 }
 
-/** Mapa booking_id → minha nota, para listas como histórico/agenda. */
+/** Mapa booking_id → minha nota, para listas como histórico/agenda.
+ *  PERF: a agenda só consome `note.body` (prefill do editor + indicador "✓").
+ *  Pedimos apenas `booking_id, body` em vez de `*` — deixamos de transferir
+ *  id/subject_id/author_id/created_at/updated_at para cada nota da range
+ *  visível. Comportamento idêntico: o editor continua a receber o body. */
 export async function getMyNotesMapForBookings(bookingIds: string[]): Promise<Map<string, SessionNote>> {
   const map = new Map<string, SessionNote>();
   if (bookingIds.length === 0) return map;
   const supabase = createClient();
   const { data } = await supabase
     .from("session_notes")
-    .select("*")
+    .select("booking_id, body")
     .in("booking_id", bookingIds);
-  for (const row of (data ?? []) as SessionNote[]) {
-    map.set(row.booking_id, row);
+  for (const row of (data ?? []) as unknown as SessionNote[]) {
+    if (row.booking_id) map.set(row.booking_id, row);
   }
   return map;
 }

@@ -38,6 +38,7 @@ export function TopBar({
                 alt="LEAP-FITNESS"
                 width={44}
                 height={44}
+                sizes="44px"
                 className="h-11 w-11 dark:invert"
               />
               <span className="font-display text-sm font-semibold tracking-tight hidden sm:inline">
