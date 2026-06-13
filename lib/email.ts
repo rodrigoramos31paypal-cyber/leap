@@ -156,4 +156,27 @@ export const emailTemplates = {
       text: `${args.clientName} → ${args.packName} (${args.amountEur}). Confirmar em /admin/pagamentos.`,
     };
   },
+  sessionReminder(args: { clientName: string; when: string }) {
+    return {
+      subject: "Lembrete de sessão",
+      html: shell(
+        "Lembrete de sessão",
+        `<p style="margin:0 0 10px">Olá ${escapeHtml(args.clientName)},</p>
+         <p style="margin:0 0 10px">Este é um lembrete da tua sessão marcada para <strong>${escapeHtml(args.when)}</strong>.</p>
+         <p style="margin:0">Até já! Se precisares de cancelar, fá-lo com antecedência no portal.</p>`,
+      ),
+      text: `Lembrete: sessão a ${args.when}.`,
+    };
+  },
+  sessionReminderTrainer(args: { trainerName: string; clientName: string; when: string }) {
+    return {
+      subject: "Lembrete de sessão",
+      html: shell(
+        "Lembrete de sessão",
+        `<p style="margin:0 0 10px">Olá ${escapeHtml(args.trainerName)},</p>
+         <p style="margin:0 0 10px">Lembrete: tens uma sessão com <strong>${escapeHtml(args.clientName)}</strong> a <strong>${escapeHtml(args.when)}</strong>.</p>`,
+      ),
+      text: `Lembrete: sessão com ${args.clientName} a ${args.when}.`,
+    };
+  },
 };

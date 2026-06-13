@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { updateProfileAction } from "./actions";
 import { BackLink } from "@/components/back-link";
+import { NotificationPrefToggle } from "@/components/notification-pref-toggle";
 
 export default async function PerfilPage({
   searchParams,
@@ -14,6 +15,14 @@ export default async function PerfilPage({
   const supabase = createClient();
 
   const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+
+  const { data: notifPref } = await (supabase as any)
+    .from("notification_preferences")
+    .select("enabled")
+    .eq("user_id", user.id)
+    .eq("kind", "session_reminder")
+    .maybeSingle();
+  const reminderOn = (notifPref as any)?.enabled ?? true;
 
   return (
     <div className="space-y-5">
@@ -42,6 +51,15 @@ export default async function PerfilPage({
         </div>
         <button type="submit" className="btn-primary w-full">Guardar</button>
       </form>
+
+      <div className="card space-y-4 p-5">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Notificações</h2>
+        <NotificationPrefToggle
+          initial={reminderOn}
+          label="Lembretes de sessão"
+          desc="Recebe um email e uma notificação na app antes de cada sessão."
+        />
+      </div>
     </div>
   );
 }
