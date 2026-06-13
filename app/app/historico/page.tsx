@@ -35,6 +35,10 @@ export default async function HistoricoPage({
         <div className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
           Marcações recorrentes criadas com sucesso.
         </div>
+      ) : searchParams.ok === "reschedule" ? (
+        <div className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+          Sessão reagendada com sucesso.
+        </div>
       ) : searchParams.ok ? (
         <div className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
           Marcação confirmada com sucesso.
