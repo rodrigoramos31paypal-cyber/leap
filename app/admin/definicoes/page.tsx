@@ -4,7 +4,8 @@ import { googleEnabled, microsoftEnabled } from "@/lib/calendar-sync";
 import { getCurrentTrainer } from "@/lib/trainer";
 import { CopyButton } from "@/components/copy-button";
 import { NotificationPrefToggle } from "@/components/notification-pref-toggle";
-import { Smartphone } from "lucide-react";
+import { Smartphone, ShieldCheck, ChevronRight } from "lucide-react";
+import Link from "next/link";
 
 const DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
@@ -95,6 +96,24 @@ export default async function DefinicoesPage({
           desc="Recebe um email e uma notificação na app antes das tuas sessões."
         />
       </div>
+
+      <Link
+        href="/admin/seguranca"
+        className="card flex items-center justify-between p-4 hover:border-gold-400"
+      >
+        <div className="flex items-center gap-3">
+          <span className="grid h-10 w-10 place-items-center rounded-lg bg-bone-100 text-ink-700">
+            <ShieldCheck size={18} />
+          </span>
+          <div>
+            <div className="text-sm font-semibold">Segurança da conta</div>
+            <div className="text-xs text-ink-500">
+              Verificação em dois passos (2FA) e dispositivos confiados.
+            </div>
+          </div>
+        </div>
+        <ChevronRight size={16} className="text-ink-500" />
+      </Link>
 
       <form action={saveSettingsAction} className="card space-y-4 p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Regras de negócio</h2>
