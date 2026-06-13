@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSafePath } from "@/lib/utils";
+import { listVerifiedFactors, isDeviceTrusted } from "@/lib/mfa";
 
 export async function loginAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
@@ -15,18 +16,27 @@ export async function loginAction(formData: FormData) {
     redirect(`/login?error=${encodeURIComponent("Email ou password inválidos.")}`);
   }
 
-  // descobre role para redirect
   const { data: profile } = await supabase
     .from("profiles")
     .select("role")
     .eq("id", data.user!.id)
     .single();
 
-  // SEC (C3): isSafePath rejeita `//evil.com`, `\\evil.com`, URLs com
-  // scheme e caracteres de controlo. `startsWith("/")` sozinho deixava
-  // passar protocol-relative URLs → open redirect.
+  // SEC (C3): isSafePath rejeita `//evil.com`, etc.
   const fallback = profile?.role === "client" ? "/app/dashboard" : "/admin/dashboard";
   const target = isSafePath(next) ? next : fallback;
+
+  // 2FA gate: se tem factor verificado e o device NÃO está confiado,
+  // manda para o desafio (preserva `next` para depois). signInWithPassword
+  // deixa a sessão em AAL1; só o challengeAndVerify a eleva para AAL2.
+  const factors = await listVerifiedFactors();
+  if (factors.length > 0) {
+    const trusted = await isDeviceTrusted(data.user!.id);
+    if (!trusted) {
+      const url = `/login/2fa?next=${encodeURIComponent(target)}`;
+      redirect(url);
+    }
+  }
 
   redirect(target);
 }

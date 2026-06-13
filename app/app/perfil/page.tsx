@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { updateProfileAction } from "./actions";
 import { BackLink } from "@/components/back-link";
 import { NotificationPrefToggle } from "@/components/notification-pref-toggle";
 import { DeleteAccountSection } from "@/components/delete-account-section";
-import { Download } from "lucide-react";
+import { Download, ShieldCheck, ChevronRight } from "lucide-react";
 
 export default async function PerfilPage({
   searchParams,
@@ -72,6 +73,22 @@ export default async function PerfilPage({
           desc="Avisa-te quando as tuas sessões estão a acabar ou um pack está a expirar."
         />
       </div>
+
+      <Link
+        href="/app/perfil/seguranca"
+        className="card flex items-center justify-between p-4 hover:border-gold-400"
+      >
+        <div className="flex items-center gap-3">
+          <span className="grid h-10 w-10 place-items-center rounded-lg bg-bone-100 text-ink-700">
+            <ShieldCheck size={18} />
+          </span>
+          <div>
+            <div className="text-sm font-semibold">Segurança</div>
+            <div className="text-xs text-ink-500">Verificação em dois passos e dispositivos.</div>
+          </div>
+        </div>
+        <ChevronRight size={16} className="text-ink-500" />
+      </Link>
 
       <div className="card space-y-3 p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Dados e privacidade</h2>
