@@ -1037,6 +1037,15 @@ export type Database = {
         Returns: boolean
       }
       mark_no_show: { Args: { p_booking_id: string }; Returns: undefined }
+      set_payment_gateway_info: {
+        Args: {
+          p_gateway_payload: Json
+          p_gateway_ref: string | null
+          p_gateway_request_id: string | null
+          p_purchase_id: string
+        }
+        Returns: undefined
+      }
       pick_purchase_for_booking:
         | {
             Args: {

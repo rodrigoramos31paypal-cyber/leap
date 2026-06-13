@@ -1,6 +1,17 @@
 // ════════════════════════════════════════════════════════════════
 // Calendar sync · Google Calendar + Microsoft Graph (Outlook)
 // One-way push: app → calendário pessoal do admin.
+//
+// SEC — uso de service role (createAdminClient):
+//   Necessário de propósito. Estas funções leem os OAuth tokens da
+//   tabela calendar_integrations — credenciais privadas do admin a
+//   que NENHUM cliente tem acesso por RLS — e empurram o evento para
+//   o calendário externo. Nada é devolvido ao caller.
+//
+//   CONTRATO: chamadas sempre DEPOIS de uma RPC que valida ownership
+//   (create_booking / cancel_booking). Se o bookingId não pertencer
+//   ao caller, essa RPC falha e estas funções nunca correm. NÃO usar
+//   service role aqui para devolver dados ao utilizador (≠ caso H5).
 // ════════════════════════════════════════════════════════════════
 import { createAdminClient } from "@/lib/supabase/server";
 

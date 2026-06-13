@@ -3,8 +3,29 @@
 // Docs: https://ifthenpay.com/docs/en/integrations/api/
 // ════════════════════════════════════════════════════════════════
 import { timingSafeEqual } from "crypto";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import type { PaymentMethod } from "@/types/database";
+import type { Database, PaymentMethod } from "@/types/database";
+
+/**
+ * Anexa a info devolvida pelo gateway ao payment pending da compra,
+ * via RPC SECURITY DEFINER (a RLS de payments é admin-write only).
+ * H5: substitui o antigo UPDATE com service_role neste caminho — a RPC
+ * valida que o caller é o dono da compra.
+ */
+async function setGatewayInfo(
+  supabase: SupabaseClient<Database>,
+  purchaseId: string,
+  info: { requestId: string | null; ref: string | null; payload: unknown },
+) {
+  const { error } = await supabase.rpc("set_payment_gateway_info", {
+    p_purchase_id: purchaseId,
+    p_gateway_request_id: info.requestId,
+    p_gateway_ref: info.ref,
+    p_gateway_payload: info.payload as any,
+  });
+  if (error) throw error;
+}
 
 /** Comparação em tempo constante para segredos partilhados (anti timing-attack). */
 function safeEqual(a: string, b: string): boolean {
@@ -43,7 +64,10 @@ export async function createIfthenpayPayment({ purchaseId, method }: StartArgs):
     throw new Error("IfthenPay desativado. Define IFTHENPAY_ENABLED=true e configura as chaves.");
   }
   const keys = requireKeys();
-  const supabase = createAdminClient();
+  // H5: client autenticado + RLS. createIfthenpayPayment só é chamado a
+  // partir da server action startPurchaseAction (utilizador autenticado);
+  // a policy "purchases: client read own" deixa o dono ler a sua compra.
+  const supabase = createClient();
 
   // carrega purchase + cliente
   const { data: purchase } = await supabase
@@ -75,11 +99,11 @@ export async function createIfthenpayPayment({ purchaseId, method }: StartArgs):
       }),
     });
     const payload = await res.json();
-    await supabase.from("payments").update({
-      gateway_request_id: payload?.RequestId ?? payload?.requestId ?? null,
-      gateway_payload: payload,
-      gateway_ref: orderId,
-    }).eq("purchase_id", purchaseId).eq("status", "pending");
+    await setGatewayInfo(supabase, purchaseId, {
+      requestId: payload?.RequestId ?? payload?.requestId ?? null,
+      ref: orderId,
+      payload,
+    });
 
     return { redirectUrl: `/app/compras/${purchaseId}/gateway?method=mbway` };
   }
@@ -98,11 +122,11 @@ export async function createIfthenpayPayment({ purchaseId, method }: StartArgs):
       }),
     });
     const payload = await res.json();
-    await supabase.from("payments").update({
-      gateway_request_id: payload?.RequestId ?? null,
-      gateway_payload: payload,
-      gateway_ref: payload?.Reference ?? payload?.reference ?? orderId,
-    }).eq("purchase_id", purchaseId).eq("status", "pending");
+    await setGatewayInfo(supabase, purchaseId, {
+      requestId: payload?.RequestId ?? null,
+      ref: payload?.Reference ?? payload?.reference ?? orderId,
+      payload,
+    });
     return { redirectUrl: `/app/compras/${purchaseId}/gateway?method=multibanco` };
   }
 
@@ -124,11 +148,11 @@ export async function createIfthenpayPayment({ purchaseId, method }: StartArgs):
       }),
     });
     const payload = await res.json();
-    await supabase.from("payments").update({
-      gateway_request_id: payload?.RequestId ?? null,
-      gateway_payload: payload,
-      gateway_ref: orderId,
-    }).eq("purchase_id", purchaseId).eq("status", "pending");
+    await setGatewayInfo(supabase, purchaseId, {
+      requestId: payload?.RequestId ?? null,
+      ref: orderId,
+      payload,
+    });
     return { redirectUrl: payload?.PaymentUrl ?? payload?.paymentUrl ?? `/app/compras/${purchaseId}/gateway?method=card` };
   }
 

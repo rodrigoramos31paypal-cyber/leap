@@ -45,6 +45,9 @@ export async function bookAction({
       durationMin,
       sessionType,
     });
+    // SEC: createBooking (RPC) já validou ownership/regras acima. As
+    // chamadas abaixo usam service role mas só sobre um bookingId
+    // server-generated — não devolvem dados ao caller.
     await dispatchBookingCreated(bookingId).catch(() => {});
     await pushBookingToCalendars(bookingId).catch(() => {});
     // Verifica o status final para a UI mostrar mensagem correcta

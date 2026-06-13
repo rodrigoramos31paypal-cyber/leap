@@ -4,7 +4,7 @@
 // de refactor — apenas terminologia user-facing usa "sessão")
 // ════════════════════════════════════════════════════════════════
 import { cache } from "react";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import type { PaymentMethod, SessionType } from "@/types/database";
 
 export type CreditSummary = {
@@ -211,9 +211,3 @@ export async function adjustCredits(purchaseId: string, delta: number, reason: s
   if (error) throw error;
 }
 
-/** Confirma compra usando service role (para webhooks/callbacks). */
-export async function confirmPurchaseAsService(purchaseId: string) {
-  const supabase = createAdminClient();
-  const { error } = await supabase.rpc("confirm_purchase", { p_purchase_id: purchaseId });
-  if (error) throw error;
-}
