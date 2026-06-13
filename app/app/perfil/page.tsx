@@ -3,6 +3,8 @@ import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { updateProfileAction } from "./actions";
 import { BackLink } from "@/components/back-link";
 import { NotificationPrefToggle } from "@/components/notification-pref-toggle";
+import { DeleteAccountSection } from "@/components/delete-account-section";
+import { Download } from "lucide-react";
 
 export default async function PerfilPage({
   searchParams,
@@ -69,6 +71,23 @@ export default async function PerfilPage({
           label="Avisos de saldo e validade"
           desc="Avisa-te quando as tuas sessões estão a acabar ou um pack está a expirar."
         />
+      </div>
+
+      <div className="card space-y-3 p-5">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Dados e privacidade</h2>
+        <a
+          href="/api/me/export"
+          className="flex items-center gap-3 rounded-lg border border-ink-900/10 p-3 hover:border-gold-400"
+        >
+          <Download size={18} className="shrink-0 text-ink-700" />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold">Descarregar os meus dados</div>
+            <div className="text-xs text-ink-500">Perfil, sessões, compras e notas (Excel).</div>
+          </div>
+        </a>
+        <div className="border-t border-ink-900/5 pt-3">
+          <DeleteAccountSection />
+        </div>
       </div>
     </div>
   );
