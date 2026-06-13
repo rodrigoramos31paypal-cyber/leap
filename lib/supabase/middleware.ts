@@ -47,7 +47,26 @@ export async function updateSession(
     },
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  // PERF (audit #1): verificação de sessão local em vez de round-trip
+  // ao GoTrue. `getClaims()` valida a ASSINATURA do JWT em processo
+  // quando o projecto usa signing keys assimétricas (ES256/RS256/EdDSA):
+  // zero latência de rede no caminho crítico de cada request/prefetch.
+  //
+  // IMPORTANTE — pré-condição: enquanto os tokens forem assinados com o
+  // segredo HS256 legacy, a auth-js faz fallback transparente para
+  // getUser() (mesmo comportamento de hoje, sem regressão). O ganho de
+  // performance só se materializa após migrar para signing keys
+  // assimétricas no dashboard Supabase (Auth → JWT Keys → migrar p/ ECC).
+  //
+  // SEGURANÇA: ao contrário de descodificar o JWT à mão, getClaims()
+  // verifica a assinatura criptográfica — não é forjável, fecha o
+  // loophole do header `next-router-prefetch`.
+  //
+  // SESSÃO: getClaims() → getSession() → __loadSession() continua a
+  // refrescar tokens expirados (_callRefreshToken) e o cookie adapter
+  // re-escreve os cookies via setAll — o refresh de sessão mantém-se.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const user = claimsData?.claims ?? null;
   const path = request.nextUrl.pathname;
 
   // Public paths
