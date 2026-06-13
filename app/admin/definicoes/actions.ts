@@ -45,11 +45,44 @@ export async function saveSettingsAction(formData: FormData) {
 
 export async function addAvailabilityAction(formData: FormData) {
   const supabase = createClient();
+  const trainerId = String(formData.get("trainerId") ?? "");
+  const dayOfWeek = Number(formData.get("day_of_week") ?? 1);
+  const startTime = String(formData.get("start_time") ?? "07:00");
+  const endTime = String(formData.get("end_time") ?? "21:00");
+
+  // Validação de intervalo: início < fim. Comparar como strings "HH:MM"
+  // funciona porque o formato é fixo e lexicograficamente ordenável.
+  if (startTime >= endTime) {
+    setFlash("A hora de início tem de ser anterior à hora de fim", "error");
+    revalidatePath("/admin/definicoes");
+    return;
+  }
+
+  // Regra: 1 horário por dia da semana. Defesa em profundidade — a UI
+  // já filtra o dropdown, mas o action também rejeita duplicados para
+  // que um submit direto (curl, JS modificado) não consiga inserir.
+  const { data: existing } = await supabase
+    .from("trainer_availability")
+    .select("id")
+    .eq("trainer_id", trainerId)
+    .eq("day_of_week", dayOfWeek)
+    .maybeSingle();
+
+  if (existing) {
+    const DAYS_PT = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+    setFlash(
+      `Já existe um horário para ${DAYS_PT[dayOfWeek] ?? "este dia"}. Elimina o atual antes de adicionar outro.`,
+      "error",
+    );
+    revalidatePath("/admin/definicoes");
+    return;
+  }
+
   const { error } = await supabase.from("trainer_availability").insert({
-    trainer_id: String(formData.get("trainerId") ?? ""),
-    day_of_week: Number(formData.get("day_of_week") ?? 1),
-    start_time: String(formData.get("start_time") ?? "07:00"),
-    end_time: String(formData.get("end_time") ?? "21:00"),
+    trainer_id: trainerId,
+    day_of_week: dayOfWeek,
+    start_time: startTime,
+    end_time: endTime,
   });
   if (error) setFlash("Não foi possível adicionar disponibilidade", "error", error.message);
   else setFlash("Disponibilidade adicionada");
