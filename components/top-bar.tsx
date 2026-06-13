@@ -12,6 +12,7 @@ export function TopBar({
   notifLink = "/app/notificacoes",
   userId,
   homeHref = "/",
+  wide = false,
 }: {
   title?: string;
   unread?: number;
@@ -22,10 +23,14 @@ export function TopBar({
   /** Destino do logótipo. Em layouts autenticados, aponta para o
    *  dashboard correspondente (cliente ou admin) em vez da landing. */
   homeHref?: string;
+  /** Alinha o conteúdo do header com o container largo (max-w-7xl) do
+   *  admin, para o logótipo ficar por cima da sidebar. Cliente usa o
+   *  container normal (max-w-6xl). */
+  wide?: boolean;
 }) {
   return (
     <header className="safe-top sticky top-0 z-30 border-b border-ink-900/5 bg-bone-50/80 backdrop-blur dark:border-white/5 dark:bg-ink-900/80">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+      <div className={`mx-auto flex items-center justify-between gap-3 px-4 py-3 ${wide ? "max-w-7xl" : "max-w-6xl"}`}>
         <div className="flex items-center gap-2">
           {back ? (
             <Link href={back} className="rounded-md p-1 text-ink-500 hover:bg-ink-900/5 dark:text-bone-100 dark:hover:bg-white/10">

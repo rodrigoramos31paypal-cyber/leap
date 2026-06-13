@@ -50,6 +50,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         notifLink="/admin/notificacoes"
         userId={user.id}
         homeHref="/admin/dashboard"
+        wide
       />
       <Toaster initial={flash} />
       <div className="mx-auto max-w-7xl md:flex md:gap-6 md:px-4 md:py-6">
