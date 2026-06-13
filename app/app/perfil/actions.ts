@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
+import { logError } from "@/lib/errors";
 
 export async function updateProfileAction(formData: FormData) {
   const supabase = createClient();
@@ -18,7 +19,8 @@ export async function updateProfileAction(formData: FormData) {
     .eq("id", user.id);
 
   if (error) {
-    setFlash("Não foi possível guardar o perfil", "error", error.message);
+    logError("updateProfileAction", error);
+    setFlash("Não foi possível guardar o perfil", "error");
   } else {
     setFlash("Perfil actualizado");
   }

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
+import { logError } from "@/lib/errors";
 
 export async function markReadAction(notifId: string) {
   const supabase = createClient();
@@ -17,7 +18,8 @@ export async function deleteNotificationAction(formData: FormData) {
   const supabase = createClient();
   const { error } = await supabase.from("notifications").delete().eq("id", id);
   if (error) {
-    setFlash("Não foi possível eliminar", "error", error.message);
+    logError("deleteNotificationAction", error);
+    setFlash("Não foi possível eliminar", "error");
   } else {
     setFlash("Notificação eliminada");
   }

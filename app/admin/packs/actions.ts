@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
+import { logError } from "@/lib/errors";
 
 export async function savePackAction(formData: FormData) {
   const supabase = createClient();
@@ -24,7 +25,8 @@ export async function savePackAction(formData: FormData) {
     sort_order: sessions * 10,
   });
   if (error) {
-    setFlash("Não foi possível criar o pack", "error", error.message);
+    logError("savePackAction", error);
+    setFlash("Não foi possível criar o pack", "error");
   } else {
     setFlash("Pack criado");
   }
@@ -49,7 +51,8 @@ export async function updatePackAction(formData: FormData) {
     })
     .eq("id", id);
   if (error) {
-    setFlash("Não foi possível guardar", "error", error.message);
+    logError("updatePackAction", error);
+    setFlash("Não foi possível guardar", "error");
   } else {
     setFlash("Pack actualizado");
   }
@@ -62,7 +65,8 @@ export async function togglePackAction(formData: FormData) {
   const active = formData.get("active") === "true";
   const { error } = await supabase.from("packs").update({ active }).eq("id", id);
   if (error) {
-    setFlash("Não foi possível alterar o estado", "error", error.message);
+    logError("togglePackAction", error);
+    setFlash("Não foi possível alterar o estado", "error");
   } else {
     setFlash(active ? "Pack activado" : "Pack desactivado");
   }
@@ -74,7 +78,8 @@ export async function deletePackAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const { error } = await supabase.from("packs").delete().eq("id", id);
   if (error) {
-    setFlash("Não foi possível eliminar", "error", error.message);
+    logError("deletePackAction", error);
+    setFlash("Não foi possível eliminar", "error");
   } else {
     setFlash("Pack eliminado");
   }

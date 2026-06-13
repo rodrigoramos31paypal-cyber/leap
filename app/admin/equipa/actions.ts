@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
+import { logError } from "@/lib/errors";
 
 async function requireOwner() {
   const supabase = createClient();
@@ -38,7 +39,8 @@ export async function addTrainerAction(formData: FormData): Promise<{ error?: st
       user_metadata: { full_name: fullName },
     });
     if (authErr || !created.user) {
-      return { error: authErr?.message ?? "Erro ao criar conta." };
+      logError("addTrainerAction:createUser", authErr);
+      return { error: "Não foi possível criar a conta do trainer." };
     }
     const userId = created.user.id;
 
@@ -48,7 +50,10 @@ export async function addTrainerAction(formData: FormData): Promise<{ error?: st
       .from("profiles")
       .update({ role: "trainer", full_name: fullName })
       .eq("id", userId);
-    if (profErr) return { error: profErr.message };
+    if (profErr) {
+      logError("addTrainerAction:promote", profErr);
+      return { error: "Não foi possível configurar o perfil do trainer." };
+    }
 
     // 3. cria trainer record + settings + horários default
     const { data: tRow, error: tErr } = await admin
@@ -56,7 +61,10 @@ export async function addTrainerAction(formData: FormData): Promise<{ error?: st
       .insert({ profile_id: userId, slug, bio: "Personal Trainer" })
       .select("id")
       .single();
-    if (tErr || !tRow) return { error: tErr?.message ?? "Erro ao criar trainer." };
+    if (tErr || !tRow) {
+      logError("addTrainerAction:createTrainer", tErr);
+      return { error: "Não foi possível criar o registo de trainer." };
+    }
 
     await admin.from("trainer_settings").insert({ trainer_id: tRow.id });
     await admin.from("trainer_availability").insert([
@@ -71,9 +79,10 @@ export async function addTrainerAction(formData: FormData): Promise<{ error?: st
     revalidatePath("/admin/equipa");
     setFlash("Trainer criado");
     return { ok: true };
-  } catch (e: any) {
-    setFlash("Não foi possível criar trainer", "error", e?.message);
-    return { error: e?.message ?? "Erro." };
+  } catch (e) {
+    logError("addTrainerAction", e);
+    setFlash("Não foi possível criar trainer", "error");
+    return { error: "Não foi possível criar o trainer." };
   }
 }
 
@@ -83,7 +92,7 @@ export async function toggleTrainerActiveAction(formData: FormData) {
   const active = formData.get("active") === "true";
   const admin = createAdminClient();
   const { error } = await admin.from("trainers").update({ active }).eq("id", id);
-  if (error) setFlash("Não foi possível alterar o estado", "error", error.message);
+  if (error) { logError("toggleTrainerActiveAction", error); setFlash("Não foi possível alterar o estado", "error"); }
   else setFlash(active ? "Trainer activado" : "Trainer desactivado");
   revalidatePath("/admin/equipa");
 }
@@ -94,7 +103,7 @@ export async function deleteTrainerAction(formData: FormData) {
   const admin = createAdminClient();
   // não apagamos auth.users para preservar histórico; só remove trainer
   const { error } = await admin.from("trainers").delete().eq("id", id);
-  if (error) setFlash("Não foi possível remover trainer", "error", error.message);
+  if (error) { logError("deleteTrainerAction", error); setFlash("Não foi possível remover trainer", "error"); }
   else setFlash("Trainer removido");
   revalidatePath("/admin/equipa");
 }

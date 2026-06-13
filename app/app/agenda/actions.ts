@@ -6,6 +6,7 @@ import { dispatchBookingCreated } from "@/lib/email-dispatch";
 import { pushBookingToCalendars } from "@/lib/calendar-sync";
 import { createClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
+import { logError } from "@/lib/errors";
 import type { SessionType } from "@/types/database";
 
 export async function getSlotsAction({
@@ -60,9 +61,10 @@ export async function bookAction({
     const pending = (b as any)?.status === "booked";
     setFlash(pending ? "Marcação criada — a aguardar aprovação" : "Marcação confirmada");
     return { ok: true, pending };
-  } catch (err: any) {
-    setFlash("Não foi possível marcar", "error", err?.message);
-    return { error: err?.message ?? "Erro ao marcar." };
+  } catch (err) {
+    logError("bookAction", err);
+    setFlash("Não foi possível marcar", "error");
+    return { error: "Não foi possível marcar. Tenta novamente." };
   }
 }
 
@@ -97,8 +99,9 @@ export async function bookRecurringAction({
     }
     setFlash(`Criadas ${result.booking_ids.length} marcações`);
     return { ok: true, result };
-  } catch (err: any) {
-    setFlash("Não foi possível marcar a série", "error", err?.message);
-    return { error: err?.message ?? "Erro ao marcar série." };
+  } catch (err) {
+    logError("bookRecurringAction", err);
+    setFlash("Não foi possível marcar a série", "error");
+    return { error: "Não foi possível marcar a série. Tenta novamente." };
   }
 }

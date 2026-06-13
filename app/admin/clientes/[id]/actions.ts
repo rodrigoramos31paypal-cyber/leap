@@ -9,6 +9,7 @@ import {
 } from "@/lib/credits";
 import { getCurrentTrainerId, getAccessibleTrainerIds } from "@/lib/trainer";
 import { setFlash } from "@/lib/flash";
+import { logError } from "@/lib/errors";
 
 export async function adjustCreditsAction(formData: FormData) {
   const purchaseId = String(formData.get("purchaseId") ?? "");
@@ -25,8 +26,9 @@ export async function adjustCreditsAction(formData: FormData) {
     setFlash(
       delta > 0 ? `Adicionadas ${delta} sessão(ões)` : `Removidas ${Math.abs(delta)} sessão(ões)`,
     );
-  } catch (e: any) {
-    setFlash("Não foi possível ajustar sessões", "error", e?.message);
+  } catch (e) {
+    logError("adjustCreditsAction", e);
+    setFlash("Não foi possível ajustar sessões", "error");
   }
   revalidatePath(`/admin/clientes/${clientId}`);
 }
@@ -99,9 +101,9 @@ export async function grantPackAction(formData: FormData): Promise<void> {
     } else {
       setFlash("Pack atribuído — a aguardar confirmação de pagamento", "info");
     }
-  } catch (e: any) {
-    console.error("grantPackAction failed", e);
-    setFlash("Não foi possível atribuir as sessões", "error", e?.message);
+  } catch (e) {
+    logError("grantPackAction", e);
+    setFlash("Não foi possível atribuir as sessões", "error");
   }
   revalidatePath(`/admin/clientes/${clientId}`);
 }

@@ -7,6 +7,7 @@ import { dispatchBookingCancelled } from "@/lib/email-dispatch";
 import { removeBookingFromCalendars } from "@/lib/calendar-sync";
 import { createClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
+import { logError } from "@/lib/errors";
 
 async function wasRefunded(bookingId: string): Promise<boolean> {
   const supabase = createClient();
@@ -33,8 +34,9 @@ export async function cancelBookingAction(formData: FormData) {
     setFlash(
       refunded ? "Sessão cancelada e devolvida" : "Sessão cancelada (cancelamento tardio)",
     );
-  } catch (e: any) {
-    setFlash("Não foi possível cancelar", "error", e?.message);
+  } catch (e) {
+    logError("cancelBookingAction", e);
+    setFlash("Não foi possível cancelar", "error");
   }
   revalidatePath("/app/historico");
   revalidatePath("/app/dashboard");
@@ -49,8 +51,9 @@ export async function rebookAction(formData: FormData) {
     await dispatchBookingCancelled(bookingId, refunded).catch(() => {});
     await removeBookingFromCalendars(bookingId).catch(() => {});
     setFlash("Sessão cancelada — escolhe novo horário", "info");
-  } catch (e: any) {
-    setFlash("Não foi possível reagendar", "error", e?.message);
+  } catch (e) {
+    logError("rebookAction", e);
+    setFlash("Não foi possível reagendar", "error");
     revalidatePath("/app/historico");
     return;
   }

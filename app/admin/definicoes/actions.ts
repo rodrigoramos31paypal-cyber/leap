@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
+import { logError } from "@/lib/errors";
 
 export async function saveTrainerBioAction(formData: FormData) {
   const supabase = createClient();
@@ -10,7 +11,7 @@ export async function saveTrainerBioAction(formData: FormData) {
   const bio = String(formData.get("bio") ?? "").trim().slice(0, 500);
   if (!trainerId) return;
   const { error } = await supabase.from("trainers").update({ bio }).eq("id", trainerId);
-  if (error) setFlash("Não foi possível guardar a biografia", "error", error.message);
+  if (error) { logError("saveTrainerBioAction", error); setFlash("Não foi possível guardar a biografia", "error"); }
   else setFlash("Biografia guardada");
   revalidatePath("/admin/definicoes");
 }
@@ -38,7 +39,7 @@ export async function saveSettingsAction(formData: FormData) {
       charge_no_show: formData.get("charge_no_show") === "on",
       auto_confirm_bookings: formData.get("auto_confirm_bookings") === "on",
     });
-  if (error) setFlash("Não foi possível guardar definições", "error", error.message);
+  if (error) { logError("saveSettingsAction", error); setFlash("Não foi possível guardar definições", "error"); }
   else setFlash("Definições guardadas");
   revalidatePath("/admin/definicoes");
 }
@@ -84,7 +85,7 @@ export async function addAvailabilityAction(formData: FormData) {
     start_time: startTime,
     end_time: endTime,
   });
-  if (error) setFlash("Não foi possível adicionar disponibilidade", "error", error.message);
+  if (error) { logError("addAvailabilityAction", error); setFlash("Não foi possível adicionar disponibilidade", "error"); }
   else setFlash("Disponibilidade adicionada");
   revalidatePath("/admin/definicoes");
 }
@@ -92,7 +93,7 @@ export async function addAvailabilityAction(formData: FormData) {
 export async function deleteAvailabilityAction(formData: FormData) {
   const supabase = createClient();
   const { error } = await supabase.from("trainer_availability").delete().eq("id", String(formData.get("id") ?? ""));
-  if (error) setFlash("Não foi possível remover", "error", error.message);
+  if (error) { logError("deleteAvailabilityAction", error); setFlash("Não foi possível remover", "error"); }
   else setFlash("Disponibilidade removida");
   revalidatePath("/admin/definicoes");
 }
@@ -102,7 +103,7 @@ export async function deleteBlockAction(formData: FormData) {
   if (!id) return;
   const supabase = createClient();
   const { error } = await supabase.from("trainer_blocked_times").delete().eq("id", id);
-  if (error) setFlash("Não foi possível remover bloqueio", "error", error.message);
+  if (error) { logError("deleteBlockAction", error); setFlash("Não foi possível remover bloqueio", "error"); }
   else setFlash("Bloqueio removido");
   revalidatePath("/admin/definicoes");
   revalidatePath("/admin/agenda");
@@ -116,7 +117,7 @@ export async function addBlockAction(formData: FormData) {
     ends_at: new Date(String(formData.get("ends_at"))).toISOString(),
     reason: String(formData.get("reason") ?? "") || null,
   });
-  if (error) setFlash("Não foi possível criar bloqueio", "error", error.message);
+  if (error) { logError("addBlockAction", error); setFlash("Não foi possível criar bloqueio", "error"); }
   else setFlash("Bloqueio criado");
   revalidatePath("/admin/definicoes");
 }

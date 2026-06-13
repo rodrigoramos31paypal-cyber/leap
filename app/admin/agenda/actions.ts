@@ -7,6 +7,7 @@ import { removeBookingFromCalendars } from "@/lib/calendar-sync";
 import { createClient } from "@/lib/supabase/server";
 import { getAccessibleTrainerIds } from "@/lib/trainer";
 import { setFlash } from "@/lib/flash";
+import { logError } from "@/lib/errors";
 
 export async function confirmAttendanceAction(formData: FormData) {
   const id = String(formData.get("bookingId") ?? "");
@@ -15,8 +16,9 @@ export async function confirmAttendanceAction(formData: FormData) {
     await confirmAttendance(id);
     await dispatchBookingConfirmed(id).catch(() => {});
     setFlash("Presença confirmada");
-  } catch (e: any) {
-    setFlash("Não foi possível confirmar", "error", e?.message);
+  } catch (e) {
+    logError("confirmAttendanceAction", e);
+    setFlash("Não foi possível confirmar", "error");
   }
   revalidatePath("/admin/agenda");
   revalidatePath("/admin/dashboard");
@@ -28,8 +30,9 @@ export async function markNoShowAction(formData: FormData) {
   try {
     await markNoShow(id);
     setFlash("Marcado como falta");
-  } catch (e: any) {
-    setFlash("Não foi possível marcar como falta", "error", e?.message);
+  } catch (e) {
+    logError("markNoShowAction", e);
+    setFlash("Não foi possível marcar como falta", "error");
   }
   revalidatePath("/admin/agenda");
 }
@@ -47,8 +50,9 @@ export async function cancelAdminAction(formData: FormData) {
     await dispatchBookingCancelled(id, true).catch(() => {});
     await removeBookingFromCalendars(id).catch(() => {});
     setFlash("Sessão cancelada");
-  } catch (e: any) {
-    setFlash("Não foi possível cancelar", "error", e?.message);
+  } catch (e) {
+    logError("cancelAdminAction", e);
+    setFlash("Não foi possível cancelar", "error");
   }
   revalidatePath("/admin/agenda");
 }

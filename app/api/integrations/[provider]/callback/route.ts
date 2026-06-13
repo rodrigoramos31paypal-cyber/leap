@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { timingSafeEqual } from "crypto";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { exchangeCode } from "@/lib/calendar-sync";
+import { logError } from "@/lib/errors";
 
 const STATE_COOKIE = "oauth_state";
 
@@ -77,9 +78,13 @@ export async function GET(req: Request, { params }: { params: { provider: string
       );
 
     return NextResponse.redirect(new URL("/admin/definicoes?integration_ok=1", req.url));
-  } catch (err: any) {
+  } catch (err) {
+    logError("integrationCallback", err);
     return NextResponse.redirect(
-      new URL(`/admin/definicoes?integration_error=${encodeURIComponent(err?.message ?? "")}`, req.url),
+      new URL(
+        `/admin/definicoes?integration_error=${encodeURIComponent("Não foi possível concluir a ligação. Tenta novamente.")}`,
+        req.url,
+      ),
     );
   }
 }
