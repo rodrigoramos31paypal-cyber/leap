@@ -93,6 +93,32 @@ export const getClientIdsInScope = cache(async (trainerIds: string[]): Promise<s
   return Array.from(set);
 });
 
+/** Nº de clientes distintos no scope — só a contagem, sem trazer linhas.
+ *
+ *  PERF: usa a RPC `count_clients_in_scope` (COUNT(DISTINCT) no Postgres)
+ *  em vez de puxar todas as linhas de purchases+bookings para o Node e
+ *  deduplicar em JS, como faz getClientIdsInScope(). Usar isto quando só
+ *  precisamos do número (ex: KPI do dashboard) — não da lista de IDs.
+ *
+ *  ROBUSTEZ: se a RPC ainda não existir (migration 0033 não aplicada) ou
+ *  falhar, cai para getClientIdsInScope().length — comportamento idêntico
+ *  ao anterior. Zero breakage no deploy. */
+export const getClientCountInScope = cache(async (trainerIds: string[]): Promise<number> => {
+  if (trainerIds.length === 0) return 0;
+  const supabase = createClient();
+  try {
+    // `as any`: a RPC ainda não está nos tipos gerados do Supabase.
+    const { data, error } = await (supabase as any).rpc("count_clients_in_scope", {
+      p_trainer_ids: trainerIds,
+    });
+    if (error) throw error;
+    return Number(data ?? 0);
+  } catch {
+    const ids = await getClientIdsInScope(trainerIds);
+    return ids.length;
+  }
+});
+
 /** Para clientes: trainer a usar — preferred = profile.trainer_id, fallback = único activo. */
 export const getTrainerForClient = cache(async (clientUserId: string): Promise<string | null> => {
   const supabase = createClient();

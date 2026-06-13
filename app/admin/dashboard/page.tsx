@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { eur, formatDateTime } from "@/lib/utils";
 import { CreditCard, Calendar, Users, TrendingUp, Activity, Package, ChevronLeft, ChevronRight } from "lucide-react";
-import { getAccessibleTrainerIds, getClientIdsInScope } from "@/lib/trainer";
+import { getAccessibleTrainerIds, getClientCountInScope } from "@/lib/trainer";
 import { KpiGridSkeleton, CardSkeleton } from "@/components/skeleton";
 
 const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -107,7 +107,7 @@ async function Kpis({ year, month }: { year: number; month: number }) {
     { count: pendingPaymentsCount },
     { data: monthPurchases },
     { data: monthBookings },
-    clientsInScope,
+    totalClientsInScope,
   ] = await Promise.all([
     supabase
       .from("purchases")
@@ -127,9 +127,8 @@ async function Kpis({ year, month }: { year: number; month: number }) {
       .in("trainer_id", trainerScope)
       .gte("starts_at", monthStart.toISOString())
       .lt("starts_at", monthEnd.toISOString()),
-    getClientIdsInScope(trainerIds),
+    getClientCountInScope(trainerIds),
   ]);
-  const totalClientsInScope = clientsInScope.length;
 
   const revenue = ((monthPurchases ?? []) as any[]).reduce((s: number, r: any) => s + r.amount_cents, 0);
   const packsSold = (monthPurchases ?? []).length;
