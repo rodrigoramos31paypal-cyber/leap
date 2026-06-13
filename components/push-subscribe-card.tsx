@@ -16,8 +16,34 @@ function urlBase64ToUint8Array(base64String: string) {
   return arr;
 }
 
-// Soft prompt: aparece só quando o push é suportado, a permissão ainda
-// não foi pedida, e o utilizador não dispensou recentemente.
+// Garante uma subscrição activa e grava-a. Reutiliza a existente se houver
+// (idempotente: re-grava sempre, o que "auto-cura" a linha no servidor caso
+// tenha sido removida por um envio falhado). Assume permissão concedida.
+async function subscribeAndSave(): Promise<boolean> {
+  const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  if (!key) return false;
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) {
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(key),
+    });
+  }
+  const json = sub.toJSON();
+  const r = await savePushSubscription({
+    endpoint: json.endpoint ?? "",
+    p256dh: json.keys?.p256dh ?? "",
+    auth: json.keys?.auth ?? "",
+  });
+  return !!r?.ok;
+}
+
+// Soft prompt + auto-heal:
+//  • permissão 'granted' mas sem subscrição (ex.: re-instalou a PWA) →
+//    re-subscreve em silêncio, sem mostrar nada.
+//  • permissão 'default' e não dispensado → mostra o card "Ativar".
+//  • 'denied' → nada (tem de reativar nas definições do browser/iOS).
 export function PushSubscribeCard() {
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -27,7 +53,12 @@ export function PushSubscribeCard() {
     const supported =
       "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
     if (!supported) return;
-    if (Notification.permission !== "default") return; // já concedeu/bloqueou
+
+    if (Notification.permission === "granted") {
+      subscribeAndSave().catch(() => {});
+      return;
+    }
+    if (Notification.permission !== "default") return; // denied
     const last = Number(localStorage.getItem(DISMISS_KEY) ?? 0);
     if (last && Date.now() - last < DISMISS_TTL_MS) return;
     setShow(true);
@@ -42,22 +73,7 @@ export function PushSubscribeCard() {
         setShow(false);
         return;
       }
-      const reg = await navigator.serviceWorker.ready;
-      const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      if (!key) {
-        setShow(false);
-        return;
-      }
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(key),
-      });
-      const json = sub.toJSON();
-      await savePushSubscription({
-        endpoint: json.endpoint ?? "",
-        p256dh: json.keys?.p256dh ?? "",
-        auth: json.keys?.auth ?? "",
-      });
+      await subscribeAndSave();
       setShow(false);
     } catch {
       setShow(false);
