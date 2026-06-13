@@ -80,6 +80,8 @@ export async function updateSession(
     // Cron de lembretes: protegido por CRON_SECRET no próprio route, não
     // por sessão. Sem isto o middleware redirecionava-o para /login.
     path.startsWith("/api/cron") ||
+    // Push dispatch (Supabase webhook) — protegido por CRON_SECRET no route.
+    path.startsWith("/api/push") ||
     // iCal subscription feeds: autenticados pelo token UUID na URL.
     // iOS Calendar / Google Calendar não enviam cookies de sessão, e
     // o redirect para /login do middleware faz a validação falhar.

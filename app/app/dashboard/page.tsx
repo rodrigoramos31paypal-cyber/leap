@@ -4,6 +4,7 @@ import { createClient, getSessionUser, getCurrentProfile } from "@/lib/supabase/
 import { getClientCredits, getClientCreditsByTrainer } from "@/lib/credits";
 import { formatDateTime, pluralize } from "@/lib/utils";
 import { Calendar, ShoppingBag, Sparkles, AlertCircle, NotebookPen } from "lucide-react";
+import { PushSubscribeCard } from "@/components/push-subscribe-card";
 
 export default async function ClientDashboard() {
   const user = await getSessionUser();
@@ -46,6 +47,8 @@ export default async function ClientDashboard() {
         </h1>
         <p className="text-sm text-ink-500">Pronto para mais uma sessão?</p>
       </div>
+
+      <PushSubscribeCard />
 
       {/* Cartão sessões — adapta-se ao tema. */}
       <div className="card p-5">
