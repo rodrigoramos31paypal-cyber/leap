@@ -206,4 +206,18 @@ export const emailTemplates = {
       text: `O teu pack ${args.packName} expira a ${args.when} (${args.remaining} por usar).`,
     };
   },
+  ratingPrompt(args: { clientName: string; when: string; bookingId: string; appUrl: string }) {
+    const link = `${args.appUrl.replace(/\/$/, "")}/app/sessao/${args.bookingId}/avaliar`;
+    return {
+      subject: "Como correu a tua sessão?",
+      html: shell(
+        "Como correu a tua sessão?",
+        `<p style="margin:0 0 10px">Olá ${escapeHtml(args.clientName)},</p>
+         <p style="margin:0 0 10px">A tua sessão de <strong>${escapeHtml(args.when)}</strong> já terminou. Avalia em 10 segundos — ajuda-nos a melhorar.</p>
+         <p style="margin:18px 0"><a href="${link}" style="display:inline-block;padding:10px 18px;background:#caa14a;color:#1a1a1a;border-radius:8px;text-decoration:none;font-weight:600">Avaliar sessão</a></p>
+         <p style="margin:0;color:#666;font-size:13px">É opcional. Podes ignorar este email sem problema.</p>`,
+      ),
+      text: `Avalia a tua sessão de ${args.when}: ${link}`,
+    };
+  },
 };

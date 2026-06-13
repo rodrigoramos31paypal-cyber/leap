@@ -2,14 +2,14 @@ import { redirect, notFound } from "next/navigation";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { formatDateTime, BOOKING_STATUS } from "@/lib/utils";
 import { cancelBookingAction, rebookAction } from "@/app/app/historico/actions";
-import { CalendarPlus, RefreshCcw, X, NotebookPen, ChevronRight } from "lucide-react";
+import { CalendarPlus, RefreshCcw, X, NotebookPen, ChevronRight, Star } from "lucide-react";
 import { BackLink } from "@/components/back-link";
 import { NoteEditor } from "@/components/note-editor";
 import { getMyNoteForBooking } from "@/lib/notes";
+import { getMyRatingForBooking } from "@/lib/ratings";
 
 // Página de uma sessão específica (cliente). Opções: adicionar ao
-// calendário, reagendar, cancelar e as minhas notas. Reaproveita as
-// mesmas actions/componentes do histórico ("Ver tudo").
+// calendário, reagendar, cancelar, avaliar e as minhas notas.
 export default async function SessaoPage({ params }: { params: { id: string } }) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
@@ -17,7 +17,7 @@ export default async function SessaoPage({ params }: { params: { id: string } })
   const supabase = createClient();
   const { data: b } = await supabase
     .from("bookings")
-    .select("id, starts_at, session_type, status, client_id, trainer_id")
+    .select("id, starts_at, ends_at, session_type, status, client_id, trainer_id")
     .eq("id", params.id)
     .eq("client_id", user.id)
     .maybeSingle();
@@ -26,6 +26,11 @@ export default async function SessaoPage({ params }: { params: { id: string } })
   const note = await getMyNoteForBooking(b.id);
   const isFuture = new Date(b.starts_at).getTime() > Date.now();
   const canModify = isFuture && (b.status === "booked" || b.status === "confirmed");
+
+  // Sessão "realizada": confirmed + já acabou. Só estas podem ser avaliadas.
+  const isPast = new Date(b.ends_at).getTime() < Date.now();
+  const canRate = isPast && b.status === "confirmed";
+  const existingRating = canRate ? await getMyRatingForBooking(b.id) : null;
 
   // Janela de cancelamento é por trainer (default 12h). Mostramos o
   // valor real no botão para não desalinhar com a regra do servidor.
@@ -107,6 +112,26 @@ export default async function SessaoPage({ params }: { params: { id: string } })
             </button>
           </form>
         </div>
+      ) : canRate ? (
+        <a
+          href={`/app/sessao/${b.id}/avaliar`}
+          className="card flex items-center gap-3 p-4 hover:border-gold-400"
+        >
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-gold-50 text-gold-600">
+            <Star size={18} className={existingRating ? "fill-gold-400 text-gold-400" : ""} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold">
+              {existingRating ? `A tua avaliação: ${existingRating.stars}/5` : "Avaliar sessão"}
+            </div>
+            <div className="text-xs text-ink-500">
+              {existingRating
+                ? "Toca para editar a tua avaliação."
+                : "Como correu? 1-5⭐ + comentário opcional."}
+            </div>
+          </div>
+          <ChevronRight size={16} className="shrink-0 text-ink-500" />
+        </a>
       ) : (
         <div className="card p-4 text-sm text-ink-500">
           Esta sessão já não pode ser alterada.
