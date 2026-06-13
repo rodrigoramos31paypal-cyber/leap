@@ -18,6 +18,19 @@ export default async function NotificationsPage() {
     .order("created_at", { ascending: false })
     .limit(10);
 
+  // PODA: mantém só as 10 mais recentes na BD (apaga as restantes). Sem
+  // isto, apagar uma das 10 trazia a 11.ª de volta ao recarregar (o
+  // `limit 10` re-preenchia). Assim, apagar dá 10 → 9 → 8 e as antigas
+  // não reaparecem.
+  const keepIds = (notifs ?? []).map((n) => n.id);
+  if (keepIds.length === 10) {
+    await supabase
+      .from("notifications")
+      .delete()
+      .eq("user_id", user.id)
+      .not("id", "in", `(${keepIds.join(",")})`);
+  }
+
   // marca todas como lidas ao abrir
   await supabase
     .from("notifications")

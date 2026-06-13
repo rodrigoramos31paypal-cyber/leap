@@ -39,7 +39,11 @@ export function BookingFlow({
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const res = await getSlotsAction({ trainerId, dateIso: date.toISOString(), durationMin: duration });
+      // Envia o dia-calendário LOCAL ("YYYY-MM-DD"), não toISOString():
+      // meia-noite local convertida para UTC saltava para o dia anterior
+      // (ex.: Segunda 00:00 Lisboa → Domingo 23:00 UTC), e o servidor
+      // calculava o dia-da-semana errado.
+      const res = await getSlotsAction({ trainerId, dateIso: ymd(date), durationMin: duration });
       if (cancelled) return;
       setSlots(res.slots);
       setPicked(null);
@@ -256,6 +260,11 @@ function reasonLabel(reason: string) {
   }
 }
 
+// Dia-calendário local como "YYYY-MM-DD" (sem conversão de fuso).
+function ymd(d: Date) {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
 function startOfDay(d: Date) {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
