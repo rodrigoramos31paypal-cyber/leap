@@ -1,9 +1,46 @@
 // ════════════════════════════════════════════════════════════════
 // Cálculo de slots disponíveis para um trainer num dado dia.
+//
+// FUSO: tudo é calculado no fuso do estúdio (Europe/Lisbon), não no
+// fuso do servidor (Vercel corre em UTC). Sem isto, o dia-da-semana e
+// as horas dos slots saíam trocados (ex.: Segunda tratada como Domingo
+// no Verão, marcações a cair no dia anterior).
+//
+// O `date` recebido representa a meia-noite UTC do dia-calendário
+// escolhido (vem de uma string "YYYY-MM-DD"), por isso lemos os seus
+// componentes em UTC.
 // ════════════════════════════════════════════════════════════════
 import { createClient } from "@/lib/supabase/server";
 
+const STUDIO_TZ = "Europe/Lisbon";
+
 export type Slot = { startsAt: Date; endsAt: Date };
+
+// Offset (minutos) tal que horaLocal = UTC + offset, para o tz no instante dado.
+function tzOffsetMinutes(date: Date, tz: string): number {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const p: Record<string, string> = {};
+  for (const part of dtf.formatToParts(date)) p[part.type] = part.value;
+  const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
+  return (asUTC - date.getTime()) / 60000;
+}
+
+// Converte uma hora "de parede" no fuso do estúdio para o instante UTC correcto
+// (trata DST automaticamente via o offset do próprio dia).
+function wallToUtc(y: number, mo: number, d: number, h: number, mi: number): Date {
+  const guess = Date.UTC(y, mo, d, h, mi, 0);
+  const off = tzOffsetMinutes(new Date(guess), STUDIO_TZ);
+  return new Date(guess - off * 60000);
+}
 
 export async function getAvailableSlots(args: {
   trainerId: string;
@@ -13,12 +50,17 @@ export async function getAvailableSlots(args: {
   const { trainerId, date, durationMin } = args;
   const supabase = createClient();
 
-  // dia da semana (0-6)
-  const dow = date.getDay();
-  const dayStart = new Date(date);
-  dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(dayStart);
-  dayEnd.setDate(dayEnd.getDate() + 1);
+  // Componentes do dia-calendário (date = meia-noite UTC de "YYYY-MM-DD").
+  const y = date.getUTCFullYear();
+  const mo = date.getUTCMonth();
+  const d = date.getUTCDate();
+
+  // dia da semana (0-6) do dia-calendário — estável, independente do fuso do servidor.
+  const dow = new Date(Date.UTC(y, mo, d)).getUTCDay();
+
+  // Fronteiras do dia no fuso do estúdio, convertidas para UTC.
+  const dayStart = wallToUtc(y, mo, d, 0, 0);
+  const dayEnd = wallToUtc(y, mo, d + 1, 0, 0);
 
   // disponibilidades nesse dia
   const { data: avail } = await supabase
@@ -75,12 +117,10 @@ export async function getAvailableSlots(args: {
   for (const a of avail) {
     const [sh, sm] = a.start_time.split(":").map(Number);
     const [eh, em] = a.end_time.split(":").map(Number);
-    const startBoundary = new Date(date);
-    startBoundary.setHours(sh, sm, 0, 0);
-    const endBoundary = new Date(date);
-    endBoundary.setHours(eh, em, 0, 0);
+    const startBoundary = wallToUtc(y, mo, d, sh, sm).getTime();
+    const endBoundary = wallToUtc(y, mo, d, eh, em).getTime();
 
-    for (let t = startBoundary.getTime(); t + slotMs <= endBoundary.getTime(); t += stepMs) {
+    for (let t = startBoundary; t + slotMs <= endBoundary; t += stepMs) {
       if (t <= now) continue;
       const slotEnd = t + slotMs;
       const overlaps = busy.some((b) => !(slotEnd <= b.start || t >= b.end));
