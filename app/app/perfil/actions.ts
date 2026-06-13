@@ -52,14 +52,7 @@ export async function deleteAccountAction(
   const { error: rpcErr } = await (supabase as any).rpc("anonymize_my_account");
   if (rpcErr) {
     logError("deleteAccountAction:anonymize", rpcErr);
-    // DIAGNÓSTICO TEMPORÁRIO: mostra o erro real da BD para podermos
-    // identificar a causa. (Voltar a mensagem genérica depois.)
-    const detail =
-      (rpcErr as any)?.message ||
-      (rpcErr as any)?.details ||
-      (rpcErr as any)?.code ||
-      "desconhecido";
-    return { ok: false, error: `Erro ao apagar: ${detail}` };
+    return { ok: false, error: "Não foi possível apagar a conta. Tenta de novo ou contacta-nos." };
   }
 
   // 2) Bloquear o login (remover PII do auth + ban). Só esta parte precisa
