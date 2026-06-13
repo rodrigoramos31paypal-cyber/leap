@@ -32,26 +32,27 @@ export async function updateProfileAction(formData: FormData) {
 // em bookings/purchases e há obrigação legal de retenção contabilística).
 // Em vez disso: apaga dados pessoais sem retenção, anonimiza o perfil
 // (mantém marcações/compras anonimizadas), e bloqueia o login.
-export async function deleteAccountAction(formData: FormData) {
+// Devolve um resultado (NÃO faz redirect) — a navegação é feita no
+// cliente. Mais fiável que <form action> + redirect e mostra erros.
+export async function deleteAccountAction(
+  formData: FormData,
+): Promise<{ ok: boolean; error?: string }> {
   const confirm = String(formData.get("confirm") ?? "").trim();
+  if (confirm !== "APAGAR") {
+    return { ok: false, error: "Escreve APAGAR para confirmar." };
+  }
+
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  if (!user) return { ok: false, error: "Sessão expirada. Volta a entrar." };
   const uid = user.id;
-
-  if (confirm !== "APAGAR") {
-    setFlash("Confirmação inválida — escreve APAGAR.", "error");
-    redirect("/app/perfil");
-  }
 
   // 1) Anonimizar dados pessoais via RPC SECURITY DEFINER (limitada a
   //    auth.uid()). Fiável e independente da service-role key no runtime.
-  //    VERIFICAMOS o erro — antes as escritas falhavam em silêncio.
   const { error: rpcErr } = await (supabase as any).rpc("anonymize_my_account");
   if (rpcErr) {
     logError("deleteAccountAction:anonymize", rpcErr);
-    setFlash("Não foi possível apagar a conta. Tenta de novo ou contacta-nos.", "error");
-    redirect("/app/perfil");
+    return { ok: false, error: "Não foi possível apagar a conta. Contacta-nos." };
   }
 
   // 2) Bloquear o login (remover PII do auth + ban). Só esta parte precisa
@@ -72,7 +73,7 @@ export async function deleteAccountAction(formData: FormData) {
     logError("deleteAccountAction:ban", e);
   }
 
-  // 3) Terminar sessão e ir para a landing page.
+  // 3) Terminar sessão server-side. A navegação para "/" é feita no cliente.
   await supabase.auth.signOut().catch(() => {});
-  redirect("/");
+  return { ok: true };
 }
