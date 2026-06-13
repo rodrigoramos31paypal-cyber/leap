@@ -4,14 +4,19 @@ import { sendEmail, emailTemplates, emailEnabled } from "@/lib/email";
 import { formatDateTime } from "@/lib/utils";
 
 // ════════════════════════════════════════════════════════════════
-// Cron · lembretes de sessão por EMAIL (24h antes).
+// Cron · lembretes de sessão 24h antes — EMAIL + IN-APP/PUSH.
 //
 // Disparado por um scheduler externo (cron-job.org) ou Vercel Cron,
 // com header `Authorization: Bearer ${CRON_SECRET}`.
 //
-// IDEMPOTENTE: a janela é (now, now+24h] e cada envio "reclama" uma
-// linha em booking_reminders antes de enviar. Por isso corre bem a
-// qualquer cadência (de hora a hora ou 1×/dia): nunca envia duas vezes.
+// IDEMPOTENTE por canal: cada envio "reclama" uma linha em
+// booking_reminders (channel='email' ou 'in_app'). Corre a qualquer
+// cadência sem duplicar. Os dois canais são INDEPENDENTES — o email
+// pode estar desactivado e o in-app/push continua a sair.
+//
+// Push: o webhook de Supabase em notifications INSERT dispara o push
+// web automaticamente (ver /api/push/dispatch). Por isso o canal
+// 'in_app' aqui implica também 'push' sem código extra.
 // ════════════════════════════════════════════════════════════════
 
 export const dynamic = "force-dynamic";
@@ -25,9 +30,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  if (!emailEnabled()) {
-    return NextResponse.json({ ok: true, skipped: "email_disabled" });
-  }
+  // Email é opcional. Se estiver desactivado, continuamos com in-app/push.
+  const emailOn = emailEnabled();
 
   const supabase = createAdminClient();
   const now = new Date();
@@ -42,10 +46,9 @@ export async function GET(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!bookings || bookings.length === 0) {
-    return NextResponse.json({ ok: true, processed: 0, sent: 0 });
+    return NextResponse.json({ ok: true, processed: 0, emailSent: 0, inAppSent: 0 });
   }
 
-  // Perfis (cliente) + trainers→perfil, em queries agregadas.
   const clientIds = Array.from(new Set(bookings.map((b: any) => b.client_id)));
   const trainerIds = Array.from(new Set(bookings.map((b: any) => b.trainer_id)));
   const SENTINEL = "00000000-0000-0000-0000-000000000000";
@@ -67,7 +70,6 @@ export async function GET(request: NextRequest) {
   const trainerProfMap = new Map((trainerProfiles ?? []).map((p: any) => [p.id, p]));
   const trainerToProfile = new Map((trainers ?? []).map((t: any) => [t.id, t.profile_id]));
 
-  // Opt-outs.
   const allRecipientIds = Array.from(new Set([...clientIds, ...trainerProfileIds]));
   const { data: prefs } = await (supabase as any)
     .from("notification_preferences")
@@ -78,24 +80,49 @@ export async function GET(request: NextRequest) {
     (prefs ?? []).filter((p: any) => p.enabled === false).map((p: any) => p.user_id),
   );
 
-  let sent = 0;
+  let emailSent = 0;
+  let inAppSent = 0;
 
-  async function claimAndSend(
+  async function claimAndSendEmail(
     bookingId: string,
     recipientId: string,
     to: string | undefined | null,
     tpl: { subject: string; html: string; text?: string },
   ) {
-    if (!to || disabled.has(recipientId)) return;
-    // Reclama a linha de dedup; só envia se a inserção vingou (sem conflito).
+    if (!emailOn || !to || disabled.has(recipientId)) return;
     const { data: claimed, error: claimErr } = await (supabase as any)
       .from("booking_reminders")
       .insert({ booking_id: bookingId, recipient_id: recipientId, channel: "email" })
       .select("id")
       .maybeSingle();
-    if (claimErr || !claimed) return; // já enviado (conflito) ou erro
+    if (claimErr || !claimed) return;
     const res = await sendEmail({ to, ...tpl });
-    if (res.ok) sent++;
+    if (res.ok) emailSent++;
+  }
+
+  async function claimAndPushInApp(
+    bookingId: string,
+    recipientId: string,
+    title: string,
+    body: string,
+    link: string,
+  ) {
+    if (disabled.has(recipientId)) return;
+    const { data: claimed, error: claimErr } = await (supabase as any)
+      .from("booking_reminders")
+      .insert({ booking_id: bookingId, recipient_id: recipientId, channel: "in_app" })
+      .select("id")
+      .maybeSingle();
+    if (claimErr || !claimed) return;
+    // notifications INSERT → webhook dispara push web automaticamente.
+    await (supabase as any).from("notifications").insert({
+      user_id: recipientId,
+      type: "session_reminder",
+      title,
+      body,
+      link,
+    });
+    inAppSent++;
   }
 
   for (const b of bookings as any[]) {
@@ -104,15 +131,22 @@ export async function GET(request: NextRequest) {
     const trainerProfileId = trainerToProfile.get(b.trainer_id);
     const trainerProf = trainerProfileId ? trainerProfMap.get(trainerProfileId) : null;
 
-    await claimAndSend(
+    await claimAndSendEmail(
       b.id,
       b.client_id,
       client?.email,
       emailTemplates.sessionReminder({ clientName: client?.full_name ?? "atleta", when }),
     );
+    await claimAndPushInApp(
+      b.id,
+      b.client_id,
+      "Lembrete de sessão",
+      `Tens uma sessão a ${when}.`,
+      "/app/agenda",
+    );
 
     if (trainerProfileId) {
-      await claimAndSend(
+      await claimAndSendEmail(
         b.id,
         trainerProfileId,
         trainerProf?.email,
@@ -122,8 +156,20 @@ export async function GET(request: NextRequest) {
           when,
         }),
       );
+      await claimAndPushInApp(
+        b.id,
+        trainerProfileId,
+        "Lembrete de sessão",
+        `Sessão com ${client?.full_name ?? "cliente"} a ${when}.`,
+        "/admin/agenda",
+      );
     }
   }
 
-  return NextResponse.json({ ok: true, processed: bookings.length, sent });
+  return NextResponse.json({
+    ok: true,
+    processed: bookings.length,
+    emailSent,
+    inAppSent,
+  });
 }

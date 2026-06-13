@@ -3,7 +3,7 @@
 import { getAvailableSlots } from "@/lib/availability";
 import { createBooking, createRecurringBooking, type RecurringBookingResult } from "@/lib/credits";
 import { dispatchBookingCreated } from "@/lib/email-dispatch";
-import { pushBookingToCalendars } from "@/lib/calendar-sync";
+import { pushBookingToCalendars, removeBookingFromCalendars } from "@/lib/calendar-sync";
 import { createClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
@@ -66,6 +66,40 @@ export async function bookAction({
     setFlash("Não foi possível marcar", "error");
     return { error: "Não foi possível marcar. Tenta novamente." };
   }
+}
+
+export async function rescheduleAction({
+  oldBookingId,
+  startsAtIso,
+  durationMin,
+}: {
+  oldBookingId: string;
+  startsAtIso: string;
+  durationMin: number;
+}): Promise<{ ok?: true; error?: string; pending?: boolean }> {
+  const supabase = createClient();
+  // RPC atómica: devolve crédito da antiga, cancela-a e cria a nova.
+  const { data: newId, error } = await (supabase as any).rpc("reschedule_booking", {
+    p_old_booking_id: oldBookingId,
+    p_starts_at: new Date(startsAtIso).toISOString(),
+    p_duration_min: durationMin,
+  });
+  if (error) {
+    logError("rescheduleAction", error);
+    return { error: "Não foi possível reagendar. O horário pode já estar ocupado." };
+  }
+
+  // Best effort: emails + calendários (a antiga sai, a nova entra).
+  await dispatchBookingCreated(newId as string).catch(() => {});
+  await pushBookingToCalendars(newId as string).catch(() => {});
+  await removeBookingFromCalendars(oldBookingId).catch(() => {});
+
+  const { data: b } = await supabase
+    .from("bookings")
+    .select("status")
+    .eq("id", newId as string)
+    .single();
+  return { ok: true, pending: (b as any)?.status === "booked" };
 }
 
 export async function bookRecurringAction({

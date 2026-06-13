@@ -5,19 +5,52 @@ import { getClientCredits } from "@/lib/credits";
 import { BookingFlow } from "./booking-flow";
 import { BackLink } from "@/components/back-link";
 import { getActiveTrainersPublic, getTrainerForClient } from "@/lib/trainer";
+import { formatDateTime } from "@/lib/utils";
 
 export default async function AgendaPage({
   searchParams,
 }: {
-  searchParams: { rebook?: string; trainer?: string };
+  searchParams: { rebook?: string; trainer?: string; reschedule?: string };
 }) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
   const supabase = createClient();
 
+  // Modo reagendamento: a marcação antiga só é cancelada ao confirmar o novo
+  // horário. Força o trainer e a duração da sessão original.
+  let reschedule:
+    | { id: string; trainerId: string; durationMin: number; startsAt: string }
+    | null = null;
+  if (searchParams.reschedule) {
+    const { data: ob } = await supabase
+      .from("bookings")
+      .select("id, starts_at, ends_at, trainer_id, status, client_id")
+      .eq("id", searchParams.reschedule)
+      .eq("client_id", user.id)
+      .maybeSingle();
+    if (
+      ob &&
+      (ob.status === "booked" || ob.status === "confirmed") &&
+      new Date(ob.starts_at).getTime() > Date.now()
+    ) {
+      reschedule = {
+        id: ob.id,
+        trainerId: ob.trainer_id,
+        durationMin: Math.max(
+          1,
+          Math.round(
+            (new Date(ob.ends_at).getTime() - new Date(ob.starts_at).getTime()) / 60000,
+          ),
+        ),
+        startsAt: ob.starts_at,
+      };
+    }
+  }
+
   const actives = await getActiveTrainersPublic();
-  const preferred = searchParams.trainer ?? (await getTrainerForClient(user.id));
+  const preferred =
+    reschedule?.trainerId ?? searchParams.trainer ?? (await getTrainerForClient(user.id));
   const trainerId = preferred && actives.some((t) => t.id === preferred) ? preferred : null;
 
   // mais que 1 trainer e sem escolha → mostra picker
@@ -100,7 +133,14 @@ export default async function AgendaPage({
         </div>
       )}
 
-      {credits.total === 0 ? (
+      {reschedule && (
+        <div className="rounded-xl border border-gold-300 bg-gold-50 p-4 text-sm text-ink-800">
+          Estás a reagendar a tua sessão de <strong>{formatDateTime(reschedule.startsAt)}</strong>.
+          Escolhe um novo horário — a sessão atual só é cancelada quando confirmares.
+        </div>
+      )}
+
+      {credits.total === 0 && !reschedule ? (
         <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-800">
           Sem sessões disponíveis {currentTrainer ? `com ${currentTrainer.full_name}` : ""}.{" "}
           <a
@@ -115,8 +155,9 @@ export default async function AgendaPage({
         <BookingFlow
           trainerId={trainerId}
           slotDurations={settings?.slot_durations_min ?? [45, 60, 90]}
-          defaultDuration={settings?.default_slot_duration_min ?? 45}
+          defaultDuration={reschedule?.durationMin ?? settings?.default_slot_duration_min ?? 45}
           credits={credits}
+          rescheduleBookingId={reschedule?.id}
         />
       )}
     </div>
