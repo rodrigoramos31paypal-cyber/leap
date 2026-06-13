@@ -13,8 +13,9 @@ export async function savePackAction(formData: FormData) {
   const sessions = Number(formData.get("sessions") ?? 0);
   const price_euros = Number(formData.get("price_euros") ?? 0);
   const validity_days = formData.get("validity_days") ? Number(formData.get("validity_days")) : null;
+  const is_single_session = formData.get("is_single_session") === "on";
 
-  const { error } = await supabase.from("packs").insert({
+  const { error } = await (supabase as any).from("packs").insert({
     trainer_id: trainerId,
     name,
     session_type,
@@ -22,11 +23,17 @@ export async function savePackAction(formData: FormData) {
     price_cents: Math.round(price_euros * 100),
     validity_days,
     active: true,
-    sort_order: sessions * 10,
+    sort_order: is_single_session ? 0 : sessions * 10,
+    is_single_session,
   });
   if (error) {
     logError("savePackAction", error);
-    setFlash("Não foi possível criar o pack", "error");
+    // O índice parcial unique rebenta com código 23505 se já houver um
+    // pack avulsa activo para o mesmo trainer. Damos uma mensagem clara.
+    const msg = (error as any).code === "23505"
+      ? "Já existe um pack 'sessão avulsa' activo. Desactiva o existente antes de criar outro."
+      : "Não foi possível criar o pack";
+    setFlash(msg, "error");
   } else {
     setFlash("Pack criado");
   }
@@ -40,19 +47,24 @@ export async function updatePackAction(formData: FormData) {
   const sessions = Number(formData.get("sessions") ?? 0);
   const price_euros = Number(formData.get("price_euros") ?? 0);
   const validity_days = formData.get("validity_days") ? Number(formData.get("validity_days")) : null;
+  const is_single_session = formData.get("is_single_session") === "on";
 
-  const { error } = await supabase
+  const { error } = await (supabase as any)
     .from("packs")
     .update({
       name,
       sessions,
       price_cents: Math.round(price_euros * 100),
       validity_days,
+      is_single_session,
     })
     .eq("id", id);
   if (error) {
     logError("updatePackAction", error);
-    setFlash("Não foi possível guardar", "error");
+    const msg = (error as any).code === "23505"
+      ? "Já existe um pack 'sessão avulsa' activo. Desactiva o existente primeiro."
+      : "Não foi possível guardar";
+    setFlash(msg, "error");
   } else {
     setFlash("Pack actualizado");
   }

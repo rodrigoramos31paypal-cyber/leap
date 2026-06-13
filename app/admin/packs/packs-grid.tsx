@@ -14,6 +14,7 @@ export type PackRow = {
   price_cents: number;
   validity_days: number | null;
   active: boolean;
+  is_single_session?: boolean | null;
 };
 
 export function PacksDisplay({ packs }: { packs: PackRow[] }) {
@@ -82,7 +83,14 @@ function PackCard({
     >
       <div className={cn("flex", compact ? "flex-col gap-1" : "flex-wrap items-center justify-between gap-3")}>
         <div className="min-w-0">
-          <div className="truncate text-sm font-semibold">{p.name}</div>
+          <div className="flex items-center gap-2">
+            <div className="truncate text-sm font-semibold">{p.name}</div>
+            {p.is_single_session && (
+              <span className="rounded-full bg-gold-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-gold-700">
+                Avulsa
+              </span>
+            )}
+          </div>
           {p.validity_days && (
             <div className="text-xs text-ink-500">{p.validity_days} dias de validade</div>
           )}
@@ -136,6 +144,20 @@ function PackCard({
               placeholder="Vazio = sem validade"
             />
           </div>
+          <label className="flex items-start gap-2 rounded-md border border-ink-900/10 bg-bone-50 px-3 py-2 text-xs">
+            <input
+              type="checkbox"
+              name="is_single_session"
+              defaultChecked={!!p.is_single_session}
+              className="mt-0.5 h-4 w-4 rounded border-ink-900/30"
+            />
+            <span>
+              <span className="block font-semibold">Sessão avulsa</span>
+              <span className="text-ink-500">
+                Aparece em destaque no topo de /comprar. Só 1 pack activo por trainer pode estar marcado.
+              </span>
+            </span>
+          </label>
           <button className="btn-primary">Guardar alterações</button>
         </form>
       )}

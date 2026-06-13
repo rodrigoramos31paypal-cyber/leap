@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { PackList } from "./pack-list";
+import { SingleSessionCard } from "./single-session-card";
 import { BackLink } from "@/components/back-link";
 import { getActiveTrainersPublic, getTrainerForClient } from "@/lib/trainer";
 
@@ -71,6 +72,12 @@ export default async function BuyPackPage({ searchParams }: { searchParams: { tr
     .order("session_type")
     .order("sort_order");
 
+  // O pack marcado como sessão avulsa é mostrado em destaque no topo
+  // e filtrado da grelha normal para não duplicar.
+  const allPacks = (packs ?? []) as any[];
+  const singleSession = allPacks.find((p) => p.is_single_session === true) ?? null;
+  const regularPacks = allPacks.filter((p) => p.is_single_session !== true);
+
   const currentTrainer = actives.find((t) => t.id === trainerId);
   const trainerName = currentTrainer?.full_name?.trim();
 
@@ -92,7 +99,9 @@ export default async function BuyPackPage({ searchParams }: { searchParams: { tr
         </p>
       </div>
 
-      <PackList packs={packs ?? []} />
+      {singleSession && <SingleSessionCard pack={singleSession} />}
+
+      <PackList packs={regularPacks} />
 
       <div className="rounded-xl border border-ink-900/10 bg-bone-100 p-4 text-xs text-ink-600">
         <p className="font-semibold text-ink-900">Como funciona</p>

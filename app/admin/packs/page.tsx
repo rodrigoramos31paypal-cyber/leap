@@ -51,6 +51,16 @@ export default async function AdminPacksPage() {
             <label className="label">Validade (dias, opcional)</label>
             <input name="validity_days" type="number" min={1} className="input" placeholder="Vazio = sem validade" />
           </div>
+          <label className="sm:col-span-2 flex items-start gap-2 rounded-md border border-ink-900/10 bg-bone-50 px-3 py-2 text-xs">
+            <input type="checkbox" name="is_single_session" className="mt-0.5 h-4 w-4 rounded border-ink-900/30" />
+            <span>
+              <span className="block font-semibold">Marcar como sessão avulsa</span>
+              <span className="text-ink-500">
+                Aparece em destaque no topo de /comprar como "Sessão avulsa". Só 1 pack activo
+                de cada vez pode ter esta marcação.
+              </span>
+            </span>
+          </label>
           <button className="btn-primary sm:col-span-2">Criar pack</button>
         </form>
       </details>
