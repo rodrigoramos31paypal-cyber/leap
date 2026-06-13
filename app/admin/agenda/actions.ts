@@ -42,11 +42,12 @@ export async function markNoShowAction(formData: FormData) {
 export async function cancelAdminAction(formData: FormData) {
   const id = String(formData.get("bookingId") ?? "");
   if (!id) return;
-  // BUG-FIX: motivo opcional escolhido pelo admin (limitado por segurança).
+  // Motivo opcional escolhido pelo admin (limitado por segurança).
+  // Usamos SEMPRE o formato com "—": cancel_booking faz split por "—" e,
+  // quando não há motivo, a parte à direita fica vazia → sem "Motivo:" na
+  // notificação. Com motivo → mostra só o motivo escrito pelo trainer.
   const reasonRaw = String(formData.get("reason") ?? "").trim().slice(0, 500);
-  const reason = reasonRaw.length > 0
-    ? `Cancelado pelo trainer — ${reasonRaw}`
-    : "Cancelado pelo trainer";
+  const reason = `Cancelado pelo trainer — ${reasonRaw}`;
   try {
     await cancelBooking(id, reason);
     await logAudit("booking_cancel_admin", {
