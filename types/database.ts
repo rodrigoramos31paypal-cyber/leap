@@ -1027,6 +1027,15 @@ export type Database = {
       current_trainer_id: { Args: never; Returns: string }
       get_active_credits: { Args: { p_client_id: string }; Returns: number }
       is_admin: { Args: never; Returns: boolean }
+      log_audit_event: {
+        Args: {
+          p_action: string
+          p_target_table?: string | null
+          p_target_id?: string | null
+          p_payload?: Json | null
+        }
+        Returns: undefined
+      }
       is_reserved_slot_blocked: {
         Args: {
           p_client_id: string

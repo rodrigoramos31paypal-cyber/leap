@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getAccessibleTrainerIds } from "@/lib/trainer";
+import { logError } from "@/lib/errors";
+
+// H7: a exportação devolve PII (nome + email + histórico). Limitamos a
+// janela temporal por exportação para minimização de dados (RGPD).
+const MAX_WINDOW_DAYS = 366;
+const MAX_WINDOW_MS = MAX_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
 export async function GET(req: NextRequest) {
   const supabase = createClient();
@@ -16,8 +22,32 @@ export async function GET(req: NextRequest) {
 
   const sp = req.nextUrl.searchParams;
   const type = sp.get("type") ?? "purchases";
-  const from = sp.get("from") ?? new Date(0).toISOString();
-  const to = sp.get("to") ?? new Date().toISOString();
+  if (type !== "purchases" && type !== "bookings") {
+    return new NextResponse("Tipo de exportação inválido.", { status: 400 });
+  }
+
+  // H7: validação da janela temporal. Antes `from` defaultava a 1970 e
+  // não havia limite — uma exportação devolvia TODO o histórico de PII.
+  const now = Date.now();
+  const toParam = sp.get("to");
+  const fromParam = sp.get("from");
+  const to = toParam ? new Date(toParam) : new Date(now);
+  const from = fromParam ? new Date(fromParam) : new Date(now - MAX_WINDOW_MS);
+
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+    return new NextResponse("Datas inválidas.", { status: 400 });
+  }
+  if (from.getTime() > to.getTime()) {
+    return new NextResponse("Intervalo inválido: 'from' é posterior a 'to'.", { status: 400 });
+  }
+  if (to.getTime() - from.getTime() > MAX_WINDOW_MS) {
+    return new NextResponse(
+      `Intervalo demasiado grande. Máximo ${MAX_WINDOW_DAYS} dias por exportação.`,
+      { status: 400 },
+    );
+  }
+  const fromIso = from.toISOString();
+  const toIso = to.toISOString();
 
   let rows: any[] = [];
   let header = "";
@@ -28,8 +58,8 @@ export async function GET(req: NextRequest) {
       .from("purchases")
       .select("created_at, confirmed_at, status, payment_method, amount_cents, sessions_total, sessions_remaining, pack_snapshot, profiles:client_id(full_name, email)")
       .in("trainer_id", trainerScope)
-      .gte("created_at", from)
-      .lte("created_at", to);
+      .gte("created_at", fromIso)
+      .lte("created_at", toIso);
     rows = data ?? [];
     header = "Data;Confirmada;Cliente;Email;Pack;Sessões;Restantes;Valor€;Método;Status";
     body = rows
@@ -53,8 +83,8 @@ export async function GET(req: NextRequest) {
       .from("bookings")
       .select("starts_at, ends_at, status, session_type, credit_charged, profiles:client_id(full_name, email)")
       .in("trainer_id", trainerScope)
-      .gte("starts_at", from)
-      .lte("starts_at", to);
+      .gte("starts_at", fromIso)
+      .lte("starts_at", toIso);
     rows = data ?? [];
     header = "Início;Fim;Cliente;Email;Tipo;Status;SessãoDescontada";
     body = rows
@@ -70,6 +100,21 @@ export async function GET(req: NextRequest) {
         ].join(";"),
       )
       .join("\n");
+  }
+
+  // H7: rasto RGPD — regista QUEM exportou, QUANDO e QUANTO, com a janela
+  // pedida. Fail-closed: se não conseguirmos auditar, NÃO devolvemos PII.
+  const { error: auditErr } = await supabase.rpc("log_audit_event", {
+    p_action: "export_pii",
+    p_target_table: type,
+    p_payload: { type, from: fromIso, to: toIso, rows_exported: rows.length, format: "csv" },
+  });
+  if (auditErr) {
+    logError("relatoriosExport:audit", auditErr);
+    return new NextResponse(
+      "Não foi possível registar a exportação. Tenta novamente.",
+      { status: 500 },
+    );
   }
 
   const csv = "﻿" + header + "\n" + body;
