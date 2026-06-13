@@ -9,11 +9,21 @@ export function pushConfigured(): boolean {
   return !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
 }
 
+// web-push exige um subject `mailto:` ou `https://`. Um email "simples"
+// (ex.: geral@dominio.pt) faz setVapidDetails() rebentar. Normalizamos
+// para nunca crashar por causa disto.
+function normalizeSubject(raw?: string): string {
+  const v = (raw || "").trim();
+  if (!v) return "mailto:no-reply@leap-fitness.pt";
+  if (v.startsWith("mailto:") || v.startsWith("http://") || v.startsWith("https://")) return v;
+  return "mailto:" + v;
+}
+
 let configured = false;
 function ensureVapid() {
   if (configured) return;
   webpush.setVapidDetails(
-    process.env.VAPID_SUBJECT || "mailto:no-reply@leap-fitness.pt",
+    normalizeSubject(process.env.VAPID_SUBJECT),
     process.env.VAPID_PUBLIC_KEY!,
     process.env.VAPID_PRIVATE_KEY!,
   );
@@ -31,8 +41,10 @@ export async function sendPush(
   payload: { title: string; body: string; url?: string },
 ): Promise<{ ok: boolean; gone?: boolean }> {
   if (!pushConfigured()) return { ok: false };
-  ensureVapid();
   try {
+    // ensureVapid() DENTRO do try: subject/keys inválidos devolvem ok:false
+    // em vez de propagar e dar 500 na rota (era o bug — log mostrava 500).
+    ensureVapid();
     await webpush.sendNotification(
       { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
       JSON.stringify(payload),
