@@ -20,7 +20,9 @@ export default async function PerfilPage({
     .from("notification_preferences")
     .select("kind, enabled")
     .eq("user_id", user.id);
-  const prefMap = new Map((prefsRows ?? []).map((r: any) => [r.kind, r.enabled]));
+  const prefMap = new Map<string, boolean>(
+    ((prefsRows ?? []) as any[]).map((r) => [String(r.kind), r.enabled !== false] as [string, boolean]),
+  );
   const reminderOn = prefMap.get("session_reminder") ?? true;
   const creditAlertOn = prefMap.get("credit_alert") ?? true;
 
