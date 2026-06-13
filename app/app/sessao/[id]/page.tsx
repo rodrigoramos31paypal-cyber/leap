@@ -74,7 +74,9 @@ export default async function SessaoPage({ params }: { params: { id: string } })
               </span>
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-semibold">Reagendar</div>
-                <div className="text-xs text-ink-500">Cancela esta e escolhe um novo horário.</div>
+                <div className="text-xs text-ink-500">
+                  Escolhe um novo horário — só confirmas no fim, sem perderes esta sessão.
+                </div>
               </div>
               <ChevronRight size={16} className="shrink-0 text-ink-500" />
             </button>

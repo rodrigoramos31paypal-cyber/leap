@@ -45,19 +45,9 @@ export async function cancelBookingAction(formData: FormData) {
 export async function rebookAction(formData: FormData) {
   const bookingId = String(formData.get("bookingId") ?? "");
   if (!bookingId) return;
-  try {
-    await cancelBooking(bookingId, "Reagendamento pelo cliente");
-    const refunded = await wasRefunded(bookingId);
-    await dispatchBookingCancelled(bookingId, refunded).catch(() => {});
-    await removeBookingFromCalendars(bookingId).catch(() => {});
-    setFlash("Sessão cancelada — escolhe novo horário", "info");
-  } catch (e) {
-    logError("rebookAction", e);
-    setFlash("Não foi possível reagendar", "error");
-    revalidatePath("/app/historico");
-    return;
-  }
-  revalidatePath("/app/historico");
-  revalidatePath("/app/dashboard");
-  redirect("/app/agenda?rebook=1");
+  // REVAMP: já NÃO cancela aqui. Leva o cliente ao agenda em modo
+  // reagendamento — a sessão atual só é cancelada quando ele confirmar o
+  // novo horário (rescheduleAction → RPC atómica). Se desistir, não perde
+  // a sessão.
+  redirect(`/app/agenda?reschedule=${bookingId}`);
 }

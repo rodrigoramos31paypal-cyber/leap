@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { cn, formatTime, formatDateTime } from "@/lib/utils";
 import { Clock, Repeat } from "lucide-react";
-import { getSlotsAction, bookAction, bookRecurringAction } from "./actions";
+import { getSlotsAction, bookAction, bookRecurringAction, rescheduleAction } from "./actions";
 import type { SessionType } from "@/types/database";
 
 type CreditSummary = { individual: number; dupla: number; total: number };
@@ -14,11 +14,15 @@ export function BookingFlow({
   slotDurations,
   defaultDuration,
   credits,
+  rescheduleBookingId,
 }: {
   trainerId: string;
   slotDurations: number[];
   defaultDuration: number;
   credits: CreditSummary;
+  /** Quando presente, estamos a reagendar esta marcação: confirmar
+   *  cancela a antiga e cria a nova atomicamente (sem perder a sessão). */
+  rescheduleBookingId?: string;
 }) {
   const router = useRouter();
   // Dupla está desactivada na UI — todas as marcações são individuais por agora.
@@ -70,6 +74,19 @@ export function BookingFlow({
     setError(null);
     setConflicts([]);
     start(async () => {
+      if (rescheduleBookingId) {
+        const res = await rescheduleAction({
+          oldBookingId: rescheduleBookingId,
+          startsAtIso: picked,
+          durationMin: duration,
+        });
+        if (res.error) {
+          setError(res.error);
+          return;
+        }
+        router.push(`/app/historico?ok=${res.pending ? "pending" : "reschedule"}`);
+        return;
+      }
       if (recurring && availableCredits > 1) {
         const res = await bookRecurringAction({
           trainerId,
@@ -214,7 +231,7 @@ export function BookingFlow({
             <div className="text-xs text-ink-500">{availableCredits} restantes</div>
           </div>
 
-          {availableCredits > 1 && (
+          {availableCredits > 1 && !rescheduleBookingId && (
             <label className="mt-3 flex items-start gap-2 rounded-md border border-ink-900/10 bg-bone-50 px-3 py-2 text-xs">
               <input
                 type="checkbox"
@@ -237,9 +254,11 @@ export function BookingFlow({
           <button onClick={confirm} disabled={pending} className="btn-gold mt-3 w-full">
             {pending
               ? "A marcar…"
-              : recurring && availableCredits > 1
-                ? `Confirmar ${availableCredits} marcações`
-                : "Confirmar marcação"}
+              : rescheduleBookingId
+                ? "Confirmar reagendamento"
+                : recurring && availableCredits > 1
+                  ? `Confirmar ${availableCredits} marcações`
+                  : "Confirmar marcação"}
           </button>
         </div>
       )}
