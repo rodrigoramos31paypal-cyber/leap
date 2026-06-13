@@ -5,6 +5,7 @@ import { eur, formatDateTime } from "@/lib/utils";
 import { CreditCard, Calendar, Users, TrendingUp, Activity, Package, ChevronLeft, ChevronRight } from "lucide-react";
 import { getAccessibleTrainerIds, getClientCountInScope } from "@/lib/trainer";
 import { KpiGridSkeleton, CardSkeleton } from "@/components/skeleton";
+import { PushSubscribeCard } from "@/components/push-subscribe-card";
 
 const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
@@ -66,6 +67,8 @@ export default function AdminDashboard({ searchParams }: { searchParams: { m?: s
           )}
         </div>
       </div>
+
+      <PushSubscribeCard />
 
       <Suspense fallback={<KpisSkeleton />}>
         <Kpis year={year} month={month} />

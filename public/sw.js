@@ -5,10 +5,11 @@
 //   "Cannot read properties of undefined" intermitentes).
 // - Páginas app/admin/públicas → network-first, fallback /offline.
 // - APIs e auth → sempre rede.
+// - Web Push → handlers `push` + `notificationclick` no fim do ficheiro.
 //
 // BUMP `CACHE_NAME` sempre que mexes em chunks/policies — o handler
 // `activate` apaga as caches antigas e o utilizador pega já na nova.
-const CACHE_NAME = "leap-v3";
+const CACHE_NAME = "leap-v4";
 const APP_SHELL = [
   "/",
   "/login",
@@ -102,4 +103,38 @@ self.addEventListener("fetch", (event) => {
         )
     );
   }
+});
+
+// ─── Web Push ──────────────────────────────────────────────────────
+// Payload (JSON) enviado por /api/push/dispatch: { title, body, url }.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    data = {};
+  }
+  const title = data.title || "LEAP-FITNESS";
+  const options = {
+    body: data.body || "",
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-192.png",
+    data: { url: data.url || "/" },
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || "/";
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((list) => {
+        for (const c of list) {
+          if (c.url.includes(target) && "focus" in c) return c.focus();
+        }
+        if (self.clients.openWindow) return self.clients.openWindow(target);
+      })
+  );
 });

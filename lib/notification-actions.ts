@@ -35,3 +35,23 @@ export async function syncSessionReminders(): Promise<number> {
   if (error) return 0;
   return (data as number) ?? 0;
 }
+
+export async function savePushSubscription(sub: {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+}): Promise<{ ok: boolean }> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user || !sub.endpoint) return { ok: false };
+
+  // `as any`: tabela ainda não está nos tipos gerados do Supabase.
+  const { error } = await (supabase as any)
+    .from("push_subscriptions")
+    .upsert(
+      { user_id: user.id, endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth },
+      { onConflict: "endpoint" },
+    );
+
+  return { ok: !error };
+}
