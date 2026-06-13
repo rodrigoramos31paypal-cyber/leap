@@ -105,15 +105,30 @@ async function CalendarView({
   const trainerIds = await getAccessibleTrainerIds();
   const scope = trainerIds.length > 0 ? trainerIds : [""];
 
+  // Preferência do viewer: mostrar canceladas na agenda? Default false →
+  // esconde-as (evita o calendário cheio de eventos sobrepostos/riscados).
+  const myTrainerId = await getCurrentTrainerId();
+  let showCancelled = false;
+  if (myTrainerId) {
+    const { data: st } = await (supabase as any)
+      .from("trainer_settings")
+      .select("show_cancelled_in_calendar")
+      .eq("trainer_id", myTrainerId)
+      .maybeSingle();
+    showCancelled = (st as any)?.show_cancelled_in_calendar ?? false;
+  }
+
   // PERF: pedimos só as colunas usadas pela UI da agenda (antes era `*`).
+  let bookingsQuery = supabase
+    .from("bookings")
+    .select("id, starts_at, ends_at, session_type, status, client_id, trainer_id, series_id, profiles:client_id(full_name)")
+    .in("trainer_id", scope)
+    .gte("starts_at", rangeStart.toISOString())
+    .lt("starts_at", rangeEnd.toISOString());
+  if (!showCancelled) bookingsQuery = bookingsQuery.neq("status", "cancelled");
+
   const [{ data: bookings }, { data: blocks }, { data: reserved }] = await Promise.all([
-    supabase
-      .from("bookings")
-      .select("id, starts_at, ends_at, session_type, status, client_id, trainer_id, series_id, profiles:client_id(full_name)")
-      .in("trainer_id", scope)
-      .gte("starts_at", rangeStart.toISOString())
-      .lt("starts_at", rangeEnd.toISOString())
-      .order("starts_at"),
+    bookingsQuery.order("starts_at"),
     supabase
       .from("trainer_blocked_times")
       .select("id, trainer_id, starts_at, ends_at, reason")

@@ -25,7 +25,8 @@ export async function saveSettingsAction(formData: FormData) {
     .filter(Boolean);
   const validity = formData.get("validity_days");
 
-  const { error } = await supabase
+  // `as any`: show_cancelled_in_calendar ainda não está nos tipos gerados.
+  const { error } = await (supabase as any)
     .from("trainer_settings")
     .upsert({
       trainer_id: trainerId,
@@ -38,6 +39,7 @@ export async function saveSettingsAction(formData: FormData) {
       charge_late_cancel: formData.get("charge_late_cancel") === "on",
       charge_no_show: formData.get("charge_no_show") === "on",
       auto_confirm_bookings: formData.get("auto_confirm_bookings") === "on",
+      show_cancelled_in_calendar: formData.get("show_cancelled_in_calendar") === "on",
     });
   if (error) { logError("saveSettingsAction", error); setFlash("Não foi possível guardar definições", "error"); }
   else setFlash("Definições guardadas");
