@@ -5,6 +5,7 @@
 import { timingSafeEqual } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { captureAlert } from "@/lib/alerts";
 import type { Database, PaymentMethod } from "@/types/database";
 
 /**
@@ -254,12 +255,27 @@ export async function handleIfthenpayCallback(params: URLSearchParams): Promise<
     // razão exacta no body de resposta — atacante não precisa de saber
     // se foi mismatch de amount, payment inexistente, etc.
     console.error("[ifthenpay] callback rpc error:", error.message, { orderId });
+    // #8a: erro na RPC de confirmação é sempre digno de alerta — pode
+    // significar pagamento recebido mas não creditado.
+    await captureAlert("ifthenpay_callback_error", {
+      level: "fatal",
+      orderId,
+      reason: error.message,
+    });
     return { ok: false, message: "Erro ao processar callback" };
   }
 
   const result = (data ?? {}) as { ok?: boolean; reason?: string };
   if (!result.ok) {
     console.warn("[ifthenpay] callback rejeitado:", result.reason ?? "unknown", { orderId });
+    // #8a: callback rejeitado (mismatch de amount, payment inexistente,
+    // etc.). Sinal de tentativa de fraude OU de desalinhamento com a
+    // IfthenPay — em qualquer caso queremos saber.
+    await captureAlert("ifthenpay_callback_rejected", {
+      level: "error",
+      orderId,
+      reason: result.reason ?? "unknown",
+    });
     return { ok: false, message: "Callback rejeitado" };
   }
   return { ok: true };

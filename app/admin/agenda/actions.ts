@@ -8,6 +8,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getAccessibleTrainerIds } from "@/lib/trainer";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
+import { logAudit } from "@/lib/audit";
+import { captureAlert, isAccessDenied } from "@/lib/alerts";
 
 export async function confirmAttendanceAction(formData: FormData) {
   const id = String(formData.get("bookingId") ?? "");
@@ -47,11 +49,17 @@ export async function cancelAdminAction(formData: FormData) {
     : "Cancelado pelo trainer";
   try {
     await cancelBooking(id, reason);
+    await logAudit("booking_cancel_admin", {
+      targetTable: "bookings",
+      targetId: id,
+      payload: { reason },
+    });
     await dispatchBookingCancelled(id, true).catch(() => {});
     await removeBookingFromCalendars(id).catch(() => {});
     setFlash("Sessão cancelada");
   } catch (e) {
     logError("cancelAdminAction", e);
+    if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "cancelBooking", targetId: id });
     setFlash("Não foi possível cancelar", "error");
   }
   revalidatePath("/admin/agenda");
