@@ -9,7 +9,8 @@
 // ════════════════════════════════════════════════════════════════
 import { createClient } from "@/lib/supabase/server";
 
-export async function setSessionReminderEnabled(
+export async function setNotificationPref(
+  kind: string,
   enabled: boolean,
 ): Promise<{ ok: boolean }> {
   const supabase = createClient();
@@ -20,7 +21,7 @@ export async function setSessionReminderEnabled(
   const { error } = await (supabase as any)
     .from("notification_preferences")
     .upsert(
-      { user_id: user.id, kind: "session_reminder", enabled, updated_at: new Date().toISOString() },
+      { user_id: user.id, kind, enabled, updated_at: new Date().toISOString() },
       { onConflict: "user_id,kind" },
     );
 

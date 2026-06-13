@@ -179,4 +179,31 @@ export const emailTemplates = {
       text: `Lembrete: sessão com ${args.clientName} a ${args.when}.`,
     };
   },
+  creditLow(args: { clientName: string; total: number }) {
+    const out = args.total <= 0;
+    return {
+      subject: out ? "Ficaste sem sessões" : "Restam-te poucas sessões",
+      html: shell(
+        out ? "Ficaste sem sessões" : "Restam-te poucas sessões",
+        out
+          ? `<p style="margin:0 0 10px">Olá ${escapeHtml(args.clientName)},</p>
+             <p style="margin:0 0 10px">Já não tens sessões disponíveis. Para continuares a treinar, compra um novo pack.</p>`
+          : `<p style="margin:0 0 10px">Olá ${escapeHtml(args.clientName)},</p>
+             <p style="margin:0 0 10px">Tens apenas <strong>${args.total}</strong> ${args.total === 1 ? "sessão" : "sessões"} por usar. Renova o teu pack para não interromperes o treino.</p>`,
+      ),
+      text: out ? "Ficaste sem sessões. Compra um pack." : `Restam-te ${args.total} sessões.`,
+    };
+  },
+  packExpiring(args: { clientName: string; remaining: number; when: string; packName: string }) {
+    return {
+      subject: "O teu pack está a expirar",
+      html: shell(
+        "O teu pack está a expirar",
+        `<p style="margin:0 0 10px">Olá ${escapeHtml(args.clientName)},</p>
+         <p style="margin:0 0 10px">O teu pack <strong>${escapeHtml(args.packName)}</strong> expira a <strong>${escapeHtml(args.when)}</strong> e ainda tens <strong>${args.remaining}</strong> ${args.remaining === 1 ? "sessão" : "sessões"} por usar.</p>
+         <p style="margin:0">Marca as tuas sessões antes que expirem.</p>`,
+      ),
+      text: `O teu pack ${args.packName} expira a ${args.when} (${args.remaining} por usar).`,
+    };
+  },
 };
