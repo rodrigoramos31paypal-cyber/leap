@@ -3,8 +3,9 @@ import { redirect } from "next/navigation";
 import { createClient, getSessionUser, getCurrentProfile } from "@/lib/supabase/server";
 import { getClientCredits, getClientCreditsByTrainer } from "@/lib/credits";
 import { formatDateTime, pluralize } from "@/lib/utils";
-import { Calendar, ShoppingBag, Sparkles, AlertCircle, NotebookPen, ChevronRight, MousePointerClick } from "lucide-react";
+import { Calendar, ShoppingBag, Sparkles, AlertCircle, NotebookPen, ChevronRight, MousePointerClick, Flame } from "lucide-react";
 import { PushSubscribeCard } from "@/components/push-subscribe-card";
+import { getCurrentStreak } from "@/lib/streak";
 
 export default async function ClientDashboard() {
   const user = await getSessionUser();
@@ -21,6 +22,7 @@ export default async function ClientDashboard() {
     credits,
     creditsByTrainer,
     { data: upcoming },
+    streak,
   ] = await Promise.all([
     getCurrentProfile(),
     getClientCredits(user.id),
@@ -33,6 +35,7 @@ export default async function ClientDashboard() {
       .gte("starts_at", new Date().toISOString())
       .order("starts_at", { ascending: true })
       .limit(3),
+    getCurrentStreak(user.id),
   ]);
   const multiTrainer = creditsByTrainer.length > 1;
 
@@ -49,6 +52,24 @@ export default async function ClientDashboard() {
       </div>
 
       <PushSubscribeCard />
+
+      {streak.weeks >= 1 && (
+        <div className="card flex items-center gap-3 border-gold-300 bg-gradient-to-br from-gold-50 to-bone-50 p-4">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-ink-900 text-gold-400">
+            <Flame size={18} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold">
+              {streak.weeks} {streak.weeks === 1 ? "semana" : "semanas"} consecutivas
+            </div>
+            <div className="text-xs text-ink-600">
+              {streak.weeks === 1
+                ? "Boa! Continua para começar uma série."
+                : "Mantém o ritmo — não quebres a série."}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Cartão sessões — adapta-se ao tema. */}
       <div className="card p-5">
