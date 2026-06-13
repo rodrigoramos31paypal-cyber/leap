@@ -72,7 +72,7 @@ export async function deleteAccountAction(formData: FormData) {
     logError("deleteAccountAction:ban", e);
   }
 
-  // 3) Terminar sessão e sair.
+  // 3) Terminar sessão e ir para a landing page.
   await supabase.auth.signOut().catch(() => {});
-  redirect("/login?deleted=1");
+  redirect("/");
 }
