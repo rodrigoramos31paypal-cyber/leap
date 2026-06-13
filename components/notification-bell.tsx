@@ -72,13 +72,11 @@ export function NotificationBell({
         () => {
           if (onNotifPage) return;
           setUnread((c) => c + 1);
-          if (typeof window !== "undefined" && "Notification" in window) {
-            if (Notification.permission === "granted") {
-              try {
-                new Notification("LEAP-FITNESS", { body: "Nova notificação" });
-              } catch {}
-            }
-          }
+          // Sem new Notification() aqui: as notificações de sistema são
+          // entregues por Web Push (service worker), com título/corpo ricos
+          // e mesmo com a app fechada. Este handler só actualiza o badge ao
+          // vivo — evita uma notificação genérica e duplicada quando a app
+          // está aberta.
         },
       )
       .on(
