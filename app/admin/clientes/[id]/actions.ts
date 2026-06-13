@@ -10,6 +10,8 @@ import {
 import { getCurrentTrainerId, getAccessibleTrainerIds } from "@/lib/trainer";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
+import { logAudit } from "@/lib/audit";
+import { captureAlert, isAccessDenied } from "@/lib/alerts";
 
 export async function adjustCreditsAction(formData: FormData) {
   const purchaseId = String(formData.get("purchaseId") ?? "");
@@ -23,11 +25,17 @@ export async function adjustCreditsAction(formData: FormData) {
 
   try {
     await adjustCredits(purchaseId, delta, reason);
+    await logAudit("credits_adjust", {
+      targetTable: "purchases",
+      targetId: purchaseId,
+      payload: { delta, reason },
+    });
     setFlash(
       delta > 0 ? `Adicionadas ${delta} sessão(ões)` : `Removidas ${Math.abs(delta)} sessão(ões)`,
     );
   } catch (e) {
     logError("adjustCreditsAction", e);
+    if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "adjustCredits", targetId: purchaseId });
     setFlash("Não foi possível ajustar sessões", "error");
   }
   revalidatePath(`/admin/clientes/${clientId}`);
@@ -101,8 +109,21 @@ export async function grantPackAction(formData: FormData): Promise<void> {
     } else {
       setFlash("Pack atribuído — a aguardar confirmação de pagamento", "info");
     }
+
+    await logAudit("pack_grant", {
+      targetTable: "purchases",
+      targetId: purchaseId,
+      payload: {
+        clientId,
+        mode,
+        method,
+        confirmNow,
+        sessionsGranted: sessionsGranted || undefined,
+      },
+    });
   } catch (e) {
     logError("grantPackAction", e);
+    if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "grantPack", clientId });
     setFlash("Não foi possível atribuir as sessões", "error");
   }
   revalidatePath(`/admin/clientes/${clientId}`);

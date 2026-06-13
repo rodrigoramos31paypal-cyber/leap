@@ -5,6 +5,7 @@
 // ════════════════════════════════════════════════════════════════
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
+import { captureAlert } from "@/lib/alerts";
 import type { PaymentMethod, SessionType } from "@/types/database";
 
 export type CreditSummary = {
@@ -147,8 +148,47 @@ export async function createBooking(args: {
     p_session_type: args.sessionType ?? "individual",
     p_client_id: args.clientId,
   });
-  if (error) throw error;
+  if (error) {
+    // #8c: a RPC recusou por `pick_purchase_for_booking` devolver null.
+    // Se o saldo confirmado AINDA mostra créditos disponíveis, há um
+    // desacordo entre a função de selecção e o saldo → bug de
+    // contabilidade que esconde sessões pagas do cliente. Alerta.
+    if (/sem sess(õ|o)es/i.test(error.message ?? "")) {
+      await alertIfCreditsMismatch(args).catch(() => {});
+    }
+    throw error;
+  }
   return data as unknown as string;
+}
+
+/** #8c · helper de detecção do desacordo pick_purchase ↔ saldo. */
+async function alertIfCreditsMismatch(args: {
+  trainerId: string;
+  sessionType?: SessionType;
+  clientId?: string;
+}): Promise<void> {
+  const supabase = createClient();
+  let clientId = args.clientId;
+  if (!clientId) {
+    const { data: { user } } = await supabase.auth.getUser();
+    clientId = user?.id;
+  }
+  if (!clientId) return;
+
+  const credits = await getClientCredits(clientId, args.trainerId);
+  const type = args.sessionType ?? "individual";
+  const available = type === "individual" ? credits.individual : credits.dupla;
+  if (available > 0) {
+    await captureAlert("booking_credit_mismatch", {
+      level: "error",
+      clientId,
+      trainerId: args.trainerId,
+      sessionType: type,
+      availableInBucket: available,
+      detail:
+        "create_booking recusou por falta de sessões, mas o saldo confirmado mostra créditos disponíveis (pick_purchase_for_booking devolveu null).",
+    });
+  }
 }
 
 export type RecurringBookingResult = {
