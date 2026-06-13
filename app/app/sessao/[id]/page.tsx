@@ -17,7 +17,7 @@ export default async function SessaoPage({ params }: { params: { id: string } })
   const supabase = createClient();
   const { data: b } = await supabase
     .from("bookings")
-    .select("id, starts_at, session_type, status, client_id")
+    .select("id, starts_at, session_type, status, client_id, trainer_id")
     .eq("id", params.id)
     .eq("client_id", user.id)
     .maybeSingle();
@@ -26,6 +26,15 @@ export default async function SessaoPage({ params }: { params: { id: string } })
   const note = await getMyNoteForBooking(b.id);
   const isFuture = new Date(b.starts_at).getTime() > Date.now();
   const canModify = isFuture && (b.status === "booked" || b.status === "confirmed");
+
+  // Janela de cancelamento é por trainer (default 12h). Mostramos o
+  // valor real no botão para não desalinhar com a regra do servidor.
+  const { data: trainerSettings } = await supabase
+    .from("trainer_settings")
+    .select("cancellation_window_hours")
+    .eq("trainer_id", b.trainer_id)
+    .maybeSingle();
+  const cancelWindowHours = trainerSettings?.cancellation_window_hours ?? 12;
 
   const chipCls: Record<string, string> = {
     booked: "chip-gold",
@@ -91,7 +100,8 @@ export default async function SessaoPage({ params }: { params: { id: string } })
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-semibold text-red-700">Cancelar sessão</div>
                 <div className="text-xs text-ink-500">
-                  Liberta o horário e devolve a sessão (se dentro do prazo).
+                  Cancela a sessão e recebe-a de volta no teu saldo (se cancelares com mais
+                  de {cancelWindowHours} horas de antecedência).
                 </div>
               </div>
             </button>
