@@ -5,8 +5,9 @@ import { registerAction } from "./actions";
 export default function RegisterPage({
   searchParams,
 }: {
-  searchParams: { error?: string; success?: string };
+  searchParams: { error?: string; success?: string; trainer?: string };
 }) {
+  const trainerId = searchParams.trainer?.trim() || null;
   return (
     // Padding-top fixo em vez de justify-center: assim o logo
     // aterra na mesma coordenada Y em /login, /recuperar e /registar
@@ -35,6 +36,7 @@ export default function RegisterPage({
           )}
 
           <form action={registerAction} className="mt-6 space-y-4">
+            {trainerId && <input type="hidden" name="trainer_id" value={trainerId} />}
             <div>
               <label className="label">Nome completo</label>
               <input name="full_name" required minLength={2} className="input" />

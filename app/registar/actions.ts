@@ -9,6 +9,9 @@ export async function registerAction(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   const full_name = String(formData.get("full_name") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
+  // Vindo da página pública /t/<slug>: associa o cliente ao trainer
+  // logo no insert do profile (handle_new_user lê isto). Inválido → ignorado.
+  const trainer_id = String(formData.get("trainer_id") ?? "").trim() || null;
 
   if (password.length < 8) {
     redirect("/registar?error=" + encodeURIComponent("Password tem de ter pelo menos 8 caracteres."));
@@ -19,7 +22,7 @@ export async function registerAction(formData: FormData) {
     email,
     password,
     options: {
-      data: { full_name, phone },
+      data: trainer_id ? { full_name, phone, trainer_id } : { full_name, phone },
       emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/auth/callback`,
     },
   });
