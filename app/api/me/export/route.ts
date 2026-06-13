@@ -1,0 +1,114 @@
+import { NextResponse } from "next/server";
+import ExcelJS from "exceljs";
+import { createClient } from "@/lib/supabase/server";
+import { formatDateTime, eur } from "@/lib/utils";
+
+// RGPD · "Descarregar os meus dados". Exporta os dados pessoais do
+// utilizador autenticado num único ficheiro Excel (Perfil, Sessões,
+// Compras, Notas). Apenas dados do PRÓPRIO (RLS + filtro por user.id).
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+export async function GET() {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return new NextResponse("Unauthorized", { status: 401 });
+
+  const [{ data: profile }, { data: bookings }, { data: purchases }, { data: notes }] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select("full_name, email, phone, role, created_at")
+        .eq("id", user.id)
+        .maybeSingle(),
+      supabase
+        .from("bookings")
+        .select("starts_at, ends_at, session_type, status, created_at")
+        .eq("client_id", user.id)
+        .order("starts_at", { ascending: false }),
+      supabase
+        .from("purchases")
+        .select("pack_snapshot, amount_cents, sessions_total, sessions_remaining, status, created_at")
+        .eq("client_id", user.id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("session_notes")
+        .select("body, created_at")
+        .eq("author_id", user.id)
+        .order("created_at", { ascending: false }),
+    ]);
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "LEAP-FITNESS STUDIO";
+  wb.created = new Date();
+
+  const sP = wb.addWorksheet("Perfil");
+  sP.columns = [
+    { header: "Campo", key: "k", width: 22 },
+    { header: "Valor", key: "v", width: 44 },
+  ];
+  sP.addRows([
+    { k: "Nome", v: profile?.full_name ?? "" },
+    { k: "Email", v: profile?.email ?? "" },
+    { k: "Telemóvel", v: profile?.phone ?? "" },
+    { k: "Tipo de conta", v: profile?.role ?? "" },
+    { k: "Registado em", v: profile?.created_at ? formatDateTime(profile.created_at) : "" },
+  ]);
+
+  const sB = wb.addWorksheet("Sessões");
+  sB.columns = [
+    { header: "Início", key: "start", width: 24 },
+    { header: "Fim", key: "end", width: 24 },
+    { header: "Tipo", key: "type", width: 16 },
+    { header: "Estado", key: "status", width: 16 },
+  ];
+  for (const b of (bookings ?? []) as any[]) {
+    sB.addRow({
+      start: formatDateTime(b.starts_at),
+      end: b.ends_at ? formatDateTime(b.ends_at) : "",
+      type: b.session_type,
+      status: b.status,
+    });
+  }
+
+  const sC = wb.addWorksheet("Compras");
+  sC.columns = [
+    { header: "Pack", key: "pack", width: 30 },
+    { header: "Valor", key: "amt", width: 14 },
+    { header: "Sessões (rest./total)", key: "sess", width: 20 },
+    { header: "Estado", key: "status", width: 20 },
+    { header: "Data", key: "date", width: 24 },
+  ];
+  for (const p of (purchases ?? []) as any[]) {
+    sC.addRow({
+      pack: (p.pack_snapshot as any)?.name ?? "",
+      amt: eur(p.amount_cents),
+      sess: `${p.sessions_remaining}/${p.sessions_total}`,
+      status: p.status,
+      date: formatDateTime(p.created_at),
+    });
+  }
+
+  const sN = wb.addWorksheet("Notas");
+  sN.columns = [
+    { header: "Data", key: "date", width: 24 },
+    { header: "Nota", key: "body", width: 90 },
+  ];
+  for (const n of (notes ?? []) as any[]) {
+    sN.addRow({ date: formatDateTime(n.created_at), body: n.body });
+  }
+
+  // Cabeçalhos a bold em todas as folhas.
+  for (const ws of wb.worksheets) ws.getRow(1).font = { bold: true };
+
+  const buf = await wb.xlsx.writeBuffer();
+  const today = new Date().toISOString().slice(0, 10);
+  return new NextResponse(buf as any, {
+    headers: {
+      "Content-Type":
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="leap-os-meus-dados-${today}.xlsx"`,
+      "Cache-Control": "no-store",
+    },
+  });
+}
