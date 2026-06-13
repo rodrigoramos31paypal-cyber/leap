@@ -37,42 +37,39 @@ export default function HomePage() {
         </div>
       </header>
 
-      <section className="mx-auto w-full max-w-6xl flex-1 px-6 pt-10 pb-16">
-        <div className="grid gap-10 md:grid-cols-2 md:items-center">
-          <div>
-            <h1 className="font-display text-5xl font-black leading-[1.05] tracking-tight md:text-6xl">
-              A tua jornada,
-              <br />
-              <span className="text-gold-400">as tuas sessões,</span>
-              <br />
-              num só sítio.
-            </h1>
-            <p className="mt-6 max-w-md text-base text-ink-600 dark:text-bone-100/80">
-              Compra packs, marca sessões e segue o teu histórico. Sem confusões, sem sessões perdidas.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link href="/registar" className="btn-gold">
-                Começar agora <ArrowRight size={16} />
-              </Link>
-              <Link
-                href="/login"
-                className="btn-outline border-ink-900/20 text-ink-900 hover:bg-ink-900/5 dark:border-bone-50/20 dark:text-bone-50 dark:hover:bg-white/10"
-              >
-                Já tenho conta
-              </Link>
-            </div>
-          </div>
+      <section className="mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center px-6 py-16 text-center">
+        {/* Hero centrado (horizontal + vertical); os 4 cards ficam logo
+            por baixo, também centrados. Antes era um layout de 2 colunas
+            com os cards à direita. */}
+        <h1 className="font-display text-5xl font-black leading-[1.05] tracking-tight md:text-6xl">
+          A tua jornada,
+          <br />
+          <span className="text-gold-400">as tuas sessões,</span>
+          <br />
+          num só sítio.
+        </h1>
+        <p className="mt-6 max-w-md text-base text-ink-600 dark:text-bone-100/80">
+          Compra packs, marca sessões e segue o teu histórico. Sem confusões, sem sessões perdidas.
+        </p>
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
+          <Link href="/registar" className="btn-gold">
+            Começar agora <ArrowRight size={16} />
+          </Link>
+          <Link
+            href="/login"
+            className="btn-outline border-ink-900/20 text-ink-900 hover:bg-ink-900/5 dark:border-bone-50/20 dark:text-bone-50 dark:hover:bg-white/10"
+          >
+            Já tenho conta
+          </Link>
+        </div>
 
-          {/* Feature cards (lock-up do logo+slogan removido — ficava
-              demasiado pesado lado a lado com o H1). */}
-          <div className="flex flex-col items-center gap-6">
-            <div className="grid w-full grid-cols-2 gap-3">
-              <FeatureCard icon={<Dumbbell size={18} />} title="Packs" desc="PT Individual ou Dupla." />
-              <FeatureCard icon={<Calendar size={18} />} title="Agenda" desc="Marca em segundos." />
-              <FeatureCard icon={<CreditCard size={18} />} title="Pagamentos" desc="MB Way, Multibanco, Cartão." />
-              <FeatureCard icon={<ShieldCheck size={18} />} title="Sessões" desc="Sempre actualizadas." />
-            </div>
-          </div>
+        {/* Feature cards — logo por baixo, centrados. 2 colunas no
+            telemóvel, 4 numa linha em ecrãs maiores. */}
+        <div className="mt-14 grid w-full max-w-3xl grid-cols-2 gap-3 sm:grid-cols-4">
+          <FeatureCard icon={<Dumbbell size={18} />} title="Packs" desc="PT Individual ou Dupla." />
+          <FeatureCard icon={<Calendar size={18} />} title="Agenda" desc="Marca em segundos." />
+          <FeatureCard icon={<CreditCard size={18} />} title="Pagamentos" desc="MB Way, Multibanco, Cartão." />
+          <FeatureCard icon={<ShieldCheck size={18} />} title="Sessões" desc="Sempre actualizadas." />
         </div>
       </section>
 
@@ -88,7 +85,7 @@ export default function HomePage() {
 
 function FeatureCard({ icon, title, desc }: { icon: React.ReactNode; title: string; desc: string }) {
   return (
-    <div className="rounded-xl border border-ink-900/10 bg-white p-4 dark:border-white/5 dark:bg-ink-800">
+    <div className="rounded-xl border border-ink-900/10 bg-white p-4 text-left dark:border-white/5 dark:bg-ink-800">
       <div className="mb-2 grid h-8 w-8 place-items-center rounded-lg bg-gold-400/15 text-gold-600 dark:text-gold-400">
         {icon}
       </div>
