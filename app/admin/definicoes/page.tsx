@@ -3,6 +3,7 @@ import { saveSettingsAction, saveTrainerBioAction, addAvailabilityAction, delete
 import { googleEnabled, microsoftEnabled } from "@/lib/calendar-sync";
 import { getCurrentTrainer } from "@/lib/trainer";
 import { CopyButton } from "@/components/copy-button";
+import { NotificationPrefToggle } from "@/components/notification-pref-toggle";
 import { Smartphone } from "lucide-react";
 
 const DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -44,11 +45,19 @@ export default async function DefinicoesPage({
     { data: settings },
     { data: availability },
     { data: blocks },
+    { data: notifPref },
   ] = await Promise.all([
     supabase.from("trainer_settings").select("*").eq("trainer_id", trainer.id).single(),
     supabase.from("trainer_availability").select("*").eq("trainer_id", trainer.id).order("day_of_week").order("start_time"),
     supabase.from("trainer_blocked_times").select("*").eq("trainer_id", trainer.id).order("starts_at"),
+    (supabase as any)
+      .from("notification_preferences")
+      .select("enabled")
+      .eq("user_id", user?.id ?? "")
+      .eq("kind", "session_reminder")
+      .maybeSingle(),
   ]);
+  const reminderOn = (notifPref as any)?.enabled ?? true;
 
   return (
     <div className="space-y-6">
@@ -76,6 +85,15 @@ export default async function DefinicoesPage({
         </div>
         <button className="btn-primary">Guardar perfil</button>
       </form>
+
+      <div className="card space-y-4 p-5">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Notificações</h2>
+        <NotificationPrefToggle
+          initial={reminderOn}
+          label="Lembretes de sessão"
+          desc="Recebe um email e uma notificação na app antes das tuas sessões."
+        />
+      </div>
 
       <form action={saveSettingsAction} className="card space-y-4 p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Regras de negócio</h2>
