@@ -128,7 +128,12 @@ async function CalendarView({
       .lt("starts_at", rangeEnd.toISOString()),
   ]);
 
-  const notesMap = await getMyNotesMapForBookings((bookings ?? []).map((b: any) => b.id));
+  // PERF (#4): MonthView não consome notesMap — só Day/Week. Saltamos o
+  // round-trip (e o payload das notas) por completo na vista de mês.
+  const notesMap =
+    view === "month"
+      ? new Map<string, any>()
+      : await getMyNotesMapForBookings((bookings ?? []).map((b: any) => b.id));
 
   return (
     <>
@@ -341,6 +346,7 @@ function WeekView({
   notesMap: Map<string, any>;
 }) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
+  const byDay = bucketByDay(bookings, blocks, reserved); // PERF (#5): 1 passagem
   const today = new Date();
   const nowMinutes = today.getHours() * 60 + today.getMinutes();
   const nowInRange = nowMinutes >= HOUR_START * 60 && nowMinutes <= HOUR_END * 60;
@@ -401,15 +407,8 @@ function WeekView({
 
           {/* Day columns */}
           {days.map((d) => {
-            const dayBookings = bookings.filter((b) =>
-              sameDay(new Date(b.starts_at), d),
-            );
-            const dayBlocks = blocks.filter((b) =>
-              sameDay(new Date(b.starts_at), d),
-            );
-            const dayReserved = reserved.filter((r) =>
-              sameDay(new Date(r.starts_at), d),
-            );
+            const { bookings: dayBookings, blocks: dayBlocks, reserved: dayReserved } =
+              byDay.get(dayKey(d)) ?? EMPTY_DAY;
             const isToday = sameDay(d, today);
 
             return (
@@ -515,6 +514,7 @@ function WeekView({
 
 function MonthView({ gridStart, anchor, bookings, blocks, reserved }: { gridStart: Date; anchor: Date; bookings: any[]; blocks: any[]; reserved: any[] }) {
   const days = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+  const byDay = bucketByDay(bookings, blocks, reserved); // PERF (#5): 1 passagem
   const currentMonth = anchor.getMonth();
   return (
     <div className="card overflow-hidden p-2">
@@ -524,9 +524,8 @@ function MonthView({ gridStart, anchor, bookings, blocks, reserved }: { gridStar
       <div className="grid grid-cols-7 gap-1">
         {days.map((d) => {
           const isCurrent = d.getMonth() === currentMonth;
-          const dayBookings = isCurrent ? bookings.filter((b) => sameDay(new Date(b.starts_at), d)) : [];
-          const dayBlocks = isCurrent ? blocks.filter((b) => sameDay(new Date(b.starts_at), d)) : [];
-          const dayReserved = isCurrent ? reserved.filter((r) => sameDay(new Date(r.starts_at), d)) : [];
+          const { bookings: dayBookings, blocks: dayBlocks, reserved: dayReserved } =
+            isCurrent ? (byDay.get(dayKey(d)) ?? EMPTY_DAY) : EMPTY_DAY;
           const isToday = sameDay(d, new Date());
 
           // Out-of-month days: heavily muted, non-interactive, no events.
@@ -691,6 +690,28 @@ function BlockTimeForm({
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────
+
+// PERF (#5): agrupa eventos por dia numa única passagem O(n). Week/Month
+// faziam antes 3× Array.filter() por cada dia da grelha (7 ou 42 dias) —
+// O(dias × eventos); agora cada célula faz lookup O(1) neste Map.
+type DayBucket = { bookings: any[]; blocks: any[]; reserved: any[] };
+const EMPTY_DAY: DayBucket = { bookings: [], blocks: [], reserved: [] };
+function dayKey(d: Date) {
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+function bucketByDay(bookings: any[], blocks: any[], reserved: any[]): Map<string, DayBucket> {
+  const map = new Map<string, DayBucket>();
+  const cell = (k: string) => {
+    let e = map.get(k);
+    if (!e) { e = { bookings: [], blocks: [], reserved: [] }; map.set(k, e); }
+    return e;
+  };
+  for (const b of bookings) cell(dayKey(new Date(b.starts_at))).bookings.push(b);
+  for (const b of blocks) cell(dayKey(new Date(b.starts_at))).blocks.push(b);
+  for (const r of reserved) cell(dayKey(new Date(r.starts_at))).reserved.push(r);
+  return map;
+}
+
 function isoDate(d: Date) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
