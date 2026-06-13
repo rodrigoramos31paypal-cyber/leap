@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { confirmPurchase, rejectPurchase } from "@/lib/credits";
 import { dispatchPurchaseConfirmed } from "@/lib/email-dispatch";
 import { setFlash } from "@/lib/flash";
+import { logError } from "@/lib/errors";
 
 export async function confirmPurchaseAction(formData: FormData) {
   const id = String(formData.get("purchaseId") ?? "");
@@ -12,8 +13,9 @@ export async function confirmPurchaseAction(formData: FormData) {
     await confirmPurchase(id);
     await dispatchPurchaseConfirmed(id).catch(() => {});
     setFlash("Pagamento confirmado");
-  } catch (e: any) {
-    setFlash("Não foi possível confirmar o pagamento", "error", e?.message);
+  } catch (e) {
+    logError("confirmPurchaseAction", e);
+    setFlash("Não foi possível confirmar o pagamento", "error");
   }
   revalidatePath("/admin/pagamentos");
   revalidatePath("/admin/dashboard");
@@ -26,8 +28,9 @@ export async function rejectPurchaseAction(formData: FormData) {
   try {
     await rejectPurchase(id, reason);
     setFlash("Pagamento rejeitado");
-  } catch (e: any) {
-    setFlash("Não foi possível rejeitar", "error", e?.message);
+  } catch (e) {
+    logError("rejectPurchaseAction", e);
+    setFlash("Não foi possível rejeitar", "error");
   }
   revalidatePath("/admin/pagamentos");
 }

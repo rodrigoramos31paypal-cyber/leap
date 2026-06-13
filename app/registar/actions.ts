@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { logError } from "@/lib/errors";
 
 export async function registerAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
@@ -24,6 +25,7 @@ export async function registerAction(formData: FormData) {
   });
 
   if (error) {
+    logError("registerAction", error);
     const msg = error.message.includes("registered")
       ? "Este email já está registado."
       : "Não foi possível criar a conta.";

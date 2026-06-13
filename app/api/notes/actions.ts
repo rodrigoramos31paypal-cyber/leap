@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { logError } from "@/lib/errors";
 
 export async function createGeneralNoteAction(formData: FormData): Promise<{ error?: string; ok?: true } | void> {
   const subjectId = String(formData.get("subjectId") ?? "");
@@ -34,7 +35,8 @@ export async function createGeneralNoteAction(formData: FormData): Promise<{ err
     if (/row-level security/i.test(error.message)) {
       return { error: "Sem permissão para criar uma nota sobre este utilizador." };
     }
-    return { error: error.message };
+    logError("createGeneralNoteAction", error);
+    return { error: "Não foi possível guardar a nota." };
   }
 
   revalidatePath("/app/notas");
@@ -62,7 +64,10 @@ export async function createBookingNoteAction(formData: FormData): Promise<{ err
   const { error } = await supabase
     .from("session_notes")
     .insert({ booking_id: bookingId, author_id: user.id, body });
-  if (error) return { error: error.message };
+  if (error) {
+    logError("createBookingNoteAction", error);
+    return { error: "Não foi possível guardar a nota." };
+  }
 
   revalidatePath("/app/notas");
   revalidatePath("/admin/notas");
@@ -85,7 +90,10 @@ export async function updateNoteByIdAction(formData: FormData): Promise<{ error?
     .update({ body })
     .eq("id", noteId)
     .eq("author_id", user.id);
-  if (error) return { error: error.message };
+  if (error) {
+    logError("updateNoteByIdAction", error);
+    return { error: "Não foi possível guardar a nota." };
+  }
 
   revalidatePath("/app/notas");
   revalidatePath("/admin/notas");
@@ -130,7 +138,10 @@ export async function upsertNoteAction(formData: FormData): Promise<{ error?: st
     const { error } = await supabase
       .from("session_notes")
       .insert({ booking_id: bookingId, author_id: user.id, body });
-    if (error) return { error: error.message };
+    if (error) {
+      logError("upsertNoteAction", error);
+      return { error: "Não foi possível guardar a nota." };
+    }
   }
 
   revalidatePath("/app/historico");

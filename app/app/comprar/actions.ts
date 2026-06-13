@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createPurchase } from "@/lib/credits";
 import { ifthenpayEnabled, createIfthenpayPayment } from "@/lib/ifthenpay";
 import { dispatchPurchasePending } from "@/lib/email-dispatch";
+import { logError } from "@/lib/errors";
 import type { PaymentMethod } from "@/types/database";
 
 export async function startPurchaseAction({
@@ -37,7 +38,8 @@ export async function startPurchaseAction({
     // gateway IfthenPay
     const { redirectUrl } = await createIfthenpayPayment({ purchaseId, method });
     return { redirect: redirectUrl };
-  } catch (err: any) {
-    return { error: err?.message ?? "Erro ao iniciar compra." };
+  } catch (err) {
+    logError("startPurchaseAction", err);
+    return { error: "Não foi possível iniciar a compra. Tenta novamente." };
   }
 }
