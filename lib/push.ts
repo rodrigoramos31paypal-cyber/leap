@@ -38,7 +38,7 @@ export type StoredSubscription = {
 
 export async function sendPush(
   sub: StoredSubscription,
-  payload: { title: string; body: string; url?: string },
+  payload: { title: string; body: string; url?: string; id?: string },
 ): Promise<{ ok: boolean; gone?: boolean }> {
   if (!pushConfigured()) return { ok: false };
   try {

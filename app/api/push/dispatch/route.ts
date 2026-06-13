@@ -52,6 +52,10 @@ export async function POST(request: NextRequest) {
     title: record.title || "LEAP-FITNESS",
     body: record.body || "",
     url: record.link || "/",
+    // id da notificação in-app → o service worker usa-o no clique para a
+    // marcar como lida (/api/notifications/read), mantendo push e in-app
+    // sincronizados.
+    id: record.id as string | undefined,
   };
 
   let sent = 0;
