@@ -44,7 +44,7 @@ const adminItems: Item[] = [
 ];
 
 const adminOverflow: Item[] = [
-  { href: "/admin/pagamentos", label: "Pagam.", icon: CreditCard },
+  { href: "/admin/pagamentos", label: "Pagamentos", icon: CreditCard },
   { href: "/admin/packs", label: "Packs", icon: Package },
   { href: "/admin/notas", label: "Notas", icon: NotebookPen },
   { href: "/admin/relatorios", label: "Relatórios", icon: BarChart3 },
