@@ -107,21 +107,16 @@ export async function GET(
     const trainerIds = (trainerRows ?? []).map((t) => t.id);
 
     if (trainerIds.length > 0) {
-      const [{ data: bookings }, { data: blocks }] = await Promise.all([
-        admin
-          .from("bookings")
-          .select("id, starts_at, ends_at, session_type, status, profiles:client_id(full_name)")
-          .in("trainer_id", trainerIds)
-          .gte("starts_at", rangeStart.toISOString())
-          .lt("starts_at", rangeEnd.toISOString())
-          .neq("status", "cancelled"),
-        admin
-          .from("trainer_blocked_times")
-          .select("id, starts_at, ends_at, reason")
-          .in("trainer_id", trainerIds)
-          .gte("starts_at", rangeStart.toISOString())
-          .lt("starts_at", rangeEnd.toISOString()),
-      ]);
+      // Apenas sessões ativas — bloqueios ("Indisponível") e sessões
+      // canceladas ficam fora do feed para manter o calendário do
+      // telemóvel limpo e focado no que é real.
+      const { data: bookings } = await admin
+        .from("bookings")
+        .select("id, starts_at, ends_at, session_type, status, profiles:client_id(full_name)")
+        .in("trainer_id", trainerIds)
+        .gte("starts_at", rangeStart.toISOString())
+        .lt("starts_at", rangeEnd.toISOString())
+        .neq("status", "cancelled");
 
       for (const b of bookings ?? []) {
         const clientName = (b as any).profiles?.full_name ?? "cliente";
@@ -131,16 +126,6 @@ export async function GET(
           end: new Date(b.ends_at ?? new Date(new Date(b.starts_at).getTime() + 60 * 60 * 1000)),
           summary: `Sessão · ${clientName}`,
           description: `LEAP-FITNESS · ${b.session_type ?? ""} · ${b.status}`,
-          status: b.status === "cancelled" ? "CANCELLED" : "CONFIRMED",
-        });
-      }
-      for (const blk of blocks ?? []) {
-        events.push({
-          uid: makeUid("block", blk.id),
-          start: new Date(blk.starts_at),
-          end: new Date(blk.ends_at),
-          summary: blk.reason ? `Indisponível · ${blk.reason}` : "Indisponível",
-          description: "Bloqueio LEAP-FITNESS",
           status: "CONFIRMED",
         });
       }
