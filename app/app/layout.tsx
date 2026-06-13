@@ -5,6 +5,7 @@ import { TopBar } from "@/components/top-bar";
 import { BottomNav } from "@/components/bottom-nav";
 import { Toaster } from "@/components/toaster";
 import { ReminderSync } from "@/components/reminder-sync";
+import { ClientTopNav } from "@/components/client-top-nav";
 import { consumeFlash } from "@/lib/flash";
 
 export default async function ClientLayout({ children }: { children: React.ReactNode }) {
@@ -39,6 +40,7 @@ export default async function ClientLayout({ children }: { children: React.React
   return (
     <div className="min-h-screen bg-bone-50 pb-20 dark:bg-ink-900 md:pb-0">
       <TopBar unread={unread ?? 0} userId={user.id} homeHref="/app/dashboard" />
+      <ClientTopNav />
       <Toaster initial={flash} />
       <ReminderSync />
       <main className="mx-auto max-w-6xl px-4 py-5">{children}</main>
