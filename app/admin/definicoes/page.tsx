@@ -134,32 +134,79 @@ export default async function DefinicoesPage({
         <button className="btn-primary">Guardar</button>
       </form>
 
-      <div className="card p-5">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Horários disponíveis</h2>
-        <ul className="mt-3 space-y-2">
-          {(availability ?? []).map((a) => (
-            <li key={a.id} className="flex items-center justify-between border-b border-ink-900/5 pb-2 last:border-0">
-              <div>
-                <span className="font-medium">{DAYS[a.day_of_week]}</span>{" "}
-                <span className="text-ink-500">{a.start_time.slice(0, 5)} – {a.end_time.slice(0, 5)}</span>
-              </div>
-              <form action={deleteAvailabilityAction}>
-                <input type="hidden" name="id" value={a.id} />
-                <button className="text-xs font-medium text-red-700 hover:underline">Eliminar</button>
+      {(() => {
+        // ── Horários disponíveis ─────────────────────────────────────
+        // Regra: 1 horário por dia da semana. Filtramos do dropdown os
+        // dias que já têm um registo; o action faz a mesma validação
+        // server-side por segurança.
+        const usedDays = new Set((availability ?? []).map((a) => a.day_of_week));
+        const availableDays = DAYS.map((d, i) => ({ d, i })).filter((x) => !usedDays.has(x.i));
+
+        // Opções 24h, passo 30 min, das 06:00 às 23:30. Substitui o
+        // `input type="time"` nativo que mostrava AM/PM em sistemas
+        // com locale US (irrelevante para PT — usamos sempre 24h).
+        const timeOptions = Array.from({ length: 36 }, (_, k) => {
+          const total = 6 * 60 + k * 30;
+          const h = Math.floor(total / 60);
+          const m = total % 60;
+          return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+        });
+        // Ordem natural na lista (Seg → Dom) em vez de Dom-first.
+        const ORDER_PT = [1, 2, 3, 4, 5, 6, 0];
+        const sortedAvailability = [...(availability ?? [])].sort(
+          (a, b) => ORDER_PT.indexOf(a.day_of_week) - ORDER_PT.indexOf(b.day_of_week),
+        );
+
+        return (
+          <div className="card p-5">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Horários disponíveis</h2>
+            <p className="mt-1 text-xs text-ink-500">Apenas um intervalo por dia. Para mudar, elimina o atual e adiciona um novo.</p>
+            <ul className="mt-3 space-y-2">
+              {sortedAvailability.length === 0 && (
+                <li className="text-sm text-ink-500">Sem horários definidos.</li>
+              )}
+              {sortedAvailability.map((a) => (
+                <li key={a.id} className="flex items-center justify-between border-b border-ink-900/5 pb-2 last:border-0">
+                  <div>
+                    <span className="font-medium">{DAYS[a.day_of_week]}</span>{" "}
+                    <span className="text-ink-500 tabular-nums">{a.start_time.slice(0, 5)} – {a.end_time.slice(0, 5)}</span>
+                  </div>
+                  <form action={deleteAvailabilityAction}>
+                    <input type="hidden" name="id" value={a.id} />
+                    <button className="text-xs font-medium text-red-700 hover:underline">Eliminar</button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+
+            {availableDays.length === 0 ? (
+              <p className="mt-4 rounded-md bg-bone-100 px-3 py-2 text-xs text-ink-600 dark:bg-white/[0.04]">
+                Todos os dias da semana já têm horário definido.
+              </p>
+            ) : (
+              <form action={addAvailabilityAction} className="mt-4 grid gap-2 sm:grid-cols-4">
+                <input type="hidden" name="trainerId" value={trainer.id} />
+                <select name="day_of_week" className="input" defaultValue={String(availableDays[0]?.i ?? 1)}>
+                  {availableDays.map(({ d, i }) => (
+                    <option key={i} value={i}>{d}</option>
+                  ))}
+                </select>
+                <select name="start_time" required defaultValue="07:00" className="input tabular-nums">
+                  {timeOptions.slice(0, -1).map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+                <select name="end_time" required defaultValue="21:00" className="input tabular-nums">
+                  {timeOptions.slice(1).map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+                <button className="btn-primary">Adicionar</button>
               </form>
-            </li>
-          ))}
-        </ul>
-        <form action={addAvailabilityAction} className="mt-4 grid gap-2 sm:grid-cols-4">
-          <input type="hidden" name="trainerId" value={trainer.id} />
-          <select name="day_of_week" className="input">
-            {DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}
-          </select>
-          <input name="start_time" type="time" required className="input" defaultValue="07:00" />
-          <input name="end_time" type="time" required className="input" defaultValue="21:00" />
-          <button className="btn-primary">Adicionar</button>
-        </form>
-      </div>
+            )}
+          </div>
+        );
+      })()}
 
       <div className="card p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Sincronizar calendário</h2>

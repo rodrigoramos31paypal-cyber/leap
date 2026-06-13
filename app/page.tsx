@@ -26,17 +26,12 @@ export default function HomePage() {
             </span>
           </Link>
           <nav className="flex items-center gap-1.5 sm:gap-2">
-            {/* Light bg + border para que ThemeToggle e Entrar leiam
-                como botões (antes eram quase invisíveis no header). */}
+            {/* ThemeToggle mantém o look discreto; Entrar herda o destaque
+                gold (antes era do "Criar conta", removido para reduzir
+                clutter no header — registo continua em /registar). */}
             <ThemeToggle className="border border-ink-900/10 bg-white/60 hover:bg-white dark:border-white/10 dark:bg-white/[0.06] dark:hover:bg-white/[0.12]" />
-            <Link
-              href="/login"
-              className="inline-flex items-center rounded-lg border border-ink-900/10 bg-white/60 px-3 py-2 text-sm font-medium text-ink-900 transition hover:bg-white dark:border-white/10 dark:bg-white/[0.06] dark:text-bone-50 dark:hover:bg-white/[0.12]"
-            >
+            <Link href="/login" className="btn-gold">
               Entrar
-            </Link>
-            <Link href="/registar" className="btn-gold">
-              Criar conta
             </Link>
           </nav>
         </div>
@@ -69,16 +64,9 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Lock-up completo (logo + FITNESS STUDIO + slogan) — ligeiramente maior. */}
+          {/* Feature cards (lock-up do logo+slogan removido — ficava
+              demasiado pesado lado a lado com o H1). */}
           <div className="flex flex-col items-center gap-6">
-            <Image
-              src="/images/logo-slogan.png"
-              alt="LEAP-FITNESS STUDIO · Love. Energy. Ambition. Power."
-              width={640}
-              height={480}
-              priority
-              className="w-full max-w-lg dark:invert"
-            />
             <div className="grid w-full grid-cols-2 gap-3">
               <FeatureCard icon={<Dumbbell size={18} />} title="Packs" desc="PT Individual ou Dupla." />
               <FeatureCard icon={<Calendar size={18} />} title="Agenda" desc="Marca em segundos." />
