@@ -40,7 +40,6 @@ export default function HomePage() {
       <section className="mx-auto w-full max-w-6xl flex-1 px-6 pt-10 pb-16">
         <div className="grid gap-10 md:grid-cols-2 md:items-center">
           <div>
-            <span className="chip-gold mb-5">Portal oficial · v2.0</span>
             <h1 className="font-display text-5xl font-black leading-[1.05] tracking-tight md:text-6xl">
               A tua jornada,
               <br />
