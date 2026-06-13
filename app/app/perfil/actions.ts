@@ -44,46 +44,35 @@ export async function deleteAccountAction(formData: FormData) {
     redirect("/app/perfil");
   }
 
-  const admin = createSupabaseAdmin(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false, autoRefreshToken: false } },
-  );
+  // 1) Anonimizar dados pessoais via RPC SECURITY DEFINER (limitada a
+  //    auth.uid()). Fiável e independente da service-role key no runtime.
+  //    VERIFICAMOS o erro — antes as escritas falhavam em silêncio.
+  const { error: rpcErr } = await (supabase as any).rpc("anonymize_my_account");
+  if (rpcErr) {
+    logError("deleteAccountAction:anonymize", rpcErr);
+    setFlash("Não foi possível apagar a conta. Tenta de novo ou contacta-nos.", "error");
+    redirect("/app/perfil");
+  }
 
+  // 2) Bloquear o login (remover PII do auth + ban). Só esta parte precisa
+  //    da service role; se falhar, os dados pessoais JÁ foram anonimizados.
   try {
-    // 1) Apagar dados pessoais sem obrigação de retenção.
-    await admin.from("session_notes").delete().eq("author_id", uid);
-    await admin.from("notifications").delete().eq("user_id", uid);
-    await admin.from("calendar_integrations").delete().eq("user_id", uid);
-    await admin.from("push_subscriptions").delete().eq("user_id", uid);
-    await admin.from("notification_preferences").delete().eq("user_id", uid);
-    await admin.from("engagement_alerts").delete().eq("user_id", uid);
-    await admin.from("booking_reminders").delete().eq("recipient_id", uid);
-
-    // 2) Anonimizar o perfil (marcações/compras passam a referir "Cliente removido").
-    await admin
-      .from("profiles")
-      .update({
-        full_name: "Cliente removido",
-        email: `apagado+${uid}@removido.invalid`,
-        phone: null,
-        calendar_feed_token: null,
-      })
-      .eq("id", uid);
-
-    // 3) Bloquear login + remover PII do registo de auth.
-    await admin.auth.admin.updateUserById(uid, {
+    const admin = createSupabaseAdmin(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { persistSession: false, autoRefreshToken: false } },
+    );
+    const { error: banErr } = await admin.auth.admin.updateUserById(uid, {
       email: `apagado+${uid}@removido.invalid`,
       ban_duration: "876000h",
       user_metadata: {},
     });
+    if (banErr) logError("deleteAccountAction:ban", banErr);
   } catch (e) {
-    logError("deleteAccountAction", e);
-    setFlash("Não foi possível apagar a conta. Tenta novamente ou contacta-nos.", "error");
-    redirect("/app/perfil");
+    logError("deleteAccountAction:ban", e);
   }
 
-  // 4) Terminar sessão e sair.
+  // 3) Terminar sessão e sair.
   await supabase.auth.signOut().catch(() => {});
   redirect("/login?deleted=1");
 }
