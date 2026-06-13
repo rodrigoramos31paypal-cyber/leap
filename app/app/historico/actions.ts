@@ -24,6 +24,9 @@ export async function cancelBookingAction(formData: FormData) {
   if (!bookingId) return;
   try {
     await cancelBooking(bookingId, "Cancelado pelo cliente");
+    // SEC: cancelBooking (RPC) já validou ownership acima. As chamadas
+    // abaixo usam service role mas só correm com um bookingId que o
+    // cliente comprovou ser seu — e não devolvem dados ao caller.
     const refunded = await wasRefunded(bookingId);
     await dispatchBookingCancelled(bookingId, refunded).catch(() => {});
     await removeBookingFromCalendars(bookingId).catch(() => {});

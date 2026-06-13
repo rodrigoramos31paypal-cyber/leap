@@ -1,6 +1,20 @@
 // ════════════════════════════════════════════════════════════════
 // Email dispatch helpers · combinam queries Supabase com sendEmail
 // para serem chamados a partir de server actions.
+//
+// SEC — uso de service role (createAdminClient):
+//   Estas funções usam service role de propósito. Precisam de ler
+//   dados que o cliente autenticado NÃO vê por RLS (email/nome de
+//   outros perfis, dados de bookings/purchases para o template). O
+//   resultado nunca é devolvido ao caller — só vai para dentro do
+//   email enviado ao destinatário legítimo.
+//
+//   CONTRATO: o caller garante que a operação já passou por uma RPC
+//   que valida ownership (ex. create_booking, cancel_booking,
+//   create_purchase). Estas funções são sempre chamadas DEPOIS dessa
+//   RPC ter tido sucesso, por isso o id recebido é de uma entidade a
+//   que o caller tem direito. NÃO usar service role aqui para nada
+//   que seja devolvido ao utilizador (≠ caso H5).
 // ════════════════════════════════════════════════════════════════
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail, emailTemplates, emailEnabled } from "@/lib/email";
