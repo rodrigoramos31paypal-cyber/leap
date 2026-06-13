@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { Trash2, RefreshCcw } from "lucide-react";
 import { formatDateTime } from "@/lib/utils";
-import { deleteNotificationAction } from "@/app/app/notificacoes/actions";
+import { deleteNotificationAction, deleteAllNotificationsAction } from "@/app/app/notificacoes/actions";
 
 type Notif = {
   id: string;
@@ -65,6 +65,16 @@ export function NotificationsList({
     });
   }
 
+  function handleClearAll() {
+    // Optimista: limpa já localmente; a server action apaga na BD.
+    setItems([]);
+    const fd = new FormData();
+    fd.set("scope", scope);
+    startTransition(async () => {
+      await deleteAllNotificationsAction(fd);
+    });
+  }
+
   if (items.length === 0) {
     return (
       <div className="card p-5 text-center text-sm text-ink-500">Sem notificações.</div>
@@ -72,7 +82,18 @@ export function NotificationsList({
   }
 
   return (
-    <ul className="space-y-2">
+    <div className="space-y-2">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={handleClearAll}
+          disabled={pending}
+          className="inline-flex items-center gap-1 text-xs font-medium text-ink-500 hover:text-red-600 disabled:opacity-50"
+        >
+          <Trash2 size={12} /> Limpar tudo
+        </button>
+      </div>
+      <ul className="space-y-2">
       {items.map((n) => {
         // Só sessões canceladas pelo trainer geram CTA — as outras
         // notificações são meramente informativas.
@@ -122,6 +143,7 @@ export function NotificationsList({
           </li>
         );
       })}
-    </ul>
+      </ul>
+    </div>
   );
 }
