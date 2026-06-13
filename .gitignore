@@ -39,3 +39,14 @@ next-env.d.ts
 
 .perf-audit-backup/
 public/images/.orig_backup/
+
+# supabase CLI local link state
+supabase/.temp/
+
+# stray type-check / build dumps
+tsc-output.txt
+
+# OS / editor clutter
+Thumbs.db
+ehthumbs.db
+Desktop.ini
