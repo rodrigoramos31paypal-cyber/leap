@@ -8,10 +8,46 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { Database, PaymentMethod } from "@/types/database";
 
 /**
+ * SEC (H8 — defesa em camadas, par do hardening de C2 no callback):
+ * NUNCA persistimos a resposta crua do gateway. A RLS de payments deixa
+ * o próprio cliente ler `gateway_payload`, por isso filtramos para um
+ * allowlist de campos não-sensíveis que a UI precisa (entidade,
+ * referência, estado). Qualquer campo que a IfthenPay adicione no futuro
+ * — incluindo eventual eco de credenciais/keys — fica de fora por
+ * omissão, em vez de viajar para a BD e ser legível pelo cliente.
+ *
+ * Os únicos campos lidos do payload são Entity/Reference (página
+ * Multibanco). Os restantes são status genérico, úteis para debug/UI e
+ * comprovadamente não-sensíveis.
+ */
+const GATEWAY_PAYLOAD_ALLOWLIST = [
+  "Status",
+  "Message",
+  "Entity",
+  "Reference",
+  "ExpiryDate",
+] as const;
+
+function sanitizeGatewayPayload(payload: unknown): Record<string, unknown> {
+  if (!payload || typeof payload !== "object") return {};
+  const src = payload as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const allowed of GATEWAY_PAYLOAD_ALLOWLIST) {
+    // Aceita variantes de case (Entity/entity, Reference/reference, …)
+    // mantendo a chave original — a UI lê `gw?.Entity ?? gw?.entity`.
+    for (const k of Object.keys(src)) {
+      if (k.toLowerCase() === allowed.toLowerCase()) out[k] = src[k];
+    }
+  }
+  return out;
+}
+
+/**
  * Anexa a info devolvida pelo gateway ao payment pending da compra,
  * via RPC SECURITY DEFINER (a RLS de payments é admin-write only).
  * H5: substitui o antigo UPDATE com service_role neste caminho — a RPC
  * valida que o caller é o dono da compra.
+ * H8: o payload é filtrado por allowlist antes de gravar (ver acima).
  */
 async function setGatewayInfo(
   supabase: SupabaseClient<Database>,
@@ -22,7 +58,7 @@ async function setGatewayInfo(
     p_purchase_id: purchaseId,
     p_gateway_request_id: info.requestId,
     p_gateway_ref: info.ref,
-    p_gateway_payload: info.payload as any,
+    p_gateway_payload: sanitizeGatewayPayload(info.payload) as any,
   });
   if (error) throw error;
 }
