@@ -4,7 +4,6 @@ import { NotebookPen, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getClientCredits } from "@/lib/credits";
 import { eur, formatDateTime, BOOKING_STATUS } from "@/lib/utils";
-import { adjustCreditsAction } from "./actions";
 import { NoteEditor } from "@/components/note-editor";
 import { getMyNotesMapForBookings } from "@/lib/notes";
 import { getAccessibleTrainerIds } from "@/lib/trainer";
@@ -21,6 +20,8 @@ export default async function ClientDetail({ params }: { params: { id: string } 
     notFound();
   }
   const profileId = profile.id;
+  // Conta removida (RGPD): email anonimizado → bloqueia atribuições.
+  const isDeleted = (profile.email ?? "").endsWith("@removido.invalid");
 
   // PERF: estas 4 chamadas sao independentes — antes corriam em serie
   // (4 round-trips sequenciais). Agora em paralelo (1 vaga).
@@ -83,39 +84,21 @@ export default async function ClientDetail({ params }: { params: { id: string } 
       </div>
 
       {/* Atribuir sessões manualmente — sem o cliente passar pelo site */}
-      <details className="card p-5">
-        <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
-          <Plus size={16} /> Atribuir sessões manualmente
-        </summary>
-        <GrantPackForm
-          clientId={profileId}
-          packs={packs.map((p) => ({ id: p.id, name: p.name, price_cents: p.price_cents }))}
-        />
-      </details>
-
-      {/* Ajuste manual */}
-      <div className="card p-5">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Ajustar sessões</h2>
-        {purchases.filter((p) => p.status === "confirmed" && p.sessions_remaining >= 0).length === 0 ? (
-          <p className="mt-2 text-sm text-ink-500">Sem packs ativos para ajustar.</p>
-        ) : (
-          <form action={adjustCreditsAction} className="mt-3 grid gap-2 sm:grid-cols-4">
-            <select name="purchaseId" className="input sm:col-span-2">
-              {purchases
-                .filter((p) => p.status === "confirmed")
-                .map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {(p.pack_snapshot as any).name} · {p.sessions_remaining}/{p.sessions_total}
-                  </option>
-                ))}
-            </select>
-            <input name="delta" type="number" defaultValue={1} className="input" placeholder="+/-" />
-            <input name="reason" placeholder="Motivo" className="input sm:col-span-4" required />
-            <input type="hidden" name="clientId" value={profileId} />
-            <button className="btn-primary sm:col-span-4">Aplicar</button>
-          </form>
-        )}
-      </div>
+      {isDeleted ? (
+        <div className="card p-4 text-sm text-ink-500">
+          Esta conta foi removida (RGPD). Não é possível atribuir sessões.
+        </div>
+      ) : (
+        <details className="card p-5">
+          <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
+            <Plus size={16} /> Atribuir sessões manualmente
+          </summary>
+          <GrantPackForm
+            clientId={profileId}
+            packs={packs.map((p) => ({ id: p.id, name: p.name, price_cents: p.price_cents }))}
+          />
+        </details>
+      )}
 
       <section>
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-ink-500">Compras recentes</h2>
