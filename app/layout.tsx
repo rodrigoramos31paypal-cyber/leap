@@ -79,7 +79,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             __html: `
               if ('serviceWorker' in navigator) {
                 window.addEventListener('load', () => {
-                  navigator.serviceWorker.register('/sw.js').catch(() => {});
+                  // updateViaCache:'none' → o browser nunca usa a HTTP cache
+                  // para o script do SW; verifica sempre na rede. reg.update()
+                  // força uma verificação imediata. Combinado com skipWaiting
+                  // no sw.js, garante que um SW novo (ex: leap-v4) é apanhado
+                  // e activado mesmo em iOS, que de outra forma fica preso na
+                  // versão antiga.
+                  navigator.serviceWorker
+                    .register('/sw.js', { updateViaCache: 'none' })
+                    .then((reg) => { reg.update().catch(() => {}); })
+                    .catch(() => {});
                 });
               }
             `,
