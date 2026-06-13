@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient, getSessionUser, getCurrentProfile } from "@/lib/supabase/server";
 import { getClientCredits, getClientCreditsByTrainer } from "@/lib/credits";
 import { formatDateTime, pluralize } from "@/lib/utils";
-import { Calendar, ShoppingBag, Sparkles, AlertCircle, NotebookPen } from "lucide-react";
+import { Calendar, ShoppingBag, Sparkles, AlertCircle, NotebookPen, ChevronRight, MousePointerClick } from "lucide-react";
 import { PushSubscribeCard } from "@/components/push-subscribe-card";
 
 export default async function ClientDashboard() {
@@ -153,14 +153,25 @@ export default async function ClientDashboard() {
         ) : (
           <ul className="space-y-2">
             {upcoming.map((b) => (
-              <li key={b.id} className="card flex items-center justify-between p-4">
-                <div>
-                  <div className="text-sm font-semibold">{formatDateTime(b.starts_at)}</div>
-                  <div className="text-xs text-ink-500 capitalize">{b.session_type}</div>
-                </div>
-                <span className={b.status === "confirmed" ? "chip-ok" : "chip-gold"}>
-                  {b.status === "confirmed" ? "Confirmada" : "Marcada"}
-                </span>
+              <li key={b.id}>
+                <Link
+                  href={`/app/sessao/${b.id}`}
+                  className="card flex items-center justify-between gap-3 p-4 hover:border-gold-400"
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold">{formatDateTime(b.starts_at)}</div>
+                    <div className="text-xs text-ink-500 capitalize">{b.session_type}</div>
+                    <div className="mt-1 inline-flex items-center gap-1 text-[11px] text-gold-600">
+                      <MousePointerClick size={12} /> Toca para mais opções
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className={b.status === "confirmed" ? "chip-ok" : "chip-gold"}>
+                      {b.status === "confirmed" ? "Confirmada" : "Marcada"}
+                    </span>
+                    <ChevronRight size={16} className="text-ink-500" />
+                  </div>
+                </Link>
               </li>
             ))}
           </ul>
