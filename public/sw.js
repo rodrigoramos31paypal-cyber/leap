@@ -9,7 +9,7 @@
 //
 // BUMP `CACHE_NAME` sempre que mexes em chunks/policies — o handler
 // `activate` apaga as caches antigas e o utilizador pega já na nova.
-const CACHE_NAME = "leap-v4";
+const CACHE_NAME = "leap-v5";
 const APP_SHELL = [
   "/",
   "/login",
@@ -106,7 +106,7 @@ self.addEventListener("fetch", (event) => {
 });
 
 // ─── Web Push ──────────────────────────────────────────────────────
-// Payload (JSON) enviado por /api/push/dispatch: { title, body, url }.
+// Payload (JSON) enviado por /api/push/dispatch: { title, body, url, id }.
 self.addEventListener("push", (event) => {
   let data = {};
   try {
@@ -119,22 +119,38 @@ self.addEventListener("push", (event) => {
     body: data.body || "",
     icon: "/icons/icon-192.png",
     badge: "/icons/icon-192.png",
-    data: { url: data.url || "/" },
+    // `id` = notificação in-app correspondente; usado no clique para a
+    // marcar como lida e manter push/in-app sincronizados.
+    data: { url: data.url || "/", id: data.id },
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const target = (event.notification.data && event.notification.data.url) || "/";
-  event.waitUntil(
-    self.clients
-      .matchAll({ type: "window", includeUncontrolled: true })
-      .then((list) => {
-        for (const c of list) {
-          if (c.url.includes(target) && "focus" in c) return c.focus();
-        }
-        if (self.clients.openWindow) return self.clients.openWindow(target);
-      })
-  );
+  const info = event.notification.data || {};
+  const target = info.url || "/";
+
+  // Marca a notificação in-app como lida (push e in-app andam a par).
+  // credentials:'include' → envia o cookie de sessão Supabase, por isso
+  // funciona mesmo com a app fechada. Falha em silêncio (offline, etc.).
+  const markRead = info.id
+    ? fetch("/api/notifications/read", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ id: info.id }),
+      }).catch(() => {})
+    : Promise.resolve();
+
+  const focusOrOpen = self.clients
+    .matchAll({ type: "window", includeUncontrolled: true })
+    .then((list) => {
+      for (const c of list) {
+        if (c.url.includes(target) && "focus" in c) return c.focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(target);
+    });
+
+  event.waitUntil(Promise.all([markRead, focusOrOpen]));
 });
