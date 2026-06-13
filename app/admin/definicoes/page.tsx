@@ -149,6 +149,20 @@ export default async function DefinicoesPage({
               </span>
             </span>
           </label>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="show_cancelled_in_calendar"
+              defaultChecked={(settings as any)?.show_cancelled_in_calendar ?? false}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="font-semibold">Mostrar sessões canceladas na agenda</span>
+              <span className="block text-xs text-ink-500">
+                Desligado (default), as sessões canceladas não aparecem no calendário.
+              </span>
+            </span>
+          </label>
         </div>
         <button className="btn-primary">Guardar</button>
       </form>
