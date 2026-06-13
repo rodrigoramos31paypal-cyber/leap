@@ -89,6 +89,7 @@ export default async function DefinicoesPage({
       <div className="card space-y-4 p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Notificações</h2>
         <NotificationPrefToggle
+          kind="session_reminder"
           initial={reminderOn}
           label="Lembretes de sessão"
           desc="Recebe um email e uma notificação na app antes das tuas sessões."

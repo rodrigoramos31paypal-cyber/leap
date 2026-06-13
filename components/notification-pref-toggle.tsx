@@ -1,15 +1,17 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { setSessionReminderEnabled } from "@/lib/notification-actions";
+import { setNotificationPref } from "@/lib/notification-actions";
 
 // Toggle instantâneo (sem botão Guardar). Optimista: muda já, e reverte
-// se o server action falhar.
+// se o server action falhar. `kind` mapeia para notification_preferences.
 export function NotificationPrefToggle({
+  kind,
   initial,
   label,
   desc,
 }: {
+  kind: string;
   initial: boolean;
   label: string;
   desc?: string;
@@ -21,7 +23,7 @@ export function NotificationPrefToggle({
     const next = !on;
     setOn(next);
     startTransition(async () => {
-      const r = await setSessionReminderEnabled(next);
+      const r = await setNotificationPref(kind, next);
       if (!r?.ok) setOn(!next); // reverte em caso de erro
     });
   }

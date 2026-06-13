@@ -16,13 +16,13 @@ export default async function PerfilPage({
 
   const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
 
-  const { data: notifPref } = await (supabase as any)
+  const { data: prefsRows } = await (supabase as any)
     .from("notification_preferences")
-    .select("enabled")
-    .eq("user_id", user.id)
-    .eq("kind", "session_reminder")
-    .maybeSingle();
-  const reminderOn = (notifPref as any)?.enabled ?? true;
+    .select("kind, enabled")
+    .eq("user_id", user.id);
+  const prefMap = new Map((prefsRows ?? []).map((r: any) => [r.kind, r.enabled]));
+  const reminderOn = prefMap.get("session_reminder") ?? true;
+  const creditAlertOn = prefMap.get("credit_alert") ?? true;
 
   return (
     <div className="space-y-5">
@@ -55,9 +55,17 @@ export default async function PerfilPage({
       <div className="card space-y-4 p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Notificações</h2>
         <NotificationPrefToggle
+          kind="session_reminder"
           initial={reminderOn}
           label="Lembretes de sessão"
           desc="Recebe um email e uma notificação na app antes de cada sessão."
+        />
+        <div className="border-t border-ink-900/5" />
+        <NotificationPrefToggle
+          kind="credit_alert"
+          initial={creditAlertOn}
+          label="Avisos de saldo e validade"
+          desc="Avisa-te quando as tuas sessões estão a acabar ou um pack está a expirar."
         />
       </div>
     </div>
