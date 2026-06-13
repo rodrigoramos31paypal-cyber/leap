@@ -6,6 +6,7 @@ import { BottomNav } from "@/components/bottom-nav";
 import { AdminNavItem } from "@/components/admin-nav-item";
 import { Toaster } from "@/components/toaster";
 import { consumeFlash } from "@/lib/flash";
+import { isMfaSatisfied, listVerifiedFactors } from "@/lib/mfa";
 import { LayoutDashboard, Calendar, Users, CreditCard, BarChart3, Settings, Package, UserCog, NotebookPen } from "lucide-react";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -37,6 +38,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   if (profile?.role !== "trainer" && profile?.role !== "owner") {
     redirect("/app/dashboard");
+  }
+
+  // 2FA gate para o admin: se tem factor verificado e o device ainda
+  // não está confiado nem a sessão em AAL2, manda para o desafio.
+  // Mantém o path actual em ?next para retornar depois da verificação.
+  const factors = await listVerifiedFactors();
+  if (factors.length > 0 && !(await isMfaSatisfied(user.id))) {
+    const target = path || "/admin/dashboard";
+    redirect(`/login/2fa?next=${encodeURIComponent(target)}`);
   }
 
   const isOwner = profile?.role === "owner";
