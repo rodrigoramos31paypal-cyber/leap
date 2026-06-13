@@ -273,8 +273,12 @@ function startOfDay(d: Date) {
 function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
+// Abreviações fixas (3 letras) para caberem nos chips do seletor de dia.
+// O Intl "short" em pt-PT devolvia o nome completo (Domingo, Segunda…) em
+// alguns runtimes, rebentando a largura do botão.
+const WEEKDAYS_PT_SHORT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 function weekday(d: Date) {
-  return new Intl.DateTimeFormat("pt-PT", { weekday: "short" }).format(d).replace(".", "");
+  return WEEKDAYS_PT_SHORT[d.getDay()];
 }
 function fullDate(d: Date) {
   return new Intl.DateTimeFormat("pt-PT", { weekday: "long", day: "2-digit", month: "long" }).format(d);
