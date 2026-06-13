@@ -8,32 +8,38 @@ export default function HomePage() {
     // Layout em flex column garante footer no fundo do viewport.
     // Cores light por defeito + variantes dark: para o tema escuro.
     <main className="flex min-h-screen flex-col bg-bone-50 text-ink-900 dark:bg-ink-900 dark:text-bone-50">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-5">
-        <Link href="/" className="flex items-center gap-3">
-          <Image
-            src="/images/logo.png"
-            alt="LEAP-FITNESS"
-            width={44}
-            height={44}
-            priority
-            className="h-10 w-10 dark:invert"
-          />
-          <span className="font-display text-lg font-semibold tracking-tight">
-            LEAP<span className="text-gold-400">·</span>FITNESS
-          </span>
-        </Link>
-        <nav className="flex items-center gap-1 sm:gap-2">
-          <ThemeToggle />
-          <Link
-            href="/login"
-            className="btn-ghost text-ink-900 hover:bg-ink-900/5 dark:text-bone-50 dark:hover:bg-white/10"
-          >
-            Entrar
+      {/* safe-top: respeita a Dynamic Island / notch quando a app corre
+          em modo PWA (adicionada ao ecrã principal do iPhone). */}
+      <header className="safe-top w-full">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-2 px-4 py-4 sm:px-6 sm:py-5">
+          <Link href="/" className="flex items-center gap-2 sm:gap-3">
+            <Image
+              src="/images/logo.png"
+              alt="LEAP-FITNESS"
+              width={44}
+              height={44}
+              priority
+              className="h-9 w-9 sm:h-10 sm:w-10 dark:invert"
+            />
+            <span className="font-display text-base font-semibold tracking-tight sm:text-lg">
+              LEAP<span className="text-gold-400">·</span>FITNESS
+            </span>
           </Link>
-          <Link href="/registar" className="btn-gold">
-            Criar conta
-          </Link>
-        </nav>
+          <nav className="flex items-center gap-1.5 sm:gap-2">
+            {/* Light bg + border para que ThemeToggle e Entrar leiam
+                como botões (antes eram quase invisíveis no header). */}
+            <ThemeToggle className="border border-ink-900/10 bg-white/60 hover:bg-white dark:border-white/10 dark:bg-white/[0.06] dark:hover:bg-white/[0.12]" />
+            <Link
+              href="/login"
+              className="inline-flex items-center rounded-lg border border-ink-900/10 bg-white/60 px-3 py-2 text-sm font-medium text-ink-900 transition hover:bg-white dark:border-white/10 dark:bg-white/[0.06] dark:text-bone-50 dark:hover:bg-white/[0.12]"
+            >
+              Entrar
+            </Link>
+            <Link href="/registar" className="btn-gold">
+              Criar conta
+            </Link>
+          </nav>
+        </div>
       </header>
 
       <section className="mx-auto w-full max-w-6xl flex-1 px-6 pt-10 pb-16">
