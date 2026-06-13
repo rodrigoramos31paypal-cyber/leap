@@ -8,6 +8,7 @@ import {
   confirmPurchase,
 } from "@/lib/credits";
 import { getCurrentTrainerId, getAccessibleTrainerIds } from "@/lib/trainer";
+import { createClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
 import { logAudit } from "@/lib/audit";
@@ -59,6 +60,18 @@ export async function grantPackAction(formData: FormData): Promise<void> {
 
   if (!clientId) {
     setFlash("Cliente não identificado", "error");
+    return;
+  }
+
+  // Defesa server-side: não atribuir sessões a contas removidas (RGPD).
+  const supabase = createClient();
+  const { data: target } = await supabase
+    .from("profiles")
+    .select("email")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (((target?.email as string | null) ?? "").endsWith("@removido.invalid")) {
+    setFlash("Conta removida — não é possível atribuir sessões.", "error");
     return;
   }
 
