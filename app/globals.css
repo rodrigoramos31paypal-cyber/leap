@@ -99,7 +99,7 @@ input[type="date"]::-webkit-date-and-time-value {
     @apply block text-xs font-medium uppercase tracking-wide text-ink-500 mb-1.5 dark:text-bone-100/70;
   }
   .chip {
-    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
+    @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium;
   }
   .chip-gold {
     @apply chip bg-gold-100 text-gold-700;
