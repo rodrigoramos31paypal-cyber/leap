@@ -193,6 +193,33 @@ async function alertIfCreditsMismatch(args: {
   }
 }
 
+/**
+ * Marca uma sessão EM NOME de um cliente (admin/trainer), a partir da
+ * Agenda. `deduct` decide se desconta 1 sessão do saldo do cliente
+ * (true) ou se é uma sessão grátis sem mexer no pack (false). Sessões
+ * grátis funcionam mesmo para clientes sem qualquer pack.
+ */
+export async function createBookingAdmin(args: {
+  trainerId: string;
+  startsAt: Date;
+  durationMin: number;
+  clientId: string;
+  sessionType?: SessionType;
+  deduct: boolean;
+}): Promise<string> {
+  const supabase = createClient();
+  const { data, error } = await (supabase as any).rpc("create_booking_admin", {
+    p_trainer_id: args.trainerId,
+    p_starts_at: args.startsAt.toISOString(),
+    p_duration_min: args.durationMin,
+    p_session_type: args.sessionType ?? "individual",
+    p_client_id: args.clientId,
+    p_deduct: args.deduct,
+  });
+  if (error) throw error;
+  return data as unknown as string;
+}
+
 export type RecurringBookingResult = {
   ok: boolean;
   series_id: string | null;

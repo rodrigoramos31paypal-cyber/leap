@@ -9,6 +9,8 @@ import { getMyNotesMapForBookings } from "@/lib/notes";
 import { getCurrentTrainerId, getAccessibleTrainerIds } from "@/lib/trainer";
 import { BlockPresets } from "@/components/block-presets";
 import { BookingBlock } from "./booking-popover";
+import { BookingDialog } from "./booking-dialog";
+import { SlotClickLayer } from "./slot-click-layer";
 import { CardSkeleton } from "@/components/skeleton";
 
 type View = "day" | "week" | "month";
@@ -30,9 +32,25 @@ export default async function AdminAgendaPage({
   const day = dayParam ? new Date(dayParam + "T00:00:00") : new Date();
   day.setHours(0, 0, 0, 0);
 
-  // trainerId precisa de ser conhecido para a BlockTimeForm — bloqueia
-  // apenas para isto (cached via React.cache, rapido).
+  // trainerId precisa de ser conhecido para a BlockTimeForm / BookingDialog —
+  // bloqueia apenas para isto (cached via React.cache, rapido).
   const trainerId = (await getCurrentTrainerId()) ?? "";
+
+  // Durações permitidas + default para o BookingDialog (1 lookup por PK).
+  let durations: number[] = [45, 60, 90];
+  let defaultDuration = 45;
+  if (trainerId) {
+    const { data: st } = await createClient()
+      .from("trainer_settings")
+      .select("slot_durations_min, default_slot_duration_min")
+      .eq("trainer_id", trainerId)
+      .maybeSingle();
+    if (st) {
+      durations = ((st as any).slot_durations_min as number[] | null) ?? durations;
+      defaultDuration = ((st as any).default_slot_duration_min as number | null) ?? defaultDuration;
+    }
+  }
+  const canBook = !!trainerId;
 
   let rangeStart: Date;
   let rangeEnd: Date;
@@ -54,7 +72,15 @@ export default async function AdminAgendaPage({
           <h1 className="font-display text-2xl font-bold tracking-tight">Agenda</h1>
           <p className="text-sm text-ink-500">{rangeLabel(view, day, rangeStart, rangeEnd)}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {canBook && (
+            <BookingDialog
+              trainerId={trainerId}
+              durations={durations}
+              defaultDuration={defaultDuration}
+              viewedDate={isoDate(day)}
+            />
+          )}
           <div className="flex overflow-hidden rounded-lg border border-ink-900/10 dark:border-white/10">
             {(["day", "week", "month"] as View[]).map((v) => (
               <Link
@@ -90,16 +116,16 @@ export default async function AdminAgendaPage({
         key={`${view}-${isoDate(day)}`}
         fallback={<CardSkeleton className="h-96" />}
       >
-        <CalendarView view={view} day={day} rangeStart={rangeStart} rangeEnd={rangeEnd} />
+        <CalendarView view={view} day={day} rangeStart={rangeStart} rangeEnd={rangeEnd} canBook={canBook} />
       </Suspense>
     </div>
   );
 }
 
 async function CalendarView({
-  view, day, rangeStart, rangeEnd,
+  view, day, rangeStart, rangeEnd, canBook,
 }: {
-  view: View; day: Date; rangeStart: Date; rangeEnd: Date;
+  view: View; day: Date; rangeStart: Date; rangeEnd: Date; canBook: boolean;
 }) {
   const supabase = createClient();
   // PERF (Q5): trainerIds + myTrainerId são independentes (e cached) —
@@ -160,7 +186,7 @@ async function CalendarView({
         <DayView day={day} bookings={bookings ?? []} blocks={blocks ?? []} reserved={reserved ?? []} notesMap={notesMap} />
       )}
       {view === "week" && (
-        <WeekView start={rangeStart} bookings={bookings ?? []} blocks={blocks ?? []} reserved={reserved ?? []} notesMap={notesMap} />
+        <WeekView start={rangeStart} bookings={bookings ?? []} blocks={blocks ?? []} reserved={reserved ?? []} notesMap={notesMap} canBook={canBook} />
       )}
       {view === "month" && (
         <MonthView gridStart={rangeStart} anchor={day} bookings={bookings ?? []} blocks={blocks ?? []} reserved={reserved ?? []} />
@@ -357,12 +383,14 @@ function WeekView({
   blocks,
   reserved,
   notesMap,
+  canBook,
 }: {
   start: Date;
   bookings: any[];
   blocks: any[];
   reserved: any[];
   notesMap: Map<string, any>;
+  canBook: boolean;
 }) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const byDay = bucketByDay(bookings, blocks, reserved); // PERF (#5): 1 passagem
@@ -451,6 +479,16 @@ function WeekView({
                     style={{ top: i * HOUR_HEIGHT + HOUR_HEIGHT / 2 }}
                   />
                 ))}
+
+                {/* Camada de clique para nova marcação (por baixo dos eventos) */}
+                {canBook && (
+                  <SlotClickLayer
+                    dateIso={isoDate(d)}
+                    hourStart={HOUR_START}
+                    hourEnd={HOUR_END}
+                    hourHeight={HOUR_HEIGHT}
+                  />
+                )}
 
                 {/* Now indicator */}
                 {isToday && nowInRange && (
