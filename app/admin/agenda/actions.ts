@@ -2,11 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { revalidateBookingViews, revalidateAvailabilityViews } from "@/lib/revalidate";
-import { confirmAttendance, markNoShow, cancelBooking } from "@/lib/credits";
-import { dispatchBookingConfirmed, dispatchBookingCancelled } from "@/lib/email-dispatch";
-import { removeBookingFromCalendars } from "@/lib/calendar-sync";
-import { createClient } from "@/lib/supabase/server";
+import { confirmAttendance, markNoShow, cancelBooking, createBookingAdmin } from "@/lib/credits";
+import { dispatchBookingConfirmed, dispatchBookingCancelled, dispatchBookingCreated } from "@/lib/email-dispatch";
+import { removeBookingFromCalendars, pushBookingToCalendars } from "@/lib/calendar-sync";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getAccessibleTrainerIds } from "@/lib/trainer";
+import type { SessionType } from "@/types/database";
+import { randomUUID } from "crypto";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
 import { logAudit } from "@/lib/audit";
@@ -94,6 +96,145 @@ export async function deleteBlockAction(formData: FormData) {
   await supabase.from("trainer_blocked_times").delete().eq("id", id);
   setFlash("Bloqueio removido");
   revalidateAvailabilityViews();
+}
+
+// ════════════════════════════════════════════════════════════════
+// createAgendaBookingAction · o trainer clica num horário da Agenda e
+// marca uma sessão, escolhendo um cliente JÁ existente ou criando um
+// NOVO cliente no momento (sem login: conta "silenciosa" criada por
+// service role). Pode descontar 1 sessão do saldo do cliente ou marcar
+// como sessão grátis (p_deduct = false).
+//
+// Devolve { ok, pending } ou { error } para a UI mostrar inline.
+// ════════════════════════════════════════════════════════════════
+const NOEMAIL_DOMAIN = "sem-email.leap.local";
+
+export async function createAgendaBookingAction(
+  formData: FormData,
+): Promise<{ ok?: true; error?: string; pending?: boolean }> {
+  const trainerId = String(formData.get("trainerId") ?? "");
+  const mode = String(formData.get("mode") ?? "existing"); // "existing" | "new"
+  const date = String(formData.get("date") ?? "");
+  const time = String(formData.get("time") ?? "");
+  const durationMin = Number(formData.get("durationMin") ?? 0);
+  const sessionType = (String(formData.get("sessionType") ?? "individual") === "dupla"
+    ? "dupla"
+    : "individual") as SessionType;
+  const deduct = formData.get("deduct") === "on" || formData.get("deduct") === "true";
+
+  if (!trainerId || !date || !time || !durationMin) {
+    return { error: "Preenche o dia, a hora e a duração." };
+  }
+
+  // SEC: o trainer só pode marcar para um trainer dentro do seu scope.
+  const accessible = await getAccessibleTrainerIds();
+  if (!accessible.includes(trainerId)) {
+    return { error: "Sem permissão para este treinador." };
+  }
+
+  const startsAt = new Date(`${date}T${time}:00`);
+  if (Number.isNaN(startsAt.getTime())) {
+    return { error: "Data ou hora inválida." };
+  }
+
+  // ── Resolve o cliente (existente ou novo) ───────────────────────
+  let clientId = "";
+  let isNew = false;
+  if (mode === "new") {
+    const name = String(formData.get("new_name") ?? "").trim().slice(0, 120);
+    const emailRaw = String(formData.get("new_email") ?? "").trim().toLowerCase();
+    const phone = String(formData.get("new_phone") ?? "").trim().slice(0, 40) || undefined;
+    if (!name) return { error: "Indica o nome do novo cliente." };
+    if (emailRaw && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)) {
+      return { error: "Email inválido." };
+    }
+
+    try {
+      const admin = createAdminClient();
+      // Sem email → gera um placeholder único (a conta tem de ter email).
+      const email = emailRaw || `cliente.${randomUUID()}@${NOEMAIL_DOMAIN}`;
+      const { data: created, error: authErr } = await admin.auth.admin.createUser({
+        email,
+        password: randomUUID() + randomUUID(), // aleatória — o cliente nunca faz login
+        email_confirm: true, // sem email de confirmação
+        user_metadata: { full_name: name, phone, trainer_id: trainerId },
+      });
+      if (authErr || !created?.user) {
+        const m = String(authErr?.message ?? "");
+        if (/already|registered|exists/i.test(m)) {
+          return { error: "Já existe um cliente com esse email." };
+        }
+        logError("createAgendaBookingAction:createUser", authErr);
+        return { error: "Não foi possível criar o cliente." };
+      }
+      clientId = created.user.id;
+      isNew = true;
+      await logAudit("client_create_admin", {
+        targetTable: "profiles",
+        targetId: clientId,
+        payload: { name, hasEmail: !!emailRaw, source: "agenda" },
+      });
+    } catch (e) {
+      logError("createAgendaBookingAction:newClient", e);
+      return { error: "Não foi possível criar o cliente." };
+    }
+  } else {
+    clientId = String(formData.get("clientId") ?? "");
+    if (!clientId) return { error: "Escolhe um cliente." };
+  }
+
+  // ── Cria a marcação ─────────────────────────────────────────────
+  try {
+    const bookingId = await createBookingAdmin({
+      trainerId,
+      startsAt,
+      durationMin,
+      sessionType,
+      clientId,
+      deduct,
+    });
+
+    // Best-effort: email só faz sentido se o cliente tiver email real.
+    const supabase = createClient();
+    const { data: b } = await supabase
+      .from("bookings")
+      .select("status, profiles:client_id(email)")
+      .eq("id", bookingId)
+      .single();
+
+    const clientEmail = (b as any)?.profiles?.email as string | null;
+    const realEmail = !!clientEmail && !clientEmail.endsWith(`@${NOEMAIL_DOMAIN}`);
+    const sideEffects = Promise.allSettled([
+      realEmail ? dispatchBookingCreated(bookingId) : Promise.resolve(),
+      pushBookingToCalendars(bookingId),
+    ]);
+    await sideEffects;
+
+    await logAudit("booking_create_admin", {
+      targetTable: "bookings",
+      targetId: bookingId,
+      payload: { clientId, trainerId, sessionType, durationMin, deduct, newClient: isNew },
+    });
+
+    const pending = (b as any)?.status === "booked";
+    setFlash(pending ? "Marcação criada — a aguardar aceitação" : "Marcação criada");
+    revalidateBookingViews(clientId);
+    return { ok: true, pending };
+  } catch (e: any) {
+    logError("createAgendaBookingAction:book", e);
+    if (isAccessDenied(e)) {
+      await captureAlert("admin_access_denied", { action: "createAgendaBooking", clientId });
+      return { error: "Sem permissão para marcar." };
+    }
+    const msg = String(e?.message ?? "");
+    if (/sem sess(õ|o)es/i.test(msg)) {
+      return { error: "Sem sessões para descontar. Desmarca “Descontar sessão” ou atribui um pack." };
+    }
+    if (/já existe uma marca|bloquead|reservad|não disponível|futuro|duração/i.test(msg)) {
+      return { error: msg };
+    }
+    return { error: "Não foi possível criar a marcação." };
+  }
 }
 
 export async function addBlockQuickAction(formData: FormData) {
