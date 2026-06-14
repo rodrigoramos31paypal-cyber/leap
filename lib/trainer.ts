@@ -31,17 +31,35 @@ export const getCurrentTrainer = cache(async (): Promise<TrainerLite | null> => 
     .eq("profile_id", user.id)
     .maybeSingle();
 
-  if (!data) return null;
+  if (data) return toTrainerLite(data);
+
+  // ── FALLBACK: owner-gestor sem trainer próprio ────────────────────
+  // Um OWNER que não tem o seu próprio registo de trainer gere a agenda
+  // do estúdio. Se existir EXACTAMENTE um trainer, "o trainer actual"
+  // passa a ser esse — assim as Definições e a marcação por clique na
+  // Agenda funcionam para ele tal como funcionam para o trainer. Com
+  // vários trainers fica ambíguo → mantém null (sem regressão).
+  const profile = await getCurrentProfile();
+  if (profile?.role === "owner") {
+    const { data: all } = await supabase
+      .from("trainers")
+      .select("id, profile_id, slug, active, bio, avatar_url, profiles:profile_id(full_name)");
+    if (all && all.length === 1) return toTrainerLite(all[0]);
+  }
+  return null;
+});
+
+function toTrainerLite(data: any): TrainerLite {
   return {
     id: data.id,
     profile_id: data.profile_id,
     slug: data.slug,
     active: data.active,
     bio: data.bio,
-    avatar_url: (data as any).avatar_url ?? null,
-    full_name: (data as any).profiles?.full_name ?? "",
+    avatar_url: data.avatar_url ?? null,
+    full_name: data.profiles?.full_name ?? "",
   };
-});
+}
 
 export const getCurrentTrainerId = cache(async (): Promise<string | null> => {
   const t = await getCurrentTrainer();
