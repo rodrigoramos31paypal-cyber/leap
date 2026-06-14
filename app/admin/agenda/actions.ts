@@ -1,13 +1,21 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { revalidateBookingViews, revalidateAvailabilityViews } from "@/lib/revalidate";
-import { confirmAttendance, markNoShow, cancelBooking, createBookingAdmin } from "@/lib/credits";
+import { revalidateBookingViews, revalidateAvailabilityViews, revalidateCreditsViews } from "@/lib/revalidate";
+import {
+  confirmAttendance,
+  markNoShow,
+  cancelBooking,
+  createBookingAdmin,
+  createPurchase,
+  createCustomPurchase,
+  confirmPurchase,
+} from "@/lib/credits";
 import { dispatchBookingConfirmed, dispatchBookingCancelled, dispatchBookingCreated } from "@/lib/email-dispatch";
 import { removeBookingFromCalendars, pushBookingToCalendars } from "@/lib/calendar-sync";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getAccessibleTrainerIds } from "@/lib/trainer";
-import type { SessionType } from "@/types/database";
+import type { SessionType, PaymentMethod } from "@/types/database";
 import { randomUUID } from "crypto";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
@@ -122,6 +130,21 @@ export async function createAgendaBookingAction(
     : "individual") as SessionType;
   const deduct = formData.get("deduct") === "on" || formData.get("deduct") === "true";
 
+  // Adicionar sessões/pack ao cliente no mesmo passo (opcional).
+  const grant = formData.get("grant") === "on" || formData.get("grant") === "true";
+  const grantMode = String(formData.get("grant_mode") ?? "pack"); // "pack" | "custom"
+  const grantPackId = String(formData.get("grant_pack_id") ?? "");
+  const grantSessions = Number(formData.get("grant_sessions") ?? 0);
+  const grantPriceEuros = Number(formData.get("grant_price_euros") ?? 0);
+  const ALLOWED_METHODS: PaymentMethod[] = [
+    "manual_mbway",
+    "manual_revolut",
+    "manual_cash",
+    "complimentary",
+  ];
+  const grantMethodRaw = String(formData.get("grant_method") ?? "manual_mbway") as PaymentMethod;
+  const grantMethod = ALLOWED_METHODS.includes(grantMethodRaw) ? grantMethodRaw : "manual_mbway";
+
   if (!trainerId || !date || !time || !durationMin) {
     return { error: "Preenche o dia, a hora e a duração." };
   }
@@ -183,6 +206,44 @@ export async function createAgendaBookingAction(
     if (!clientId) return { error: "Escolhe um cliente." };
   }
 
+  // ── Adicionar sessões/pack ao cliente (opcional) ────────────────
+  // Feito ANTES da marcação e confirmado já, para que (a) o saldo do
+  // cliente reflicta as novas sessões e (b) a marcação possa descontar
+  // dessas sessões se o trainer assim escolher. Confirmar a compra fá-la
+  // contar como pagamento no dashboard/relatórios.
+  if (grant) {
+    try {
+      let purchaseId: string;
+      if (grantMode === "custom") {
+        if (!Number.isFinite(grantSessions) || grantSessions <= 0) {
+          return { error: "Indica um número de sessões válido para adicionar." };
+        }
+        purchaseId = await createCustomPurchase({
+          clientId,
+          trainerId,
+          sessions: Math.floor(grantSessions),
+          priceCents: Math.max(0, Math.round((grantPriceEuros || 0) * 100)),
+          sessionType, // mesmo tipo da marcação → o desconto puxa daqui
+          paymentMethod: grantMethod,
+        });
+      } else {
+        if (!grantPackId) {
+          return { error: "Escolhe um pack para adicionar." };
+        }
+        purchaseId = await createPurchase(grantPackId, grantMethod, clientId);
+      }
+      await confirmPurchase(purchaseId);
+      await logAudit("pack_grant", {
+        targetTable: "purchases",
+        targetId: purchaseId,
+        payload: { clientId, trainerId, grantMode, method: grantMethod, source: "agenda" },
+      });
+    } catch (e) {
+      logError("createAgendaBookingAction:grant", e);
+      return { error: "Não foi possível adicionar as sessões ao cliente." };
+    }
+  }
+
   // ── Cria a marcação ─────────────────────────────────────────────
   try {
     const bookingId = await createBookingAdmin({
@@ -219,6 +280,7 @@ export async function createAgendaBookingAction(
     const pending = (b as any)?.status === "booked";
     setFlash(pending ? "Marcação criada — a aguardar aceitação" : "Marcação criada");
     revalidateBookingViews(clientId);
+    if (grant) revalidateCreditsViews(clientId);
     return { ok: true, pending };
   } catch (e: any) {
     logError("createAgendaBookingAction:book", e);

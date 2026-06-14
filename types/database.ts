@@ -1094,6 +1094,7 @@ export type Database = {
         | "manual_mbway"
         | "manual_cash"
         | "manual_transfer"
+        | "manual_revolut"
         | "mbway"
         | "multibanco"
         | "card"
@@ -1249,6 +1250,7 @@ export const Constants = {
         "manual_mbway",
         "manual_cash",
         "manual_transfer",
+        "manual_revolut",
         "mbway",
         "multibanco",
         "card",

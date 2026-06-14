@@ -1,0 +1,11 @@
+-- ════════════════════════════════════════════════════════════════
+-- 0056_revolut_payment_method
+--
+-- Adiciona "Revolut" como método de pagamento manual, para o trainer
+-- poder registar packs/sessões pagas por Revolut (ex: ao criar uma
+-- marcação na Agenda). Segue o mesmo padrão de 0018 (complimentary).
+--
+-- REVERT: não é possível remover um valor de enum em Postgres sem
+-- recriar o tipo; deixar o valor presente é inofensivo.
+-- ════════════════════════════════════════════════════════════════
+alter type payment_method add value if not exists 'manual_revolut';

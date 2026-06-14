@@ -290,6 +290,7 @@ function paymentMethodLabel(m: string) {
     manual_mbway: "MB Way (manual)",
     manual_cash: "Dinheiro",
     manual_transfer: "Transferência",
+    manual_revolut: "Revolut",
     complimentary: "Cortesia",
     mbway: "MB Way (auto)",
     multibanco: "Multibanco",

@@ -13,9 +13,12 @@
 // ════════════════════════════════════════════════════════════════
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarPlus, Search, UserPlus, X } from "lucide-react";
+import { CalendarPlus, Package, Search, UserPlus, X } from "lucide-react";
+import { eur } from "@/lib/utils";
 import { searchClientsAction, type ClientHit } from "@/app/admin/clientes/search-action";
 import { createAgendaBookingAction } from "./actions";
+
+type PackLite = { id: string; name: string; sessions: number; price_cents: number };
 
 const TIME_OPTIONS = Array.from({ length: 30 }, (_, i) => {
   const h = 7 + Math.floor(i / 2);
@@ -28,11 +31,13 @@ export function BookingDialog({
   durations,
   defaultDuration,
   viewedDate,
+  packs,
 }: {
   trainerId: string;
   durations: number[];
   defaultDuration: number;
   viewedDate: string; // ISO yyyy-mm-dd
+  packs: PackLite[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -58,6 +63,15 @@ export function BookingDialog({
   const [newEmail, setNewEmail] = useState("");
   const [newPhone, setNewPhone] = useState("");
 
+  // Adicionar sessões/pack
+  const hasPacks = packs.length > 0;
+  const [grant, setGrant] = useState(false);
+  const [grantMode, setGrantMode] = useState<"pack" | "custom">(hasPacks ? "pack" : "custom");
+  const [grantPackId, setGrantPackId] = useState(hasPacks ? packs[0].id : "");
+  const [grantSessions, setGrantSessions] = useState("1");
+  const [grantPrice, setGrantPrice] = useState("0");
+  const [grantMethod, setGrantMethod] = useState("manual_mbway");
+
   function reset() {
     setMode("existing");
     setDate(viewedDate);
@@ -72,6 +86,12 @@ export function BookingDialog({
     setNewName("");
     setNewEmail("");
     setNewPhone("");
+    setGrant(false);
+    setGrantMode(hasPacks ? "pack" : "custom");
+    setGrantPackId(hasPacks ? packs[0].id : "");
+    setGrantSessions("1");
+    setGrantPrice("0");
+    setGrantMethod("manual_mbway");
     setError(null);
   }
 
@@ -128,7 +148,9 @@ export function BookingDialog({
   function switchMode(next: "existing" | "new") {
     setMode(next);
     setError(null);
-    setDeduct(next === "existing");
+    // Novo cliente começa sem saldo → por defeito adicionamos sessões.
+    setGrant(next === "new");
+    setDeduct(true);
   }
 
   function submit() {
@@ -140,6 +162,14 @@ export function BookingDialog({
     }
     if (mode === "new" && !newName.trim()) {
       setError("Indica o nome do novo cliente.");
+      return;
+    }
+    if (grant && grantMode === "custom" && (!Number(grantSessions) || Number(grantSessions) <= 0)) {
+      setError("Indica um número de sessões válido para adicionar.");
+      return;
+    }
+    if (grant && grantMode === "pack" && !grantPackId) {
+      setError("Escolhe um pack para adicionar.");
       return;
     }
 
@@ -157,6 +187,14 @@ export function BookingDialog({
       fd.set("new_name", newName.trim());
       fd.set("new_email", newEmail.trim());
       fd.set("new_phone", newPhone.trim());
+    }
+    fd.set("grant", grant ? "true" : "false");
+    if (grant) {
+      fd.set("grant_mode", grantMode);
+      fd.set("grant_pack_id", grantPackId);
+      fd.set("grant_sessions", grantSessions);
+      fd.set("grant_price_euros", grantPrice);
+      fd.set("grant_method", grantMethod);
     }
 
     startTransition(async () => {
@@ -373,6 +411,119 @@ export function BookingDialog({
               </div>
             </div>
 
+            {/* Adicionar sessões / pack */}
+            <div className="mb-3 rounded-lg border border-ink-900/10 bg-bone-50 p-3 dark:border-white/10 dark:bg-ink-900">
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={grant}
+                  onChange={(e) => setGrant(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-ink-900/30"
+                />
+                <span>
+                  <span className="inline-flex items-center gap-1.5 font-medium">
+                    <Package size={13} /> Adicionar sessões a este cliente
+                  </span>
+                  <span className="block text-[11px] text-ink-500">
+                    Atribui um pack ou um número de sessões e regista o pagamento.
+                  </span>
+                </span>
+              </label>
+
+              {grant && (
+                <div className="mt-3 space-y-3 border-t border-ink-900/10 pt-3">
+                  {/* Pack existente vs número personalizado */}
+                  <div className="inline-flex items-center gap-1 rounded-lg border border-ink-900/10 bg-white p-1 text-xs dark:border-white/10 dark:bg-ink-800">
+                    <button
+                      type="button"
+                      onClick={() => setGrantMode("pack")}
+                      disabled={!hasPacks}
+                      className={`rounded-md px-2.5 py-1 font-medium transition disabled:opacity-40 ${
+                        grantMode === "pack" ? "bg-ink-900 text-white dark:bg-bone-50 dark:text-ink-900" : "text-ink-600"
+                      }`}
+                    >
+                      Pack existente
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setGrantMode("custom")}
+                      className={`rounded-md px-2.5 py-1 font-medium transition ${
+                        grantMode === "custom" ? "bg-ink-900 text-white dark:bg-bone-50 dark:text-ink-900" : "text-ink-600"
+                      }`}
+                    >
+                      Nº personalizado
+                    </button>
+                  </div>
+
+                  {grantMode === "pack" ? (
+                    hasPacks ? (
+                      <div>
+                        <label className="label" htmlFor="grant_pack">Pack</label>
+                        <select
+                          id="grant_pack"
+                          value={grantPackId}
+                          onChange={(e) => setGrantPackId(e.target.value)}
+                          className="input"
+                        >
+                          {packs.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name} — {p.sessions} {p.sessions === 1 ? "sessão" : "sessões"} · {eur(p.price_cents)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-ink-500">
+                        Sem packs activos. Usa "Nº personalizado".
+                      </p>
+                    )
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="label" htmlFor="grant_sessions">Nº de sessões</label>
+                        <input
+                          id="grant_sessions"
+                          type="number"
+                          min={1}
+                          value={grantSessions}
+                          onChange={(e) => setGrantSessions(e.target.value)}
+                          className="input"
+                        />
+                      </div>
+                      <div>
+                        <label className="label" htmlFor="grant_price">Preço total (€)</label>
+                        <input
+                          id="grant_price"
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={grantPrice}
+                          onChange={(e) => setGrantPrice(e.target.value)}
+                          placeholder="0 = oferta"
+                          className="input"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="label" htmlFor="grant_method">Pagamento</label>
+                    <select
+                      id="grant_method"
+                      value={grantMethod}
+                      onChange={(e) => setGrantMethod(e.target.value)}
+                      className="input"
+                    >
+                      <option value="manual_mbway">MB Way</option>
+                      <option value="manual_revolut">Revolut</option>
+                      <option value="manual_cash">Dinheiro</option>
+                      <option value="complimentary">Cortesia (oferta — sem pagamento)</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Descontar sessão */}
             <label className="mb-4 flex items-start gap-2 rounded-lg border border-ink-900/10 bg-bone-50 p-3 text-sm dark:border-white/10 dark:bg-ink-900">
               <input
@@ -382,9 +533,11 @@ export function BookingDialog({
                 className="mt-0.5 h-4 w-4 rounded border-ink-900/30"
               />
               <span>
-                <span className="font-medium">Descontar 1 sessão do cliente</span>
+                <span className="font-medium">Descontar 1 sessão desta marcação</span>
                 <span className="block text-[11px] text-ink-500">
-                  Desligado = sessão grátis (não mexe no saldo). Necessário para clientes sem pack.
+                  {grant
+                    ? "Ligado = usa 1 das sessões adicionadas. Desligado = sessão grátis (mantém o saldo completo)."
+                    : "Desligado = sessão grátis (não mexe no saldo). Necessário para clientes sem pack."}
                 </span>
               </span>
             </label>
