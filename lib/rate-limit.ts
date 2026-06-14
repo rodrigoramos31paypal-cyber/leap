@@ -1,29 +1,26 @@
 // ════════════════════════════════════════════════════════════════
-// Rate limiting · H1 do audit de segurança
+// Rate limiting · H1 do audit de segurança (+ H2 hardening)
 //
-// Backend: Upstash Redis via REST (funciona em Edge runtime, partilha
-// contadores entre regiões Vercel). Se as env vars não estiverem
-// definidas, o limiter degrada para no-op — útil em dev local sem
-// conta Upstash.
+// Backend preferido: Upstash Redis via REST (Edge-compatible, partilha
+// contadores entre regiões Vercel).
 //
-// Buckets diferenciados por kind:
-//   • auth      — 5 req/min (login)
-//   • register  — 3 req/min (signup, password reset)
-//   • webhook   — 60 req/min (IfthenPay callbacks; relaxado porque
-//                 retries legítimos podem aparecer em rajada)
-//   • generic   — 30 req/min (fallback)
+// H2: SEM Upstash configurado já NÃO é no-op. Caímos para um limiter
+// IN-MEMORY por instância (sliding window). Protecção degradada (não
+// partilhada entre instâncias serverless), mas eleva muito a fasquia
+// vs. "sem limite" — e nunca bloqueia logins por misconfiguração
+// (zero lockout). Configurar UPSTASH_* repõe o limiter distribuído.
 //
-// Uso (no middleware ou route handler):
-//   const r = await rateLimit("auth", `login:${ip}`);
-//   if (!r.success) return new Response("Too many requests", {
-//     status: 429,
-//     headers: { "Retry-After": String(r.retryAfterSeconds) }
-//   });
+// Buckets (req / minuto):
+//   • auth     5    (login)
+//   • register 3    (signup, password reset)
+//   • webhook  60   (IfthenPay callbacks; retries em rajada)
+//   • export   5    (exportações CSV/XLSX — caras em CPU/memória)
+//   • generic  30   (fallback)
 // ════════════════════════════════════════════════════════════════
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 
-export type RateLimitKind = "auth" | "register" | "webhook" | "generic";
+export type RateLimitKind = "auth" | "register" | "webhook" | "export" | "generic";
 
 type LimitResult = {
   success: boolean;
@@ -33,12 +30,21 @@ type LimitResult = {
   retryAfterSeconds: number;
 };
 
+// Limites centralizados — usados tanto pelo Upstash como pelo fallback.
+const LIMITS: Record<RateLimitKind, { tokens: number; windowMs: number }> = {
+  auth: { tokens: 5, windowMs: 60_000 },
+  register: { tokens: 3, windowMs: 60_000 },
+  webhook: { tokens: 60, windowMs: 60_000 },
+  export: { tokens: 5, windowMs: 60_000 },
+  generic: { tokens: 30, windowMs: 60_000 },
+};
+
 // ────────────────────────────────────────────────────────────────
-// Lazy init dos limiters — só na primeira chamada, e cached.
-// Sem env vars → null → no-op em todas as chamadas.
+// Upstash (distribuído) — lazy init, cached. null se env em falta.
 // ────────────────────────────────────────────────────────────────
 type LimiterMap = Record<RateLimitKind, Ratelimit>;
 let cached: LimiterMap | null | undefined;
+let warned = false;
 
 function getLimiters(): LimiterMap | null {
   if (cached !== undefined) return cached;
@@ -46,73 +52,91 @@ function getLimiters(): LimiterMap | null {
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) {
-    // Log uma vez na cold start para o developer perceber que está
-    // a correr sem proteção. Em produção, Vercel logs apanham isto
-    // e o on-call vê imediatamente.
-    if (process.env.NODE_ENV === "production") {
-      console.warn("[rate-limit] UPSTASH_REDIS_REST_URL/TOKEN não definidos — rate limiting DESACTIVADO.");
+    if (process.env.NODE_ENV === "production" && !warned) {
+      warned = true;
+      // ERRO (não warn): em produção sem Upstash usamos o fallback
+      // in-memory por instância — protecção degradada. O on-call deve
+      // configurar UPSTASH_* para repor o limiter distribuído.
+      console.error(
+        "[rate-limit] UPSTASH_* em falta — a usar fallback IN-MEMORY por instância (protecção degradada, não partilhada). Configura Upstash em produção.",
+      );
     }
     cached = null;
     return null;
   }
 
   const redis = new Redis({ url, token });
+  const mk = (kind: RateLimitKind, prefix: string) =>
+    new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(LIMITS[kind].tokens, "1 m"),
+      analytics: true,
+      prefix,
+    });
   cached = {
-    auth: new Ratelimit({
-      redis,
-      limiter: Ratelimit.slidingWindow(5, "1 m"),
-      analytics: true,
-      prefix: "rl:auth",
-    }),
-    register: new Ratelimit({
-      redis,
-      limiter: Ratelimit.slidingWindow(3, "1 m"),
-      analytics: true,
-      prefix: "rl:register",
-    }),
-    webhook: new Ratelimit({
-      redis,
-      limiter: Ratelimit.slidingWindow(60, "1 m"),
-      analytics: true,
-      prefix: "rl:webhook",
-    }),
-    generic: new Ratelimit({
-      redis,
-      limiter: Ratelimit.slidingWindow(30, "1 m"),
-      analytics: true,
-      prefix: "rl:generic",
-    }),
+    auth: mk("auth", "rl:auth"),
+    register: mk("register", "rl:register"),
+    webhook: mk("webhook", "rl:webhook"),
+    export: mk("export", "rl:export"),
+    generic: mk("generic", "rl:generic"),
   };
   return cached;
 }
 
+// ────────────────────────────────────────────────────────────────
+// Fallback IN-MEMORY (por instância) — usado só sem Upstash.
+// Sliding window por chave. Não partilhado entre instâncias, mas
+// determinístico, sem dependências e sem risco de lockout.
+// ────────────────────────────────────────────────────────────────
+const memStore = new Map<string, number[]>();
+
+function inMemoryLimit(kind: RateLimitKind, key: string): LimitResult {
+  const { tokens, windowMs } = LIMITS[kind];
+  const now = Date.now();
+  const bucketKey = `${kind}:${key}`;
+  const fresh = (memStore.get(bucketKey) ?? []).filter((t) => now - t < windowMs);
+
+  if (fresh.length >= tokens) {
+    memStore.set(bucketKey, fresh);
+    const retryAfterSeconds = Math.max(1, Math.ceil((windowMs - (now - fresh[0])) / 1000));
+    return { success: false, limit: tokens, remaining: 0, retryAfterSeconds };
+  }
+
+  fresh.push(now);
+  memStore.set(bucketKey, fresh);
+
+  // Poda oportunista — limita memória em instâncias de vida longa.
+  if (memStore.size > 5000) {
+    for (const [k, v] of memStore) {
+      const f = v.filter((t) => now - t < windowMs);
+      if (f.length === 0) memStore.delete(k);
+      else memStore.set(k, f);
+    }
+  }
+
+  return { success: true, limit: tokens, remaining: tokens - fresh.length, retryAfterSeconds: 0 };
+}
+
 /**
- * Verifica se o pedido com a chave indicada está dentro do limite
- * configurado para o `kind`. A `key` é normalmente IP+endpoint
- * (ex. `login:1.2.3.4`); usar IP-apenas é mais agressivo (afecta
- * todos os endpoints partilhados).
+ * Verifica se o pedido com a chave indicada está dentro do limite do
+ * `kind`. A `key` é normalmente IP+endpoint ou userId+endpoint.
  *
- * Se Upstash não estiver configurado, devolve sempre success=true
- * (no-op) — não vamos partir a app porque ainda não criámos a conta.
+ * H2: sem Upstash, usa o fallback in-memory (NÃO é mais no-op).
  */
 export async function rateLimit(kind: RateLimitKind, key: string): Promise<LimitResult> {
   const limiters = getLimiters();
-  if (!limiters) {
-    return { success: true, limit: Infinity, remaining: Infinity, retryAfterSeconds: 0 };
-  }
+  if (!limiters) return inMemoryLimit(kind, key);
 
   const limiter = limiters[kind];
   const { success, limit, remaining, reset } = await limiter.limit(key);
-  // reset = epoch ms quando o bucket abre
   const retryAfterSeconds = Math.max(0, Math.ceil((reset - Date.now()) / 1000));
   return { success, limit, remaining, retryAfterSeconds };
 }
 
 /**
  * Devolve o IP do request a partir de headers que o Vercel define.
- * Fallback "anon" para dev local. Note que `x-forwarded-for` pode
- * ter múltiplos IPs (cliente, proxy1, proxy2…) — o primeiro é o
- * cliente real na convenção do Vercel.
+ * Fallback "anon" para dev local. `x-forwarded-for` pode ter múltiplos
+ * IPs — o primeiro é o cliente real na convenção do Vercel.
  */
 export function getRequestIp(headers: Headers): string {
   return (

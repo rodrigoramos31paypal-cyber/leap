@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getAccessibleTrainerIds } from "@/lib/trainer";
+import { rateLimit } from "@/lib/rate-limit";
 import { logError } from "@/lib/errors";
 
 // H7: a exportação devolve PII (nome + email + histórico). Limitamos a
@@ -12,6 +13,15 @@ export async function GET(req: NextRequest) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return new NextResponse("Unauthorized", { status: 401 });
+
+  // H2: limita exportações de PII (CSV caro + PII sensível).
+  const rl = await rateLimit("export", `export:rel:${user.id}`);
+  if (!rl.success) {
+    return new NextResponse("Demasiados pedidos. Tenta novamente mais tarde.", {
+      status: 429,
+      headers: { "Retry-After": String(rl.retryAfterSeconds) },
+    });
+  }
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
   if (profile?.role !== "trainer" && profile?.role !== "owner") return new NextResponse("Forbidden", { status: 403 });
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { createClient } from "@/lib/supabase/server";
+import { rateLimit } from "@/lib/rate-limit";
 import { formatDateTime, eur } from "@/lib/utils";
 
 // RGPD · "Descarregar os meus dados". Exporta os dados pessoais do
@@ -13,6 +14,15 @@ export async function GET() {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return new NextResponse("Unauthorized", { status: 401 });
+
+  // H2: limita exportações (XLSX é caro em CPU/memória).
+  const rl = await rateLimit("export", `export:me:${user.id}`);
+  if (!rl.success) {
+    return new NextResponse("Demasiados pedidos. Tenta novamente mais tarde.", {
+      status: 429,
+      headers: { "Retry-After": String(rl.retryAfterSeconds) },
+    });
+  }
 
   const [{ data: profile }, { data: bookings }, { data: purchases }, { data: notes }] =
     await Promise.all([
