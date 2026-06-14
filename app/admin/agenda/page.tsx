@@ -102,12 +102,16 @@ async function CalendarView({
   view: View; day: Date; rangeStart: Date; rangeEnd: Date;
 }) {
   const supabase = createClient();
-  const trainerIds = await getAccessibleTrainerIds();
+  // PERF (Q5): trainerIds + myTrainerId são independentes (e cached) —
+  // corremo-los em paralelo em vez de em série antes do calendário.
+  const [trainerIds, myTrainerId] = await Promise.all([
+    getAccessibleTrainerIds(),
+    getCurrentTrainerId(),
+  ]);
   const scope = trainerIds.length > 0 ? trainerIds : [""];
 
   // Preferência do viewer: mostrar canceladas na agenda? Default false →
   // esconde-as (evita o calendário cheio de eventos sobrepostos/riscados).
-  const myTrainerId = await getCurrentTrainerId();
   let showCancelled = false;
   if (myTrainerId) {
     const { data: st } = await (supabase as any)
