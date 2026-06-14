@@ -72,6 +72,77 @@ function safeEqual(a: string, b: string): boolean {
   return timingSafeEqual(ab, bb);
 }
 
+// ════════════════════════════════════════════════════════════════
+// SEC (H3) · Allow-list de IP do callback (defesa em profundidade)
+//
+// A integridade do pagamento assenta na anti-phishing key (segredo
+// estático que viaja na query string → logs). Como camada extra,
+// restringimos o callback aos IPs de origem da IfthenPay.
+//
+// OPT-IN, fail-open por omissão: sem IFTHENPAY_CALLBACK_ALLOWED_IPS
+// definido NÃO bloqueamos (key + validação de amount + idempotência
+// continuam a proteger) — evita partir pagamentos por falta de config.
+// Com a env definida passa a fail-closed: só os IPs/CIDRs listados.
+//
+// Obtém os IPs actuais junto do suporte IfthenPay (não há lista pública
+// estável). Aceita IPs exactos e CIDR IPv4 (ex.: "1.2.3.0/24"),
+// separados por vírgula. IPs IPv6 não são suportados → com allow-list
+// activa, um callback IPv6 é recusado (a IfthenPay usa IPv4).
+// ════════════════════════════════════════════════════════════════
+function ipv4ToInt(ip: string): number | null {
+  const parts = ip.split(".");
+  if (parts.length !== 4) return null;
+  let n = 0;
+  for (const p of parts) {
+    if (!/^\d+$/.test(p)) return null;
+    const o = Number(p);
+    if (o < 0 || o > 255) return null;
+    n = (n << 8) | o;
+  }
+  return n >>> 0;
+}
+
+function ipMatchesRule(ip: string, rule: string): boolean {
+  if (rule.includes("/")) {
+    const [base, bitsStr] = rule.split("/");
+    const bits = Number(bitsStr);
+    const ipN = ipv4ToInt(ip);
+    const baseN = ipv4ToInt(base);
+    if (ipN === null || baseN === null) return false;
+    if (!Number.isInteger(bits) || bits < 0 || bits > 32) return false;
+    if (bits === 0) return true;
+    const mask = (bits === 32 ? 0xffffffff : (~((1 << (32 - bits)) - 1)) >>> 0) >>> 0;
+    return (ipN & mask) === (baseN & mask);
+  }
+  return ip === rule;
+}
+
+/**
+ * Decide se o IP de origem do callback IfthenPay é permitido.
+ * Confia APENAS no header `x-vercel-forwarded-for` (definido pela
+ * infra do Vercel) — `x-forwarded-for` é forjável pelo cliente.
+ */
+export function ifthenpayCallbackIpAllowed(
+  headers: Headers,
+): { allowed: boolean; ip: string; reason?: string } {
+  const raw = process.env.IFTHENPAY_CALLBACK_ALLOWED_IPS?.trim();
+  const ip = headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() ?? "";
+
+  if (!raw) {
+    if (process.env.NODE_ENV === "production") {
+      console.warn(
+        "[ifthenpay] IFTHENPAY_CALLBACK_ALLOWED_IPS não definido — allow-list de IP DESACTIVADA (defesa-em-profundidade off). Pede os IPs ao suporte IfthenPay e define a env.",
+      );
+    }
+    return { allowed: true, ip }; // fail-open: não partir pagamentos
+  }
+
+  if (!ip) return { allowed: false, ip: "", reason: "no_trusted_ip" };
+  const rules = raw.split(",").map((r) => r.trim()).filter(Boolean);
+  const ok = rules.some((r) => ipMatchesRule(ip, r));
+  return { allowed: ok, ip, reason: ok ? undefined : "ip_not_allowed" };
+}
+
 const BASE_MBWAY = "https://ifthenpay.com/api/spg/payment/mbway";
 const BASE_MULTIBANCO = "https://ifthenpay.com/api/multibanco/reference/init";
 const BASE_CCARD = "https://ifthenpay.com/api/creditcard/init";
