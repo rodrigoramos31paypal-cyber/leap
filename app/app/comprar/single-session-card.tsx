@@ -13,7 +13,7 @@ const METHODS: { id: PaymentMethod; label: string; helper: string }[] = [
   { id: "mbway", label: "MB Way (automático)", helper: "Aprovação imediata via IfthenPay" },
   { id: "multibanco", label: "Multibanco", helper: "Referência automática" },
   { id: "card", label: "Cartão bancário", helper: "Visa / Mastercard via IfthenPay" },
-  { id: "manual_mbway", label: "MB Way manual", helper: "Pagas diretamente ao trainer — confirmação em minutos" },
+  { id: "manual_mbway", label: "MB Way (manual) ou Revolut", helper: "Pagas diretamente ao trainer — confirmação em minutos" },
 ];
 
 export function SingleSessionCard({ pack }: { pack: Pack }) {
