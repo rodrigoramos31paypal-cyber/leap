@@ -8,6 +8,9 @@ import { ReminderSync } from "@/components/reminder-sync";
 import { ClientTopNav } from "@/components/client-top-nav";
 import { consumeFlash } from "@/lib/flash";
 
+import type { Metadata } from "next";
+export const metadata: Metadata = { robots: { index: false, follow: false } };
+
 export default async function ClientLayout({ children }: { children: React.ReactNode }) {
   // PERF: getSessionUser/getCurrentProfile sao cached por request, leem
   // apenas cookie (sem round-trip ao auth server). Middleware ja validou.

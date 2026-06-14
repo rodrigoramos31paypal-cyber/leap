@@ -2,6 +2,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { registerAction } from "./actions";
 
+import type { Metadata } from "next";
+export const metadata: Metadata = { robots: { index: false, follow: false } };
+
 export default function RegisterPage({
   searchParams,
 }: {

@@ -9,6 +9,9 @@ import { consumeFlash } from "@/lib/flash";
 import { isMfaSatisfied, listVerifiedFactors } from "@/lib/mfa";
 import { LayoutDashboard, Calendar, Users, CreditCard, BarChart3, Settings, Package, UserCog, NotebookPen } from "lucide-react";
 
+import type { Metadata } from "next";
+export const metadata: Metadata = { robots: { index: false, follow: false } };
+
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   // PERF: getSessionUser/getCurrentProfile sao cached por request, leem
   // apenas cookie (sem round-trip ao auth server). Middleware ja validou.
