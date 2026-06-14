@@ -59,7 +59,9 @@ export function buildCsp(nonce: string): string {
       "'strict-dynamic'",
     ],
     "style-src": ["'self'", "'unsafe-inline'"],
-    "img-src": ["'self'", "data:", "blob:"],
+    // `https://*.supabase.co` para avatares no bucket público `avatars`.
+    // data: e blob: mantêm-se para previews locais antes do upload.
+    "img-src": ["'self'", "data:", "blob:", "https://*.supabase.co"],
     "font-src": ["'self'", "data:"],
     "connect-src": [
       "'self'",
