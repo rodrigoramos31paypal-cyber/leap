@@ -63,21 +63,25 @@ export async function getAvailableSlots(args: {
   const dayEnd = wallToUtc(y, mo, d + 1, 0, 0);
 
   // disponibilidades nesse dia
-  const { data: avail } = await supabase
-    .from("trainer_availability")
-    .select("start_time, end_time, active")
-    .eq("trainer_id", trainerId)
-    .eq("day_of_week", dow)
-    .eq("active", true);
+  // PERF (C3): availability + settings em PARALELO. Eram 2 round-trips em
+  // série, mas settings (buffer) não depende de availability. Custo: uma
+  // query settings "a mais" nos dias sem disponibilidade — desprezável
+  // face ao ganho no caminho comum (dias com horários).
+  const [{ data: avail }, { data: settings }] = await Promise.all([
+    supabase
+      .from("trainer_availability")
+      .select("start_time, end_time, active")
+      .eq("trainer_id", trainerId)
+      .eq("day_of_week", dow)
+      .eq("active", true),
+    supabase
+      .from("trainer_settings")
+      .select("buffer_between_sessions_min")
+      .eq("trainer_id", trainerId)
+      .single(),
+  ]);
 
   if (!avail || avail.length === 0) return [];
-
-  // settings (buffer)
-  const { data: settings } = await supabase
-    .from("trainer_settings")
-    .select("buffer_between_sessions_min")
-    .eq("trainer_id", trainerId)
-    .single();
   const buffer = settings?.buffer_between_sessions_min ?? 0;
 
   // marcações ativas + bloqueios

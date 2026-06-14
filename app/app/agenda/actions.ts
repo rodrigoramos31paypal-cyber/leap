@@ -1,6 +1,5 @@
 "use server";
 
-import { getAvailableSlots } from "@/lib/availability";
 import { createBooking, createRecurringBooking, type RecurringBookingResult } from "@/lib/credits";
 import { dispatchBookingCreated } from "@/lib/email-dispatch";
 import { pushBookingToCalendars, removeBookingFromCalendars } from "@/lib/calendar-sync";
@@ -9,24 +8,8 @@ import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
 import type { SessionType } from "@/types/database";
 
-export async function getSlotsAction({
-  trainerId,
-  dateIso,
-  durationMin,
-}: {
-  trainerId: string;
-  dateIso: string;
-  durationMin: number;
-}) {
-  const slots = await getAvailableSlots({
-    trainerId,
-    date: new Date(dateIso),
-    durationMin,
-  });
-  return {
-    slots: slots.map((s) => ({ startsAt: s.startsAt.toISOString(), endsAt: s.endsAt.toISOString() })),
-  };
-}
+// NOTA (C3): a leitura de slots passou a Route Handler GET /api/slots
+// (cacheável + paralelizável). A antiga `getSlotsAction` foi removida.
 
 export async function bookAction({
   trainerId,
@@ -49,8 +32,18 @@ export async function bookAction({
     // SEC: createBooking (RPC) já validou ownership/regras acima. As
     // chamadas abaixo usam service role mas só sobre um bookingId
     // server-generated — não devolvem dados ao caller.
-    await dispatchBookingCreated(bookingId).catch(() => {});
-    await pushBookingToCalendars(bookingId).catch(() => {});
+    //
+    // PERF (C2): email + calendário são best-effort e NÃO afectam o registo
+    // da marcação (a RPC já fez commit). Disparamo-los em PARALELO — e em
+    // paralelo com a leitura do status — em vez de sequencialmente, por isso
+    // o utilizador espera max(email, calendário, status) em vez da soma.
+    // (Em serverless não podemos "fire-and-forget" de forma fiável sem os
+    // perder, por isso aguardamos o batch antes de devolver.)
+    const sideEffects = Promise.allSettled([
+      dispatchBookingCreated(bookingId),
+      pushBookingToCalendars(bookingId),
+    ]);
+
     // Verifica o status final para a UI mostrar mensagem correcta
     const supabase = createClient();
     const { data: b } = await supabase
@@ -58,6 +51,9 @@ export async function bookAction({
       .select("status")
       .eq("id", bookingId)
       .single();
+
+    await sideEffects;
+
     const pending = (b as any)?.status === "booked";
     setFlash(pending ? "Marcação criada — a aguardar aprovação" : "Marcação confirmada");
     return { ok: true, pending };
@@ -90,15 +86,21 @@ export async function rescheduleAction({
   }
 
   // Best effort: emails + calendários (a antiga sai, a nova entra).
-  await dispatchBookingCreated(newId as string).catch(() => {});
-  await pushBookingToCalendars(newId as string).catch(() => {});
-  await removeBookingFromCalendars(oldBookingId).catch(() => {});
+  // PERF (C2): em PARALELO — antes eram 3 awaits sequenciais.
+  const sideEffects = Promise.allSettled([
+    dispatchBookingCreated(newId as string),
+    pushBookingToCalendars(newId as string),
+    removeBookingFromCalendars(oldBookingId),
+  ]);
 
   const { data: b } = await supabase
     .from("bookings")
     .select("status")
     .eq("id", newId as string)
     .single();
+
+  await sideEffects;
+
   return { ok: true, pending: (b as any)?.status === "booked" };
 }
 
@@ -127,10 +129,16 @@ export async function bookRecurringAction({
       setFlash("Conflitos detectados na série", "error");
       return { error: "Conflitos detectados.", result };
     }
-    for (const id of result.booking_ids) {
-      await dispatchBookingCreated(id).catch(() => {});
-      await pushBookingToCalendars(id).catch(() => {});
-    }
+    // PERF (C2): dispara TODAS as notificações/calendários da série em
+    // PARALELO. Antes era um loop sequencial: para N sessões, N×2 chamadas
+    // externas em série (uma série de 8 semanas = 16 round-trips antes de
+    // responder ao utilizador). Agora é um único batch paralelo.
+    await Promise.allSettled(
+      result.booking_ids.flatMap((id) => [
+        dispatchBookingCreated(id),
+        pushBookingToCalendars(id),
+      ]),
+    );
     setFlash(`Criadas ${result.booking_ids.length} marcações`);
     return { ok: true, result };
   } catch (err) {
