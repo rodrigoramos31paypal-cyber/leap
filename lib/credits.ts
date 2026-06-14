@@ -249,6 +249,29 @@ export async function createRecurringBooking(args: {
   return data as unknown as RecurringBookingResult;
 }
 
+/**
+ * Reagenda uma marcação (admin/trainer) — usado pelo drag-and-drop na
+ * Agenda. Atómico e neutro em créditos. Preserva o estado da sessão.
+ * `notifyClient` controla a notificação in-app/push do cliente.
+ * Devolve o id da NOVA marcação.
+ */
+export async function rescheduleBookingAdmin(args: {
+  oldBookingId: string;
+  startsAt: Date;
+  durationMin: number;
+  notifyClient: boolean;
+}): Promise<string> {
+  const supabase = createClient();
+  const { data, error } = await (supabase as any).rpc("reschedule_booking_admin", {
+    p_old_booking_id: args.oldBookingId,
+    p_starts_at: args.startsAt.toISOString(),
+    p_duration_min: args.durationMin,
+    p_notify_client: args.notifyClient,
+  });
+  if (error) throw error;
+  return data as unknown as string;
+}
+
 export async function confirmAttendance(bookingId: string) {
   const supabase = createClient();
   const { error } = await supabase.rpc("confirm_booking_attendance", { p_booking_id: bookingId });

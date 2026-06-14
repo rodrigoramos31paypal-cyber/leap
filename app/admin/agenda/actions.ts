@@ -7,6 +7,7 @@ import {
   markNoShow,
   cancelBooking,
   createBookingAdmin,
+  rescheduleBookingAdmin,
   createPurchase,
   createCustomPurchase,
   confirmPurchase,
@@ -296,6 +297,65 @@ export async function createAgendaBookingAction(
       return { error: msg };
     }
     return { error: "Não foi possível criar a marcação." };
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// rescheduleBookingAdminAction · drag-and-drop na Agenda. Move uma
+// marcação para novo dia/hora (mesma semana visível). O calendário do
+// trainer é sempre actualizado; o cliente só é notificado (in-app/push
+// via RPC + email aqui) se `notify` estiver ligado.
+// ════════════════════════════════════════════════════════════════
+export async function rescheduleBookingAdminAction(args: {
+  bookingId: string;
+  startsAtIso: string;
+  durationMin: number;
+  notify: boolean;
+}): Promise<{ ok?: true; error?: string }> {
+  const { bookingId, startsAtIso, durationMin, notify } = args;
+  if (!bookingId || !startsAtIso || !durationMin) {
+    return { error: "Dados em falta para reagendar." };
+  }
+  const startsAt = new Date(startsAtIso);
+  if (Number.isNaN(startsAt.getTime())) {
+    return { error: "Data ou hora inválida." };
+  }
+
+  try {
+    const newId = await rescheduleBookingAdmin({
+      oldBookingId: bookingId,
+      startsAt,
+      durationMin,
+      notifyClient: notify,
+    });
+
+    // Calendário do trainer: sempre actualizado (sai a antiga, entra a nova).
+    // Email ao cliente: só se notify. (In-app/push já tratados pela RPC.)
+    await Promise.allSettled([
+      notify ? dispatchBookingCreated(newId) : Promise.resolve(),
+      pushBookingToCalendars(newId),
+      removeBookingFromCalendars(bookingId),
+    ]);
+
+    await logAudit("booking_reschedule_admin", {
+      targetTable: "bookings",
+      targetId: newId,
+      payload: { from: bookingId, notify },
+    });
+    setFlash("Sessão reagendada");
+    revalidateBookingViews();
+    return { ok: true };
+  } catch (e: any) {
+    logError("rescheduleBookingAdminAction", e);
+    if (isAccessDenied(e)) {
+      await captureAlert("admin_access_denied", { action: "rescheduleBooking", targetId: bookingId });
+      return { error: "Sem permissão para reagendar." };
+    }
+    const msg = String(e?.message ?? "");
+    if (/já existe uma marca|bloquead|reservad|não disponível|futuro|duração|decorreu|sem sess/i.test(msg)) {
+      return { error: msg };
+    }
+    return { error: "Não foi possível reagendar." };
   }
 }
 

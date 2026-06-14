@@ -6,17 +6,62 @@ import { formatTime, BOOKING_STATUS } from "@/lib/utils";
 import { NoteEditor } from "@/components/note-editor";
 import { confirmAttendanceAction, markNoShowAction, cancelAdminAction } from "./actions";
 
+// ── helpers de drag ────────────────────────────────────────────────
+function isoDateOf(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+function hhmm(totalMin: number) {
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+type Preview = {
+  dateIso: string;
+  time: string;
+  colLeft: number;
+  colWidth: number;
+  top: number;
+  height: number;
+  axisLeft: number;
+};
+
 export function BookingBlock({
   b,
   note,
   style,
+  draggable = false,
+  hourStart = 7,
+  hourEnd = 22,
+  hourHeight = 56,
+  snapMin = 15,
 }: {
   b: any;
   note?: { body: string } | null;
   style: React.CSSProperties;
+  draggable?: boolean;
+  hourStart?: number;
+  hourEnd?: number;
+  hourHeight?: number;
+  snapMin?: number;
 }) {
   const [open, setOpen] = useState(false);
+  const [preview, setPreview] = useState<Preview | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+
+  // refs de drag (não provocam re-render)
+  const startRef = useRef<{ x: number; y: number } | null>(null);
+  const draggingRef = useRef(false);
+
+  const startDate = new Date(b.starts_at);
+  const durationMin = b.ends_at
+    ? Math.max(15, Math.round((new Date(b.ends_at).getTime() - startDate.getTime()) / 60000))
+    : 60;
+  const originIso = isoDateOf(startDate);
+  const originTime = hhmm(startDate.getHours() * 60 + startDate.getMinutes());
 
   useEffect(() => {
     if (!open) return;
@@ -37,6 +82,106 @@ export function BookingBlock({
     };
   }, [open]);
 
+  function computePreview(clientX: number, clientY: number): Preview | null {
+    const cols = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-daycol]"),
+    );
+    if (cols.length === 0) return null;
+    // coluna sob o cursor (ou a mais próxima horizontalmente)
+    let col = cols.find((c) => {
+      const r = c.getBoundingClientRect();
+      return clientX >= r.left && clientX <= r.right;
+    });
+    if (!col) {
+      let best = cols[0];
+      let bestDist = Infinity;
+      for (const c of cols) {
+        const r = c.getBoundingClientRect();
+        const cx = (r.left + r.right) / 2;
+        const d = Math.abs(cx - clientX);
+        if (d < bestDist) { bestDist = d; best = c; }
+      }
+      col = best;
+    }
+    const r = col.getBoundingClientRect();
+    const totalMin = (hourEnd - hourStart) * 60;
+    const rawMin = ((clientY - r.top) / hourHeight) * 60;
+    let snapped = Math.round(rawMin / snapMin) * snapMin;
+    snapped = Math.max(0, Math.min(Math.max(0, totalMin - durationMin), snapped));
+    const time = hhmm(hourStart * 60 + snapped);
+    const axis = document.querySelector<HTMLElement>("[data-timeaxis]");
+    const axisLeft = axis ? axis.getBoundingClientRect().left : r.left - 44;
+    return {
+      dateIso: col.dataset.daycol ?? originIso,
+      time,
+      colLeft: r.left,
+      colWidth: r.width,
+      top: r.top + (snapped / 60) * hourHeight,
+      height: Math.max(20, (durationMin / 60) * hourHeight - 2),
+      axisLeft,
+    };
+  }
+
+  function onPointerDown(e: React.PointerEvent) {
+    if (!draggable) return;
+    // só botão principal
+    if (e.button !== 0) return;
+    startRef.current = { x: e.clientX, y: e.clientY };
+    draggingRef.current = false;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    if (!draggable || !startRef.current) return;
+    const dx = e.clientX - startRef.current.x;
+    const dy = e.clientY - startRef.current.y;
+    if (!draggingRef.current && Math.hypot(dx, dy) < 5) return; // threshold
+    draggingRef.current = true;
+    document.body.style.userSelect = "none";
+    setPreview(computePreview(e.clientX, e.clientY));
+  }
+
+  function onPointerCancel() {
+    if (!draggable) return;
+    startRef.current = null;
+    draggingRef.current = false;
+    document.body.style.userSelect = "";
+    setPreview(null);
+  }
+
+  function onPointerUp(e: React.PointerEvent) {
+    if (!draggable) return;
+    const wasDragging = draggingRef.current;
+    startRef.current = null;
+    draggingRef.current = false;
+    document.body.style.userSelect = "";
+    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+
+    if (!wasDragging) {
+      // clique simples → abre/fecha popover
+      setOpen((o) => !o);
+      return;
+    }
+
+    const p = computePreview(e.clientX, e.clientY) ?? preview;
+    setPreview(null);
+    if (!p) return;
+    // mudou mesmo de slot?
+    if (p.dateIso === originIso && p.time === originTime) return;
+    window.dispatchEvent(
+      new CustomEvent("agenda:reschedule", {
+        detail: {
+          bookingId: b.id,
+          clientName: b.profiles?.full_name ?? "",
+          durationMin,
+          fromLabel: `${formatTime(b.starts_at)}`,
+          newDateIso: p.dateIso,
+          newTime: p.time,
+        },
+      }),
+    );
+  }
+
   const tone =
     b.status === "confirmed"
       ? "bg-emerald-50 border-emerald-300 text-emerald-900 hover:bg-emerald-100"
@@ -51,17 +196,51 @@ export function BookingBlock({
       ref={ref}
       className={`absolute left-0.5 right-0.5 rounded border text-[10px] transition-colors ${tone} ${
         open ? "z-30 overflow-visible" : "overflow-hidden"
-      }`}
-      style={style}
+      } ${draggable ? "cursor-grab active:cursor-grabbing" : ""}`}
+      style={{ ...style, touchAction: draggable ? "none" : undefined }}
     >
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="block w-full cursor-pointer p-1 text-left"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
+        onClick={() => {
+          // o clique "real" é tratado em onPointerUp; mantemos isto como
+          // fallback para teclado/acessibilidade quando não há drag.
+          if (!draggable) setOpen((o) => !o);
+        }}
+        className="block w-full [cursor:inherit] p-1 text-left"
       >
         <div className="font-semibold tabular-nums">{formatTime(b.starts_at)}</div>
         <div className="truncate font-medium">{b.profiles?.full_name ?? "—"}</div>
       </button>
+
+      {/* Pré-visualização durante o arrasto */}
+      {preview && (
+        <>
+          {/* etiqueta de hora na coluna de tempo (esquerda) */}
+          <div
+            className="pointer-events-none fixed z-50 -translate-y-1/2 rounded bg-ink-900 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-bone-50 shadow"
+            style={{ top: preview.top, left: preview.axisLeft }}
+          >
+            {preview.time}
+          </div>
+          {/* fantasma no slot de destino */}
+          <div
+            className="pointer-events-none fixed z-40 rounded border-2 border-dashed border-ink-900/60 bg-gold-100/70 p-1 text-[10px] text-ink-900 shadow-lg"
+            style={{
+              top: preview.top,
+              left: preview.colLeft + 2,
+              width: preview.colWidth - 4,
+              height: preview.height,
+            }}
+          >
+            <div className="font-semibold tabular-nums">{preview.time}</div>
+            <div className="truncate font-medium">{b.profiles?.full_name ?? "—"}</div>
+          </div>
+        </>
+      )}
 
       {open && (
         <div className="absolute left-0 top-full z-30 mt-1 w-64 rounded-md border border-ink-900/10 bg-white p-3 text-xs text-ink-900 shadow-lg">
@@ -89,6 +268,12 @@ export function BookingBlock({
               {(BOOKING_STATUS as any)[b.status] ?? b.status}
             </span>
           </div>
+
+          {draggable && (
+            <p className="mb-2 rounded bg-bone-100 px-2 py-1 text-[10px] text-ink-500">
+              Arrasta o bloco para reagendar.
+            </p>
+          )}
 
           {(b.status === "booked" || b.status === "confirmed") && (
             <div className="mb-2 flex flex-wrap gap-1">
