@@ -309,13 +309,13 @@ function TabLink({ current, value, label }: { current: Tab; value: Tab; label: s
       href={`/admin/clientes?tab=${value}`}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex-1 rounded-md px-3 py-1.5 text-center font-medium transition",
+        "flex-1 whitespace-nowrap rounded-md px-3 py-1.5 text-center font-medium transition",
         active
           ? "bg-ink-900 text-white shadow-sm dark:bg-bone-50 dark:text-ink-900"
           : "text-ink-600 hover:bg-ink-900/5 hover:text-ink-900 dark:text-bone-100 dark:hover:bg-white/10 dark:hover:text-bone-50",
       )}
     >
       {label}
-    </Link>
+     </Link>
   );
 }
