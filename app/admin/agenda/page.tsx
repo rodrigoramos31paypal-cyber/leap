@@ -36,19 +36,30 @@ export default async function AdminAgendaPage({
   // bloqueia apenas para isto (cached via React.cache, rapido).
   const trainerId = (await getCurrentTrainerId()) ?? "";
 
-  // Durações permitidas + default para o BookingDialog (1 lookup por PK).
+  // Durações permitidas + default + packs activos para o BookingDialog.
   let durations: number[] = [45, 60, 90];
   let defaultDuration = 45;
+  let packs: { id: string; name: string; sessions: number; price_cents: number }[] = [];
   if (trainerId) {
-    const { data: st } = await createClient()
-      .from("trainer_settings")
-      .select("slot_durations_min, default_slot_duration_min")
-      .eq("trainer_id", trainerId)
-      .maybeSingle();
+    const sb = createClient();
+    const [{ data: st }, { data: pk }] = await Promise.all([
+      sb
+        .from("trainer_settings")
+        .select("slot_durations_min, default_slot_duration_min")
+        .eq("trainer_id", trainerId)
+        .maybeSingle(),
+      sb
+        .from("packs")
+        .select("id, name, sessions, price_cents")
+        .eq("trainer_id", trainerId)
+        .eq("active", true)
+        .order("sort_order"),
+    ]);
     if (st) {
       durations = ((st as any).slot_durations_min as number[] | null) ?? durations;
       defaultDuration = ((st as any).default_slot_duration_min as number | null) ?? defaultDuration;
     }
+    packs = (pk ?? []) as typeof packs;
   }
   const canBook = !!trainerId;
 
@@ -79,6 +90,7 @@ export default async function AdminAgendaPage({
               durations={durations}
               defaultDuration={defaultDuration}
               viewedDate={isoDate(day)}
+              packs={packs}
             />
           )}
           <div className="flex overflow-hidden rounded-lg border border-ink-900/10 dark:border-white/10">
