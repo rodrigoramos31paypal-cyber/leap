@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateBookingViews, revalidateAvailabilityViews } from "@/lib/revalidate";
 import { confirmAttendance, markNoShow, cancelBooking } from "@/lib/credits";
 import { dispatchBookingConfirmed, dispatchBookingCancelled } from "@/lib/email-dispatch";
 import { removeBookingFromCalendars } from "@/lib/calendar-sync";
@@ -22,8 +23,7 @@ export async function confirmAttendanceAction(formData: FormData) {
     logError("confirmAttendanceAction", e);
     setFlash("Não foi possível confirmar", "error");
   }
-  revalidatePath("/admin/agenda");
-  revalidatePath("/admin/dashboard");
+  revalidateBookingViews();
 }
 
 export async function markNoShowAction(formData: FormData) {
@@ -36,7 +36,7 @@ export async function markNoShowAction(formData: FormData) {
     logError("markNoShowAction", e);
     setFlash("Não foi possível marcar como falta", "error");
   }
-  revalidatePath("/admin/agenda");
+  revalidateBookingViews();
 }
 
 export async function cancelAdminAction(formData: FormData) {
@@ -63,7 +63,7 @@ export async function cancelAdminAction(formData: FormData) {
     if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "cancelBooking", targetId: id });
     setFlash("Não foi possível cancelar", "error");
   }
-  revalidatePath("/admin/agenda");
+  revalidateBookingViews();
 }
 
 export async function deleteBlockAction(formData: FormData) {
@@ -93,8 +93,7 @@ export async function deleteBlockAction(formData: FormData) {
 
   await supabase.from("trainer_blocked_times").delete().eq("id", id);
   setFlash("Bloqueio removido");
-  revalidatePath("/admin/agenda");
-  revalidatePath("/admin/definicoes");
+  revalidateAvailabilityViews();
 }
 
 export async function addBlockQuickAction(formData: FormData) {
@@ -134,6 +133,5 @@ export async function addBlockQuickAction(formData: FormData) {
     reason,
   });
   setFlash("Bloqueio criado");
-  revalidatePath("/admin/agenda");
-  revalidatePath("/admin/definicoes");
+  revalidateAvailabilityViews();
 }

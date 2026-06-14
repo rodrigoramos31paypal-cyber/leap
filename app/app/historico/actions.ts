@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
+import { revalidateBookingViews } from "@/lib/revalidate";
 import { cancelBooking } from "@/lib/credits";
 import { dispatchBookingCancelled } from "@/lib/email-dispatch";
 import { removeBookingFromCalendars } from "@/lib/calendar-sync";
@@ -38,8 +38,7 @@ export async function cancelBookingAction(formData: FormData) {
     logError("cancelBookingAction", e);
     setFlash("Não foi possível cancelar", "error");
   }
-  revalidatePath("/app/historico");
-  revalidatePath("/app/dashboard");
+  revalidateBookingViews();
 }
 
 export async function rebookAction(formData: FormData) {

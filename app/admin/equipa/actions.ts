@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateTeamViews } from "@/lib/revalidate";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
@@ -76,7 +76,7 @@ export async function addTrainerAction(formData: FormData): Promise<{ error?: st
       { trainer_id: tRow.id, day_of_week: 6, start_time: "08:00", end_time: "13:00" },
     ]);
 
-    revalidatePath("/admin/equipa");
+    revalidateTeamViews();
     setFlash("Trainer criado");
     return { ok: true };
   } catch (e) {
@@ -94,7 +94,7 @@ export async function toggleTrainerActiveAction(formData: FormData) {
   const { error } = await admin.from("trainers").update({ active }).eq("id", id);
   if (error) { logError("toggleTrainerActiveAction", error); setFlash("Não foi possível alterar o estado", "error"); }
   else setFlash(active ? "Trainer activado" : "Trainer desactivado");
-  revalidatePath("/admin/equipa");
+  revalidateTeamViews();
 }
 
 export async function deleteTrainerAction(formData: FormData) {
@@ -105,5 +105,5 @@ export async function deleteTrainerAction(formData: FormData) {
   const { error } = await admin.from("trainers").delete().eq("id", id);
   if (error) { logError("deleteTrainerAction", error); setFlash("Não foi possível remover trainer", "error"); }
   else setFlash("Trainer removido");
-  revalidatePath("/admin/equipa");
+  revalidateTeamViews();
 }

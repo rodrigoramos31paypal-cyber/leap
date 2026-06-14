@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePackViews } from "@/lib/revalidate";
 import { createClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
@@ -37,7 +37,7 @@ export async function savePackAction(formData: FormData) {
   } else {
     setFlash("Pack criado");
   }
-  revalidatePath("/admin/packs");
+  revalidatePackViews();
 }
 
 export async function updatePackAction(formData: FormData) {
@@ -68,7 +68,7 @@ export async function updatePackAction(formData: FormData) {
   } else {
     setFlash("Pack actualizado");
   }
-  revalidatePath("/admin/packs");
+  revalidatePackViews();
 }
 
 export async function togglePackAction(formData: FormData) {
@@ -82,7 +82,7 @@ export async function togglePackAction(formData: FormData) {
   } else {
     setFlash(active ? "Pack activado" : "Pack desactivado");
   }
-  revalidatePath("/admin/packs");
+  revalidatePackViews();
 }
 
 export async function deletePackAction(formData: FormData) {
@@ -95,5 +95,5 @@ export async function deletePackAction(formData: FormData) {
   } else {
     setFlash("Pack eliminado");
   }
-  revalidatePath("/admin/packs");
+  revalidatePackViews();
 }

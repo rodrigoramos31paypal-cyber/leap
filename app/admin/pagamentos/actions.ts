@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateCreditsViews } from "@/lib/revalidate";
 import { confirmPurchase, rejectPurchase } from "@/lib/credits";
 import { dispatchPurchaseConfirmed } from "@/lib/email-dispatch";
 import { setFlash } from "@/lib/flash";
@@ -21,8 +21,7 @@ export async function confirmPurchaseAction(formData: FormData) {
     if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "confirmPurchase", targetId: id });
     setFlash("Não foi possível confirmar o pagamento", "error");
   }
-  revalidatePath("/admin/pagamentos");
-  revalidatePath("/admin/dashboard");
+  revalidateCreditsViews();
 }
 
 export async function rejectPurchaseAction(formData: FormData) {
@@ -42,5 +41,5 @@ export async function rejectPurchaseAction(formData: FormData) {
     if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "rejectPurchase", targetId: id });
     setFlash("Não foi possível rejeitar", "error");
   }
-  revalidatePath("/admin/pagamentos");
+  revalidateCreditsViews();
 }

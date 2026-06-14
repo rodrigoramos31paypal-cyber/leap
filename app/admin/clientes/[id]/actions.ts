@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateCreditsViews } from "@/lib/revalidate";
 import {
   adjustCredits,
   createPurchase,
@@ -39,7 +39,7 @@ export async function adjustCreditsAction(formData: FormData) {
     if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "adjustCredits", targetId: purchaseId });
     setFlash("Não foi possível ajustar sessões", "error");
   }
-  revalidatePath(`/admin/clientes/${clientId}`);
+  revalidateCreditsViews(clientId);
 }
 
 /**
@@ -139,5 +139,5 @@ export async function grantPackAction(formData: FormData): Promise<void> {
     if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "grantPack", clientId });
     setFlash("Não foi possível atribuir as sessões", "error");
   }
-  revalidatePath(`/admin/clientes/${clientId}`);
+  revalidateCreditsViews(clientId);
 }
