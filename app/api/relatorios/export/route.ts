@@ -127,9 +127,18 @@ export async function GET(req: NextRequest) {
   });
 }
 
+// SEC (H1): defesa contra CSV / formula injection.
+//  • Substitui o delimitador `;` e quebras de linha (não partir colunas).
+//  • Neutraliza fórmulas: Excel/Sheets EXECUTAM o conteúdo de qualquer
+//    célula que comece por `=`, `+`, `-`, `@`, TAB ou CR. Campos como
+//    full_name/email são controlados pelo cliente e o ficheiro é aberto
+//    pelo owner — um nome `=HYPERLINK(...)`/`=cmd|...` corria na máquina
+//    do owner. Prefixamos com aspa simples para forçar texto.
 function esc(v: any) {
   if (v == null) return "";
-  return String(v).replaceAll(";", ",").replaceAll("\n", " ");
+  let s = String(v).replaceAll(";", ",").replaceAll("\n", " ").replaceAll("\r", " ");
+  if (/^[=+\-@\t]/.test(s)) s = "'" + s;
+  return s;
 }
 function fmtCsv(v: any) {
   if (!v) return "";
