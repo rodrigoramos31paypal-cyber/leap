@@ -102,6 +102,9 @@ export async function updateSession(
     // iOS Calendar / Google Calendar não enviam cookies de sessão, e
     // o redirect para /login do middleware faz a validação falhar.
     path.startsWith("/api/calendar/feed") ||
+    // Página pública do trainer (/t/<slug>) — indexável e partilhável.
+    // Sem isto, utilizadores anónimos eram redirecionados para /login.
+    path.startsWith("/t/") ||
     path.startsWith("/manifest.json") ||
     path.startsWith("/sw.js") ||
     path.startsWith("/icons");
