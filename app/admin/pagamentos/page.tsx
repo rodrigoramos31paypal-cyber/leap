@@ -245,18 +245,25 @@ function renderPurchase(p: any) {
       </div>
 
       {(p.status === "awaiting_confirmation" || p.status === "pending_payment") && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          <form action={confirmPurchaseAction}>
-            <input type="hidden" name="purchaseId" value={p.id} />
-            <button className="btn-primary">Confirmar pagamento</button>
-          </form>
-          <form action={rejectPurchaseAction} className="flex flex-1 gap-2">
-            <input type="hidden" name="purchaseId" value={p.id} />
-            <input name="reason" placeholder="Motivo (opcional)" className="input flex-1" />
-            <button className="btn-outline border-red-200 text-red-700 hover:bg-red-50">
-              Rejeitar
-            </button>
-          </form>
+        <div className="mt-3 space-y-2">
+          <div className="flex gap-2">
+            <form action={confirmPurchaseAction} className="flex-1">
+              <input type="hidden" name="purchaseId" value={p.id} />
+              <button className="btn-primary w-full">Confirmar pagamento</button>
+            </form>
+            <form action={rejectPurchaseAction} id={`reject-${p.id}`} className="flex-1">
+              <input type="hidden" name="purchaseId" value={p.id} />
+              <button className="btn-outline w-full border-red-200 text-red-700 hover:bg-red-50">
+                Rejeitar
+              </button>
+            </form>
+          </div>
+          <input
+            form={`reject-${p.id}`}
+            name="reason"
+            placeholder="Motivo de rejeição (opcional)"
+            className="input w-full"
+          />
         </div>
       )}
     </li>
