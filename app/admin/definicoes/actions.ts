@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateAvailabilityViews } from "@/lib/revalidate";
 import { createClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
@@ -89,7 +90,7 @@ export async function addAvailabilityAction(formData: FormData) {
   });
   if (error) { logError("addAvailabilityAction", error); setFlash("Não foi possível adicionar disponibilidade", "error"); }
   else setFlash("Disponibilidade adicionada");
-  revalidatePath("/admin/definicoes");
+  revalidateAvailabilityViews();
 }
 
 export async function deleteAvailabilityAction(formData: FormData) {
@@ -97,7 +98,7 @@ export async function deleteAvailabilityAction(formData: FormData) {
   const { error } = await supabase.from("trainer_availability").delete().eq("id", String(formData.get("id") ?? ""));
   if (error) { logError("deleteAvailabilityAction", error); setFlash("Não foi possível remover", "error"); }
   else setFlash("Disponibilidade removida");
-  revalidatePath("/admin/definicoes");
+  revalidateAvailabilityViews();
 }
 
 export async function deleteBlockAction(formData: FormData) {
@@ -107,8 +108,7 @@ export async function deleteBlockAction(formData: FormData) {
   const { error } = await supabase.from("trainer_blocked_times").delete().eq("id", id);
   if (error) { logError("deleteBlockAction", error); setFlash("Não foi possível remover bloqueio", "error"); }
   else setFlash("Bloqueio removido");
-  revalidatePath("/admin/definicoes");
-  revalidatePath("/admin/agenda");
+  revalidateAvailabilityViews();
 }
 
 export async function addBlockAction(formData: FormData) {
@@ -121,5 +121,5 @@ export async function addBlockAction(formData: FormData) {
   });
   if (error) { logError("addBlockAction", error); setFlash("Não foi possível criar bloqueio", "error"); }
   else setFlash("Bloqueio criado");
-  revalidatePath("/admin/definicoes");
+  revalidateAvailabilityViews();
 }

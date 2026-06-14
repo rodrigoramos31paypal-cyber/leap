@@ -6,6 +6,7 @@ import { pushBookingToCalendars, removeBookingFromCalendars } from "@/lib/calend
 import { createClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
+import { revalidateBookingViews } from "@/lib/revalidate";
 import type { SessionType } from "@/types/database";
 
 // NOTA (C3): a leitura de slots passou a Route Handler GET /api/slots
@@ -56,6 +57,7 @@ export async function bookAction({
 
     const pending = (b as any)?.status === "booked";
     setFlash(pending ? "Marcação criada — a aguardar aprovação" : "Marcação confirmada");
+    revalidateBookingViews();
     return { ok: true, pending };
   } catch (err) {
     logError("bookAction", err);
@@ -101,6 +103,7 @@ export async function rescheduleAction({
 
   await sideEffects;
 
+  revalidateBookingViews();
   return { ok: true, pending: (b as any)?.status === "booked" };
 }
 
@@ -140,6 +143,7 @@ export async function bookRecurringAction({
       ]),
     );
     setFlash(`Criadas ${result.booking_ids.length} marcações`);
+    revalidateBookingViews();
     return { ok: true, result };
   } catch (err) {
     logError("bookRecurringAction", err);

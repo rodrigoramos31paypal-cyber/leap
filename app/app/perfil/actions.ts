@@ -5,6 +5,7 @@ import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
+import { revalidateProfileViews } from "@/lib/revalidate";
 
 export async function updateProfileAction(formData: FormData) {
   const supabase = createClient();
@@ -25,6 +26,7 @@ export async function updateProfileAction(formData: FormData) {
   } else {
     setFlash("Perfil actualizado");
   }
+  revalidateProfileViews(user.id);
   redirect("/app/perfil?ok=1");
 }
 
@@ -75,5 +77,6 @@ export async function deleteAccountAction(
 
   // 3) Terminar sessão server-side. A navegação para "/" é feita no cliente.
   await supabase.auth.signOut().catch(() => {});
+  revalidateProfileViews(uid);
   return { ok: true };
 }

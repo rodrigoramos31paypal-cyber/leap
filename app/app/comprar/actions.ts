@@ -5,6 +5,7 @@ import { createPurchase } from "@/lib/credits";
 import { ifthenpayEnabled, createIfthenpayPayment } from "@/lib/ifthenpay";
 import { dispatchPurchasePending } from "@/lib/email-dispatch";
 import { logError } from "@/lib/errors";
+import { revalidateCreditsViews } from "@/lib/revalidate";
 import type { PaymentMethod } from "@/types/database";
 
 export async function startPurchaseAction({
@@ -29,6 +30,7 @@ export async function startPurchaseAction({
   try {
     const purchaseId = await createPurchase(packId, method);
     await dispatchPurchasePending(purchaseId).catch(() => {});
+    revalidateCreditsViews();
 
     if (!isGateway) {
       // manual: redireciona para página de instruções
