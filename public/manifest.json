@@ -1,6 +1,6 @@
 {
   "name": "LEAP-FITNESS STUDIO",
-  "short_name": "LEAP",
+  "short_name": "Leap Fitness",
   "description": "Portal de gestão de sessões e packs da LEAP-FITNESS STUDIO.",
   "start_url": "/app/dashboard",
   "scope": "/",
