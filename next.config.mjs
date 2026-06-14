@@ -29,6 +29,9 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: "2mb",
     },
+    // PERF (Q1): garante imports por-ícone do lucide-react em vez de puxar
+    // o módulo inteiro — bundle de cliente menor e builds mais rápidas.
+    optimizePackageImports: ["lucide-react"],
   },
   // ──────────────────────────────────────────────────────────────
   // H2 do audit · security headers

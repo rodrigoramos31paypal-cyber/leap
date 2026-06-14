@@ -8,9 +8,10 @@ import { createClient } from "@/lib/supabase/client";
 
 // PERF: realtime channel ja apanha eventos quase instantaneamente.
 // Polling e so um fallback para casos em que o canal falha (free tier,
-// rede instavel, etc.). Subir de 4s -> 30s reduz ~14x as queries em
-// idle (15/min -> 2/min) por pagina aberta, sem perda real de UX.
-const POLL_MS = 30000;
+// rede instavel, etc.). Q3: subimos 30s -> 120s — realtime + o refresh
+// no visibilitychange ja cobrem o essencial; isto corta ~4x as queries
+// em idle por pagina aberta, sem perda real de UX.
+const POLL_MS = 120000;
 
 export function NotificationBell({
   userId,

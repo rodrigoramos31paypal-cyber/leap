@@ -48,9 +48,16 @@ export default async function AgendaPage({
     }
   }
 
-  const actives = await getActiveTrainersPublic();
-  const preferred =
-    reschedule?.trainerId ?? searchParams.trainer ?? (await getTrainerForClient(user.id));
+  // PERF (Q6): getActiveTrainersPublic + o fallback getTrainerForClient são
+  // independentes — corremo-los em paralelo. Só pedimos o fallback quando
+  // não há preferência explícita (reschedule/searchParams), para não gastar
+  // uma query quando o trainer já vem no URL.
+  const explicitTrainer = reschedule?.trainerId ?? searchParams.trainer;
+  const [actives, fallbackTrainer] = await Promise.all([
+    getActiveTrainersPublic(),
+    explicitTrainer ? Promise.resolve(null) : getTrainerForClient(user.id),
+  ]);
+  const preferred = explicitTrainer ?? fallbackTrainer;
   const trainerId = preferred && actives.some((t) => t.id === preferred) ? preferred : null;
 
   // mais que 1 trainer e sem escolha → mostra picker
@@ -162,4 +169,3 @@ export default async function AgendaPage({
       )}
     </div>
   );}
-
