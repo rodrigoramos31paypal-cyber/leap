@@ -130,12 +130,14 @@ export function BottomNav({ variant }: { variant: "client" | "admin" }) {
         </>
       )}
 
-      {/* PERF: deixamos prefetch default (=null/auto) - pre-carrega o shell
-          estatico + loading.tsx das rotas vizinhas assim que os links
-          entram em viewport (sempre, na bottom-nav). Nao definir
-          prefetch={true} explicitamente - isso forcaria correr as queries
-          do RSC em todas as paginas vizinhas no mount, gastando bateria.
-          Middleware salta prefetches, por isso nao ha custo Supabase aqui. */}
+      {/* PERF: prefetch default (auto) - pre-carrega apenas o shell estatico
+          + loading.tsx das rotas vizinhas quando os links entram em viewport.
+          Nao definir prefetch={true} (forcaria correr as queries RSC de cada
+          vizinho no mount, gastando bateria).
+          NOTA (C1): o middleware corre getClaims() TAMBEM nos prefetches. Com
+          signing keys ASSIMETRICAS no Supabase, getClaims valida o JWT
+          localmente (sem round-trip); em HS256 cada prefetch custa uma chamada
+          ao GoTrue. Migrar as keys e o que torna este prefetch barato. */}
       <nav className="safe-bottom fixed bottom-0 left-0 right-0 z-40 border-t border-ink-900/10 bg-white/95 backdrop-blur dark:border-white/10 dark:bg-ink-900/95 md:hidden">
         <ul className="mx-auto flex max-w-md items-stretch justify-around px-2 py-1.5">
           {items.map((it) => {
