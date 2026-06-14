@@ -17,6 +17,7 @@ export type PublicTrainer = {
   slug: string;
   fullName: string;
   bio: string | null;
+  avatarUrl: string | null;
   stats: TrainerRatingStats;
   reviews: TrainerReview[];
 };
@@ -27,7 +28,7 @@ export async function getPublicTrainerBySlug(slug: string): Promise<PublicTraine
 
   const { data } = await (supabase as any)
     .from("trainers")
-    .select("id, slug, bio, active, profiles:profile_id(full_name)")
+    .select("id, slug, bio, avatar_url, active, profiles:profile_id(full_name)")
     .eq("slug", slug)
     .eq("active", true)
     .maybeSingle();
@@ -48,6 +49,7 @@ export async function getPublicTrainerBySlug(slug: string): Promise<PublicTraine
     slug: data.slug,
     fullName,
     bio: data.bio ?? null,
+    avatarUrl: (data as any).avatar_url ?? null,
     stats,
     reviews,
   };

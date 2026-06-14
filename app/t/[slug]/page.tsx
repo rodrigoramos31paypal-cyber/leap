@@ -51,8 +51,13 @@ export default async function PublicTrainerPage({
       </Link>
 
       <header className="card flex items-start gap-4 p-5">
-        <div className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl bg-ink-900 font-display text-3xl font-black text-gold-400">
-          {t.fullName?.[0]?.toUpperCase() ?? "T"}
+        <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-2xl bg-ink-900 font-display text-3xl font-black text-gold-400">
+          {t.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={t.avatarUrl} alt={t.fullName} className="h-full w-full object-cover" />
+          ) : (
+            t.fullName?.[0]?.toUpperCase() ?? "T"
+          )}
         </div>
         <div className="min-w-0 flex-1">
           <h1 className="font-display text-2xl font-bold tracking-tight">{t.fullName}</h1>

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { revalidateAvailabilityViews } from "@/lib/revalidate";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
 
@@ -122,4 +122,117 @@ export async function addBlockAction(formData: FormData) {
   if (error) { logError("addBlockAction", error); setFlash("Não foi possível criar bloqueio", "error"); }
   else setFlash("Bloqueio criado");
   revalidateAvailabilityViews();
+}
+
+
+// ════════════════════════════════════════════════════════════════
+// Avatar do trainer · upload para Supabase Storage bucket "avatars"
+// (criado em 0053_trainer_avatar.sql). Usamos service role para o
+// upload — o bucket é público para leitura, mas restringimos writes
+// a este caminho server-side. O FormData traz `file` (File) +
+// `trainerId`.
+// ════════════════════════════════════════════════════════════════
+export async function saveTrainerAvatarAction(formData: FormData) {
+  const trainerId = String(formData.get("trainerId") ?? "");
+  const file = formData.get("file") as File | null;
+  if (!trainerId || !file || file.size === 0) {
+    setFlash("Escolhe uma imagem primeiro", "error");
+    return;
+  }
+
+  // Validação básica — duplicada server-side mesmo com bucket
+  // file_size_limit/allowed_mime_types, para devolver uma mensagem
+  // amigável em vez do erro cru do storage.
+  const MAX = 2 * 1024 * 1024;
+  if (file.size > MAX) {
+    setFlash("Imagem demasiado grande (máx. 2 MB)", "error");
+    return;
+  }
+  const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
+  if (!ALLOWED.includes(file.type)) {
+    setFlash("Formato não suportado (usa JPG, PNG ou WEBP)", "error");
+    return;
+  }
+
+  // Confirma que o caller é mesmo o dono do trainer (defesa em
+  // profundidade — RLS já enforça o update, mas evitamos chamadas
+  // ao Storage à conta de outro user).
+  const userClient = createClient();
+  const { data: { user } } = await userClient.auth.getUser();
+  if (!user) {
+    setFlash("Sessão expirada", "error");
+    return;
+  }
+  const { data: ownedTrainer } = await userClient
+    .from("trainers")
+    .select("id, profile_id")
+    .eq("id", trainerId)
+    .maybeSingle();
+  if (!ownedTrainer || ownedTrainer.profile_id !== user.id) {
+    setFlash("Sem permissão", "error");
+    return;
+  }
+
+  // Extensão a partir do mime — evitamos confiar no filename original.
+  const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+  const path = `${trainerId}/avatar.${ext}`;
+
+  const admin = createAdminClient();
+  const buf = Buffer.from(await file.arrayBuffer());
+  const { error: upErr } = await admin.storage.from("avatars").upload(path, buf, {
+    contentType: file.type,
+    upsert: true,
+    cacheControl: "3600",
+  });
+  if (upErr) {
+    logError("saveTrainerAvatarAction:upload", upErr);
+    setFlash("Não foi possível guardar a foto", "error");
+    return;
+  }
+
+  // Cache-busting: timestamp para o browser pegar logo na nova versão.
+  const { data: pub } = admin.storage.from("avatars").getPublicUrl(path);
+  const publicUrl = `${pub.publicUrl}?v=${Date.now()}`;
+
+  const { error: updErr } = await admin
+    .from("trainers")
+    .update({ avatar_url: publicUrl })
+    .eq("id", trainerId);
+  if (updErr) {
+    logError("saveTrainerAvatarAction:update", updErr);
+    setFlash("Foto carregada mas não associada — tenta de novo", "error");
+    return;
+  }
+
+  setFlash("Foto de perfil actualizada");
+  revalidatePath("/admin/definicoes");
+  revalidatePath(`/t/[slug]`, "page");
+}
+
+export async function removeTrainerAvatarAction(formData: FormData) {
+  const trainerId = String(formData.get("trainerId") ?? "");
+  if (!trainerId) return;
+
+  const userClient = createClient();
+  const { data: { user } } = await userClient.auth.getUser();
+  if (!user) return;
+  const { data: ownedTrainer } = await userClient
+    .from("trainers")
+    .select("id, profile_id")
+    .eq("id", trainerId)
+    .maybeSingle();
+  if (!ownedTrainer || ownedTrainer.profile_id !== user.id) return;
+
+  const admin = createAdminClient();
+  // Tenta apagar todas as extensões possíveis — barato, evita ficheiros órfãos.
+  await admin.storage.from("avatars").remove([
+    `${trainerId}/avatar.jpg`,
+    `${trainerId}/avatar.png`,
+    `${trainerId}/avatar.webp`,
+  ]);
+  await admin.from("trainers").update({ avatar_url: null }).eq("id", trainerId);
+
+  setFlash("Foto de perfil removida");
+  revalidatePath("/admin/definicoes");
+  revalidatePath(`/t/[slug]`, "page");
 }

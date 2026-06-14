@@ -102,9 +102,23 @@ export default async function ClientDashboard() {
           <ul className="grid gap-2 sm:grid-cols-2">
             {creditsByTrainer.map((t) => (
               <li key={t.trainerId} className="card p-4">
-                <div className="text-sm font-semibold">{t.trainerName}</div>
-                <div className="mt-1 flex flex-wrap gap-1.5 text-xs text-ink-500">
-                  <span className="rounded-full bg-bone-100 px-2 py-0.5"><strong>{t.individual + t.dupla}</strong> sessões</span>
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-ink-900/10 bg-bone-100 dark:border-white/10 dark:bg-white/[0.06]">
+                    {t.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={t.avatarUrl} alt={t.trainerName} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center font-display text-sm font-bold text-ink-500">
+                        {(t.trainerName.trim()[0] ?? "T").toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold">{t.trainerName}</div>
+                    <div className="mt-0.5 flex flex-wrap gap-1.5 text-xs text-ink-500">
+                      <span className="rounded-full bg-bone-100 px-2 py-0.5"><strong>{t.individual + t.dupla}</strong> sessões</span>
+                    </div>
+                  </div>
                 </div>
                 <Link
                   href={`/app/agenda?trainer=${t.trainerId}`}
