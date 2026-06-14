@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { cn, formatTime, formatDateTime } from "@/lib/utils";
 import { Clock, Repeat } from "lucide-react";
-import { getSlotsAction, bookAction, bookRecurringAction, rescheduleAction } from "./actions";
+import { bookAction, bookRecurringAction, rescheduleAction } from "./actions";
 import type { SessionType } from "@/types/database";
 
 type CreditSummary = { individual: number; dupla: number; total: number };
@@ -47,9 +47,28 @@ export function BookingFlow({
       // meia-noite local convertida para UTC saltava para o dia anterior
       // (ex.: Segunda 00:00 Lisboa → Domingo 23:00 UTC), e o servidor
       // calculava o dia-da-semana errado.
-      const res = await getSlotsAction({ trainerId, dateIso: ymd(date), durationMin: duration });
+      // PERF (C3): GET cacheável a /api/slots em vez da Server Action
+      // serializada. Pedidos paralelos + cache no browser → seletor fluido.
+      const params = new URLSearchParams({
+        trainer: trainerId,
+        date: ymd(date),
+        duration: String(duration),
+      });
+      let next: { startsAt: string; endsAt: string }[] = [];
+      try {
+        const res = await fetch(`/api/slots?${params.toString()}`, {
+          credentials: "same-origin",
+        });
+        if (cancelled) return;
+        if (res.ok) {
+          const data = await res.json();
+          next = data.slots ?? [];
+        }
+      } catch {
+        // rede falhou — mostra "sem horários" em vez de crashar.
+      }
       if (cancelled) return;
-      setSlots(res.slots);
+      setSlots(next);
       setPicked(null);
       setLoading(false);
     })();
