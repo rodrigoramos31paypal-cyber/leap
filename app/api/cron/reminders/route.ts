@@ -140,7 +140,7 @@ export async function GET(request: NextRequest) {
     await claimAndPushInApp(
       b.id,
       b.client_id,
-      "Lembrete de sessão",
+      "Leap Fitness Studio",
       `Tens uma sessão a ${when}.`,
       "/app/agenda",
     );
@@ -159,7 +159,7 @@ export async function GET(request: NextRequest) {
       await claimAndPushInApp(
         b.id,
         trainerProfileId,
-        "Lembrete de sessão",
+        "Leap Fitness Studio",
         `Sessão com ${client?.full_name ?? "cliente"} a ${when}.`,
         "/admin/agenda",
       );
