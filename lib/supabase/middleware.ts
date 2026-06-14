@@ -47,6 +47,23 @@ export async function updateSession(
     },
   );
 
+  const path = request.nextUrl.pathname;
+
+  // PERF (C1): rotas públicas autenticadas por segredo/token NO PRÓPRIO
+  // handler (CRON_SECRET, assinatura de webhook, token UUID do feed iCal)
+  // nunca trazem sessão de utilizador. Saltamos getClaims() por completo —
+  // em HS256 cada invocação de cron/webhook/push custava um round-trip ao
+  // GoTrue sem qualquer benefício. (Estas rotas já estavam em `isPublic`,
+  // por isso o comportamento de auth não muda; só deixamos de pagar a call.)
+  if (
+    path.startsWith("/api/cron") ||
+    path.startsWith("/api/push") ||
+    path.startsWith("/api/webhooks") ||
+    path.startsWith("/api/calendar/feed")
+  ) {
+    return response;
+  }
+
   // PERF (audit #1): verificação de sessão local em vez de round-trip
   // ao GoTrue. `getClaims()` valida a ASSINATURA do JWT em processo
   // quando o projecto usa signing keys assimétricas (ES256/RS256/EdDSA):
@@ -67,7 +84,6 @@ export async function updateSession(
   // re-escreve os cookies via setAll — o refresh de sessão mantém-se.
   const { data: claimsData } = await supabase.auth.getClaims();
   const user = claimsData?.claims ?? null;
-  const path = request.nextUrl.pathname;
 
   // Public paths
   const isPublic =
