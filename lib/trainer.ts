@@ -41,10 +41,14 @@ export const getCurrentTrainer = cache(async (): Promise<TrainerLite | null> => 
   // vários trainers fica ambíguo → mantém null (sem regressão).
   const profile = await getCurrentProfile();
   if (profile?.role === "owner") {
-    const { data: all } = await supabase
+    // Conta apenas trainers ACTIVOS — um registo inactivo (ex: "Teste")
+    // não é a agenda do estúdio. Com exactamente um trainer activo,
+    // o owner-gestor opera sobre esse.
+    const { data: actives } = await supabase
       .from("trainers")
-      .select("id, profile_id, slug, active, bio, avatar_url, profiles:profile_id(full_name)");
-    if (all && all.length === 1) return toTrainerLite(all[0]);
+      .select("id, profile_id, slug, active, bio, avatar_url, profiles:profile_id(full_name)")
+      .eq("active", true);
+    if (actives && actives.length === 1) return toTrainerLite(actives[0]);
   }
   return null;
 });
