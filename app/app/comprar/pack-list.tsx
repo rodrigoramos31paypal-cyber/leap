@@ -11,7 +11,7 @@ const METHODS: { id: PaymentMethod; label: string; helper: string; gateway: "man
   { id: "mbway", label: "MB Way (automático)", helper: "Aprovação imediata via IfthenPay", gateway: "ifthenpay" },
   { id: "multibanco", label: "Multibanco", helper: "Referência multibanco automática", gateway: "ifthenpay" },
   { id: "card", label: "Cartão Bancário", helper: "Visa / Mastercard via IfthenPay", gateway: "ifthenpay" },
-  { id: "manual_mbway", label: "MB Way manual", helper: "Pagas diretamente ao João — confirmação em minutos", gateway: "manual" },
+  { id: "manual_mbway", label: "MB Way (manual) ou Revolut", helper: "Pagas diretamente ao João — confirmação em minutos", gateway: "manual" },
 ];
 
 export function PackList({ packs }: { packs: Pack[] }) {
