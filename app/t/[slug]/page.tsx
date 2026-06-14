@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { getPublicTrainerBySlug } from "@/lib/public-trainer";
@@ -7,9 +8,11 @@ import { ReviewsPopup } from "./reviews-popup";
 // Página pública do treinador. Indexável (SEO) — sem auth obrigatória.
 // URL: /t/<slug>
 //
-// PERF: ISR-friendly (revalidate 1h). O conteúdo (rating, bio) muda
-// pouco; novas reviews aparecem no máximo 1h depois.
-export const revalidate = 3600;
+// Page renderizada dinamicamente por causa do JSON-LD (precisa do
+// CSP nonce via `headers()`). Custo baixo — query única à view
+// pública do trainer + ratings em paralelo. Ganho de SEO com
+// structured data (Person + AggregateRating) vale a troca.
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params,
@@ -41,8 +44,54 @@ export default async function PublicTrainerPage({
   const t = await getPublicTrainerBySlug(params.slug);
   if (!t) notFound();
 
+  // CSP nonce — required because o app usa script-src strict-dynamic.
+  const nonce = headers().get("x-nonce") ?? undefined;
+
+  // ── Structured data (schema.org) ─────────────────────────────
+  //   Tipo Person (o trainer) + ProfilePage. Em conjunto com a meta
+  //   tags do generateMetadata, dá ao Google contexto rico para
+  //   knowledge panels e snippets.
+  //   AggregateRating só entra quando há pelo menos 1 review (Google
+  //   considera-o invalid se reviewCount=0).
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+  const personLd: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    name: t.fullName,
+    jobTitle: "Personal Trainer",
+    url: `${appUrl}/t/${t.slug}`,
+    description: t.bio ?? `Personal Trainer na LEAP-FITNESS Studio.`,
+  };
+  if (t.avatarUrl) personLd.image = t.avatarUrl;
+  if (t.stats.avgStars && t.stats.reviewCount > 0) {
+    personLd.aggregateRating = {
+      "@type": "AggregateRating",
+      ratingValue: t.stats.avgStars,
+      reviewCount: t.stats.reviewCount,
+      bestRating: 5,
+      worstRating: 1,
+    };
+  }
+  const profileLd = {
+    "@context": "https://schema.org",
+    "@type": "ProfilePage",
+    mainEntity: { "@id": `${appUrl}/t/${t.slug}#person` },
+    url: `${appUrl}/t/${t.slug}`,
+  };
+
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-5 sm:p-8">
+      {/* JSON-LD para motores de busca — sem efeito visual */}
+      <script
+        type="application/ld+json"
+        nonce={nonce}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(personLd) }}
+      />
+      <script
+        type="application/ld+json"
+        nonce={nonce}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(profileLd) }}
+      />
       {/* Header com identidade visual */}
       <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-ink-600">
         <span className="font-display font-black tracking-tight">LEAP</span>

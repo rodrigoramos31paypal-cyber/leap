@@ -7,7 +7,10 @@ import { getTheme } from "@/lib/theme";
 const APP_NAME = "LEAP-FITNESS STUDIO";
 const APP_DESCRIPTION = "Portal de gestão de marcações, packs e sessões da LEAP-FITNESS STUDIO.";
 
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+
 export const metadata: Metadata = {
+  metadataBase: APP_URL ? new URL(APP_URL) : undefined,
   title: { default: APP_NAME, template: `%s · LEAP-FITNESS` },
   description: APP_DESCRIPTION,
   manifest: "/manifest.json",
