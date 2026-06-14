@@ -249,7 +249,7 @@ function renderPurchase(p: any) {
           <div className="flex gap-2">
             <form action={confirmPurchaseAction} className="flex-1">
               <input type="hidden" name="purchaseId" value={p.id} />
-              <button className="btn-primary w-full">Confirmar pagamento</button>
+              <button className="btn-primary w-full">Confirmar</button>
             </form>
             <form action={rejectPurchaseAction} id={`reject-${p.id}`} className="flex-1">
               <input type="hidden" name="purchaseId" value={p.id} />
