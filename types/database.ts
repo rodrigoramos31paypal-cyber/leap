@@ -834,6 +834,7 @@ export type Database = {
       trainers: {
         Row: {
           active: boolean
+          avatar_url: string | null
           bio: string | null
           created_at: string
           id: string
@@ -843,6 +844,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          avatar_url?: string | null
           bio?: string | null
           created_at?: string
           id?: string
@@ -852,6 +854,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          avatar_url?: string | null
           bio?: string | null
           created_at?: string
           id?: string

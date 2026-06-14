@@ -16,6 +16,7 @@ export type TrainerLite = {
   active: boolean;
   full_name: string;
   bio?: string | null;
+  avatar_url?: string | null;
 };
 
 /** Devolve o trainer do user logado (admin). null se o user não for trainer/owner. */
@@ -26,7 +27,7 @@ export const getCurrentTrainer = cache(async (): Promise<TrainerLite | null> => 
 
   const { data } = await supabase
     .from("trainers")
-    .select("id, profile_id, slug, active, bio, profiles:profile_id(full_name)")
+    .select("id, profile_id, slug, active, bio, avatar_url, profiles:profile_id(full_name)")
     .eq("profile_id", user.id)
     .maybeSingle();
 
@@ -37,6 +38,7 @@ export const getCurrentTrainer = cache(async (): Promise<TrainerLite | null> => 
     slug: data.slug,
     active: data.active,
     bio: data.bio,
+    avatar_url: (data as any).avatar_url ?? null,
     full_name: (data as any).profiles?.full_name ?? "",
   };
 });
@@ -65,7 +67,7 @@ export const getActiveTrainersPublic = cache(async (): Promise<TrainerLite[]> =>
   const supabase = createClient();
   const { data } = await supabase
     .from("trainers")
-    .select("id, profile_id, slug, active, bio, profiles:profile_id(full_name)")
+    .select("id, profile_id, slug, active, bio, avatar_url, profiles:profile_id(full_name)")
     .eq("active", true)
     .order("slug");
 
@@ -75,6 +77,7 @@ export const getActiveTrainersPublic = cache(async (): Promise<TrainerLite[]> =>
     slug: t.slug,
     active: t.active,
     bio: (t as any).bio ?? null,
+    avatar_url: (t as any).avatar_url ?? null,
     full_name: (t as any).profiles?.full_name ?? "",
   }));
 });

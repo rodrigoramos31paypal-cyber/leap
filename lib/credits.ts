@@ -18,6 +18,7 @@ export type CreditsByTrainer = Array<{
   trainerId: string;
   trainerName: string;
   slug: string;
+  avatarUrl: string | null;
   individual: number;
   dupla: number;
 }>;
@@ -27,7 +28,7 @@ const fetchActiveCredits = cache(async (clientId: string) => {
   const { data } = await supabase
     .from("purchases")
     .select(
-      "session_type, sessions_remaining, expires_at, trainer_id, trainers:trainer_id(slug, profiles:profile_id(full_name))",
+      "session_type, sessions_remaining, expires_at, trainer_id, trainers:trainer_id(slug, avatar_url, profiles:profile_id(full_name))",
     )
     .eq("client_id", clientId)
     .eq("status", "confirmed")
@@ -64,6 +65,7 @@ export async function getClientCreditsByTrainer(clientId: string): Promise<Credi
         trainerId: key,
         trainerName: t?.profiles?.full_name ?? "—",
         slug: t?.slug ?? "",
+        avatarUrl: (t as any)?.avatar_url ?? null,
         individual: 0,
         dupla: 0,
       });
