@@ -221,6 +221,12 @@ function PerfilTab({
   trainer: NonNullable<Awaited<ReturnType<typeof getCurrentTrainer>>>;
   reminderOn: boolean;
 }) {
+  // Links partilháveis com o teu slug — o cliente que clicar fica logo
+  // associado a ti. Base URL vem de NEXT_PUBLIC_APP_URL.
+  const appBase = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+  const registerUrl = `${appBase}/registar?t=${trainer.slug}`;
+  const publicUrl = `${appBase}/t/${trainer.slug}`;
+
   return (
     <div className="space-y-5">
       <form action={saveTrainerBioAction} className="card space-y-3 p-5">
@@ -244,6 +250,43 @@ function PerfilTab({
           />
         </div>
         <button className="btn-primary">Guardar perfil</button>
+
+        {trainer.slug ? (
+          <div className="space-y-3 border-t border-ink-900/10 pt-4 dark:border-white/10">
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-700 dark:text-bone-100">
+                Os teus links de partilha
+              </h3>
+              <p className="mt-0.5 text-xs text-ink-500">
+                Envia para novos clientes — quem se registar por aqui fica logo associado a ti.
+              </p>
+            </div>
+
+            <div>
+              <label className="label">Link de registo direto</label>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <input
+                  readOnly
+                  defaultValue={registerUrl}
+                  className="input flex-1 font-mono text-xs"
+                />
+                <CopyButton value={registerUrl} label="Copiar" />
+              </div>
+            </div>
+
+            <div>
+              <label className="label">Página pública (bio + rating + reviews)</label>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <input
+                  readOnly
+                  defaultValue={publicUrl}
+                  className="input flex-1 font-mono text-xs"
+                />
+                <CopyButton value={publicUrl} label="Copiar" />
+              </div>
+            </div>
+          </div>
+        ) : null}
       </form>
 
       <div className="card space-y-4 p-5">
