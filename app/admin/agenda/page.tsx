@@ -10,6 +10,7 @@ import { getCurrentTrainerId, getAccessibleTrainerIds } from "@/lib/trainer";
 import { BlockPresets } from "@/components/block-presets";
 import { BookingBlock } from "./booking-popover";
 import { BookingDialog } from "./booking-dialog";
+import { RescheduleDialog } from "./reschedule-dialog";
 import { SlotClickLayer } from "./slot-click-layer";
 import { CardSkeleton } from "@/components/skeleton";
 
@@ -130,6 +131,8 @@ export default async function AdminAgendaPage({
       >
         <CalendarView view={view} day={day} rangeStart={rangeStart} rangeEnd={rangeEnd} canBook={canBook} />
       </Suspense>
+
+      {canBook && <RescheduleDialog />}
     </div>
   );
 }
@@ -452,7 +455,7 @@ function WeekView({
             style={{ gridTemplateColumns: GRID_COLS, height: TOTAL_HOURS * HOUR_HEIGHT }}
           >
           {/* Hour labels column */}
-          <div className="relative border-r border-ink-900/10 bg-bone-50">
+          <div data-timeaxis className="relative border-r border-ink-900/10 bg-bone-50">
             {Array.from({ length: TOTAL_HOURS }, (_, i) => (
               <div
                 key={i}
@@ -473,6 +476,7 @@ function WeekView({
             return (
               <div
                 key={d.toISOString()}
+                data-daycol={isoDate(d)}
                 className="relative border-r border-ink-900/10 last:border-r-0"
               >
                 {/* Hour grid lines */}
@@ -561,12 +565,21 @@ function WeekView({
                     : new Date(s.getTime() + 60 * 60 * 1000);
                   const pos = clampPosition(s, e);
                   if (!pos) return null;
+                  const canDrag =
+                    canBook &&
+                    (b.status === "booked" || b.status === "confirmed") &&
+                    s.getTime() > Date.now();
                   return (
                     <BookingBlock
                       key={`b-${b.id}`}
                       b={b}
                       note={notesMap.get(b.id)}
                       style={{ top: pos.top, height: pos.height }}
+                      draggable={canDrag}
+                      hourStart={HOUR_START}
+                      hourEnd={HOUR_END}
+                      hourHeight={HOUR_HEIGHT}
+                      snapMin={15}
                     />
                   );
                 })}
