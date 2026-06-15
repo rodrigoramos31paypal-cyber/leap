@@ -414,15 +414,16 @@ function WeekView({
   const nowInRange = nowMinutes >= HOUR_START * 60 && nowMinutes <= HOUR_END * 60;
   const nowTop = timeOffset(today);
 
-  // Mobile-friendly track sizing: 44px label + 100px/day = 744px total,
-  // letting ~3 day columns fit fully within a typical iPhone viewport (375-393px)
-  // before horizontal scroll kicks in. Desktop still expands via 1fr.
-  const GRID_COLS = "44px repeat(7, minmax(100px, 1fr))";
+  // TODOS os 7 dias cabem no ecrã (requisito do cliente): sem largura
+  // mínima por coluna (minmax(0,1fr)) e sem min-width total, as 7 colunas
+  // encolhem para preencher a viewport — mesmo em telemóvel (~375px →
+  // ~47px/dia). Eixo de horas reduzido a 34px para dar mais espaço aos dias.
+  const GRID_COLS = "34px repeat(7, minmax(0, 1fr))";
 
   return (
     <div className="card overflow-hidden">
-      <div className="overflow-x-auto">
-        <div className="min-w-[744px]">
+      <div className="overflow-x-hidden">
+        <div className="w-full">
           {/* Day headers */}
           <div
             className="grid border-b border-ink-900/10 bg-bone-50"
@@ -434,7 +435,7 @@ function WeekView({
               return (
                 <div
                   key={d.toISOString()}
-                  className="border-r border-ink-900/10 px-2 py-2 text-center last:border-r-0"
+                  className="border-r border-ink-900/10 px-0.5 py-2 text-center last:border-r-0"
                 >
                   <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
                     {weekday(d)}
@@ -459,7 +460,7 @@ function WeekView({
             {Array.from({ length: TOTAL_HOURS }, (_, i) => (
               <div
                 key={i}
-                className="absolute right-2 text-[10px] font-medium text-ink-500 tabular-nums"
+                className="absolute right-1 text-[9px] font-medium text-ink-500 tabular-nums"
                 style={{ top: i * HOUR_HEIGHT + 4 }}
               >
                 {`${String(HOUR_START + i).padStart(2, "0")}:00`}
