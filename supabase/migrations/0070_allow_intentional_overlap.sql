@@ -1,0 +1,28 @@
+-- ════════════════════════════════════════════════════════════════
+-- 0070 · Permitir SOBREPOSIÇÃO intencional de sessões
+--
+-- A constraint EXCLUDE `bookings_no_overlap` (0025) impedia, ao nível
+-- da BASE DE DADOS, QUALQUER sobreposição de sessões activas do mesmo
+-- trainer — incluindo as INTENCIONAIS feitas pelo trainer ao ajustar a
+-- duração (0069, com confirmação "Sim, guardar à mesma"). Por isso o
+-- caminho "forçar" rebentava com `exclusion_violation` (23P01) e a UI
+-- mostrava "Não foi possível alterar a duração.".
+--
+-- Removemos a constraint. A proteção contra overlaps ACIDENTAIS / race
+-- conditions MANTÉM-SE: create_booking, create_recurring_booking e
+-- reschedule_booking_admin têm todos:
+--   • pg_advisory_xact_lock(trainer) → serializa por trainer (sem race);
+--   • verificação de sobreposição em app → recusa "Já existe uma
+--     marcação neste horário." nas marcações normais.
+-- Só o ajuste de duração FORÇADO cria overlaps, e apenas depois de o
+-- trainer confirmar. É exactamente o comportamento pedido.
+--
+-- REVERT: recriar a constraint (ver 0025_fix_booking_race_condition.sql):
+--   alter table bookings add constraint bookings_no_overlap
+--     exclude using gist (trainer_id with =,
+--       tstzrange(starts_at, ends_at, '[)') with &&)
+--     where (status in ('booked','confirmed'));
+-- (só possível se não houver overlaps existentes).
+-- ════════════════════════════════════════════════════════════════
+
+alter table bookings drop constraint if exists bookings_no_overlap;
