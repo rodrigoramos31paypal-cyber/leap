@@ -308,6 +308,20 @@ export async function markNoShow(bookingId: string) {
   if (error) throw error;
 }
 
+export async function revertNoShow(
+  bookingId: string,
+  newStatus: "confirmed" | "cancelled",
+  refundCredit: boolean,
+) {
+  const supabase = createClient();
+  const { error } = await supabase.rpc("revert_no_show", {
+    p_booking_id: bookingId,
+    p_new_status: newStatus,
+    p_refund_credit: refundCredit,
+  });
+  if (error) throw error;
+}
+
 export async function adjustCredits(purchaseId: string, delta: number, reason: string) {
   const supabase = createClient();
   const { error } = await supabase.rpc("adjust_credits", {

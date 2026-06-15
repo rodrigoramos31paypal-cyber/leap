@@ -1049,6 +1049,10 @@ export type Database = {
         Returns: boolean
       }
       mark_no_show: { Args: { p_booking_id: string }; Returns: undefined }
+      revert_no_show: {
+        Args: { p_booking_id: string; p_new_status: string; p_refund_credit?: boolean }
+        Returns: undefined
+      }
       set_payment_gateway_info: {
         Args: {
           p_gateway_payload: Json

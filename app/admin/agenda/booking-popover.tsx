@@ -9,6 +9,7 @@ import { NoteEditor } from "@/components/note-editor";
 import {
   confirmAttendanceAction,
   markNoShowAction,
+  revertNoShowAction,
   cancelAdminAction,
   updateBookingDurationAction,
 } from "./actions";
@@ -90,6 +91,8 @@ export function BookingBlock({
 }) {
   const [open, setOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  // Reverter falta: devolver crédito por defeito (escolha do trainer).
+  const [refundCredit, setRefundCredit] = useState(true);
   const [preview, setPreview] = useState<Preview | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -641,6 +644,38 @@ export function BookingBlock({
                   </button>
                 </form>
               )}
+            </div>
+          )}
+
+          {b.status === "no_show" && (
+            <div className="mb-3 space-y-2">
+              <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-ink-600 dark:text-bone-100">
+                <input
+                  type="checkbox"
+                  checked={refundCredit}
+                  onChange={(e) => setRefundCredit(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-ink-900/30 accent-ink-900"
+                />
+                Devolver crédito ao cliente
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                <form action={revertNoShowAction}>
+                  <input type="hidden" name="bookingId" value={b.id} />
+                  <input type="hidden" name="newStatus" value="confirmed" />
+                  <input type="hidden" name="refundCredit" value={refundCredit ? "1" : "0"} />
+                  <button className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300">
+                    ✓ Marcar como confirmada
+                  </button>
+                </form>
+                <form action={revertNoShowAction}>
+                  <input type="hidden" name="bookingId" value={b.id} />
+                  <input type="hidden" name="newStatus" value="cancelled" />
+                  <input type="hidden" name="refundCredit" value={refundCredit ? "1" : "0"} />
+                  <button className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300">
+                    Cancelar sessão
+                  </button>
+                </form>
+              </div>
             </div>
           )}
 

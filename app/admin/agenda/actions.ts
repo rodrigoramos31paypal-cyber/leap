@@ -5,6 +5,7 @@ import { revalidateBookingViews, revalidateAvailabilityViews, revalidateCreditsV
 import {
   confirmAttendance,
   markNoShow,
+  revertNoShow,
   cancelBooking,
   createBookingAdmin,
   rescheduleBookingAdmin,
@@ -130,6 +131,28 @@ export async function markNoShowAction(formData: FormData) {
     setFlash("Não foi possível marcar como falta", "error");
   }
   revalidateBookingViews();
+}
+
+// Reverte uma falta para "confirmada" ou "cancelada", com devolução
+// opcional do crédito (escolha do trainer no popover).
+export async function revertNoShowAction(formData: FormData) {
+  const id = String(formData.get("bookingId") ?? "");
+  const newStatus = String(formData.get("newStatus") ?? "");
+  const refundCredit = String(formData.get("refundCredit") ?? "") === "1";
+  if (!id || (newStatus !== "confirmed" && newStatus !== "cancelled")) return;
+  try {
+    await revertNoShow(id, newStatus, refundCredit);
+    setFlash(
+      newStatus === "confirmed"
+        ? "Falta revertida para confirmada"
+        : "Falta revertida e sessão cancelada",
+    );
+  } catch (e) {
+    logError("revertNoShowAction", e);
+    setFlash("Não foi possível reverter a falta", "error");
+  }
+  revalidateBookingViews();
+  revalidateCreditsViews();
 }
 
 export async function cancelAdminAction(formData: FormData) {
