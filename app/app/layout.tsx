@@ -46,7 +46,7 @@ export default async function ClientLayout({ children }: { children: React.React
       <ClientTopNav />
       <Toaster initial={flash} />
       <ReminderSync />
-      <main className="mx-auto max-w-6xl px-4 py-5">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 pt-2 pb-6">{children}</main>
       <BottomNav variant="client" />
     </div>
   );

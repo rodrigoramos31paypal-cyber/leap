@@ -100,7 +100,7 @@ export default async function ClientDashboard() {
       : 0;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div>
         <h1 className="font-display text-2xl font-bold tracking-tight">
           Olá, {profile?.full_name?.split(" ")[0] ?? "atleta"}.
