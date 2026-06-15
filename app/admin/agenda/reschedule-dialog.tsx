@@ -35,6 +35,7 @@ export function RescheduleDialog() {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [notify, setNotify] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [overlapConfirm, setOverlapConfirm] = useState(false);
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -43,6 +44,7 @@ export function RescheduleDialog() {
       setDetail(d);
       setNotify(true);
       setError(null);
+      setOverlapConfirm(false);
     }
     window.addEventListener("agenda:reschedule", onReschedule as EventListener);
     return () => window.removeEventListener("agenda:reschedule", onReschedule as EventListener);
@@ -59,7 +61,7 @@ export function RescheduleDialog() {
 
   if (!detail) return null;
 
-  function confirm() {
+  function doReschedule(force: boolean) {
     if (!detail) return;
     setError(null);
     startTransition(async () => {
@@ -75,11 +77,18 @@ export function RescheduleDialog() {
         startsAtIso,
         durationMin: detail.durationMin,
         notify,
+        force,
       });
+      if (res?.conflict) {
+        // Vai sobrepor outra sessão → pede confirmação (não fecha).
+        setOverlapConfirm(true);
+        return;
+      }
       if (res?.error) {
         setError(res.error);
         return;
       }
+      setOverlapConfirm(false);
       setDetail(null);
       router.refresh();
     });
@@ -138,20 +147,48 @@ export function RescheduleDialog() {
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-2">
-          <button type="button" onClick={() => setDetail(null)} disabled={pending} className="btn-outline">
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={confirm}
-            disabled={pending}
-            className="btn-primary inline-flex items-center gap-1.5"
-          >
-            <CalendarClock size={16} />
-            {pending ? "A reagendar…" : "Reagendar"}
-          </button>
-        </div>
+        {overlapConfirm ? (
+          <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            <p>
+              Este horário <span className="font-semibold">vai sobrepor outra sessão</span>.
+              Reagendar à mesma?
+            </p>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setOverlapConfirm(false)}
+                disabled={pending}
+                className="btn-outline"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => doReschedule(true)}
+                disabled={pending}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+              >
+                <CalendarClock size={16} />
+                {pending ? "A reagendar…" : "Sim, reagendar à mesma"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-end gap-2">
+            <button type="button" onClick={() => setDetail(null)} disabled={pending} className="btn-outline">
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={() => doReschedule(false)}
+              disabled={pending}
+              className="btn-primary inline-flex items-center gap-1.5"
+            >
+              <CalendarClock size={16} />
+              {pending ? "A reagendar…" : "Reagendar"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
