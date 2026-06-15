@@ -12,7 +12,7 @@ import {
   createCustomPurchase,
   confirmPurchase,
 } from "@/lib/credits";
-import { dispatchBookingConfirmed, dispatchBookingCancelled, dispatchBookingCreated } from "@/lib/email-dispatch";
+import { dispatchBookingCancelled, dispatchBookingCreated } from "@/lib/email-dispatch";
 import { removeBookingFromCalendars, pushBookingToCalendars } from "@/lib/calendar-sync";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getAccessibleTrainerIds } from "@/lib/trainer";
@@ -61,8 +61,9 @@ export async function confirmAttendanceAction(formData: FormData) {
   if (!id) return;
   try {
     await confirmAttendance(id);
-    await dispatchBookingConfirmed(id).catch(() => {});
-    setFlash("Presença confirmada");
+    // Email de "presença confirmada" removido — a notificação in-app
+    // ("Marcação aceite") é suficiente para avisar o cliente.
+    setFlash("Marcação aceite");
   } catch (e) {
     logError("confirmAttendanceAction", e);
     setFlash("Não foi possível confirmar", "error");
