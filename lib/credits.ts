@@ -273,6 +273,7 @@ export async function rescheduleBookingAdmin(args: {
   startsAt: Date;
   durationMin: number;
   notifyClient: boolean;
+  force?: boolean;
 }): Promise<string> {
   const supabase = createClient();
   const { data, error } = await (supabase as any).rpc("reschedule_booking_admin", {
@@ -280,6 +281,7 @@ export async function rescheduleBookingAdmin(args: {
     p_starts_at: args.startsAt.toISOString(),
     p_duration_min: args.durationMin,
     p_notify_client: args.notifyClient,
+    p_force: args.force ?? false,
   });
   if (error) throw error;
   return data as unknown as string;

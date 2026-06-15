@@ -393,8 +393,9 @@ export async function rescheduleBookingAdminAction(args: {
   startsAtIso: string;
   durationMin: number;
   notify: boolean;
-}): Promise<{ ok?: true; error?: string }> {
-  const { bookingId, startsAtIso, durationMin, notify } = args;
+  force?: boolean;
+}): Promise<{ ok?: true; error?: string; conflict?: true }> {
+  const { bookingId, startsAtIso, durationMin, notify, force } = args;
   if (!bookingId || !startsAtIso || !durationMin) {
     return { error: "Dados em falta para reagendar." };
   }
@@ -409,6 +410,7 @@ export async function rescheduleBookingAdminAction(args: {
       startsAt,
       durationMin,
       notifyClient: notify,
+      force,
     });
 
     // Calendário do trainer: sempre actualizado (sai a antiga, entra a nova).
@@ -429,6 +431,11 @@ export async function rescheduleBookingAdminAction(args: {
     return { ok: true };
   } catch (e: any) {
     logError("rescheduleBookingAdminAction", e);
+    // Sinal de sobreposição (P0099): não é erro — a UI pergunta se quer
+    // reagendar à mesma (depois chama outra vez com force=true).
+    if (e?.code === "P0099") {
+      return { conflict: true };
+    }
     if (isAccessDenied(e)) {
       await captureAlert("admin_access_denied", { action: "rescheduleBooking", targetId: bookingId });
       return { error: "Sem permissão para reagendar." };
