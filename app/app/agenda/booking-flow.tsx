@@ -500,7 +500,7 @@ function ConflictSuggestions({
             type="button"
             disabled={booking !== null}
             onClick={() => book(s.startsAt)}
-            className="rounded-md border border-amber-300 bg-white px-2 py-1 text-xs font-medium tabular-nums text-ink-900 hover:bg-amber-100 disabled:opacity-50"
+            className="rounded-md border border-amber-300 bg-white px-2 py-1 text-xs font-medium tabular-nums text-ink-900 hover:bg-amber-100 disabled:opacity-50 dark:border-amber-300/40 dark:text-bone-50 dark:hover:bg-ink-700"
           >
             {booking === s.startsAt
               ? "A marcar…"

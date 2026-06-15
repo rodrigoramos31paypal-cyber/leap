@@ -42,7 +42,7 @@ export function PacksViewToggle({ onChange }: { onChange: (v: PacksView) => void
         aria-pressed={view === "grid"}
         className={cn(
           "inline-flex items-center gap-1 rounded-md px-2.5 py-1 font-medium transition",
-          view === "grid" ? "bg-ink-900 text-white" : "text-ink-600 hover:bg-ink-900/5",
+          view === "grid" ? "bg-ink-900 text-white dark:bg-bone-50 dark:text-ink-900" : "text-ink-600 hover:bg-ink-900/5",
         )}
       >
         <LayoutGrid size={14} /> Grelha
@@ -53,7 +53,7 @@ export function PacksViewToggle({ onChange }: { onChange: (v: PacksView) => void
         aria-pressed={view === "list"}
         className={cn(
           "inline-flex items-center gap-1 rounded-md px-2.5 py-1 font-medium transition",
-          view === "list" ? "bg-ink-900 text-white" : "text-ink-600 hover:bg-ink-900/5",
+          view === "list" ? "bg-ink-900 text-white dark:bg-bone-50 dark:text-ink-900" : "text-ink-600 hover:bg-ink-900/5",
         )}
       >
         <List size={14} /> Lista
