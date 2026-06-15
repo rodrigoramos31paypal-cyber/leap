@@ -32,29 +32,33 @@ export function PromoCarousel({ banners }: { banners: PromoBanner[] }) {
       >
         {banners.map((b) => {
           const card = (
-            // Imagem do slide como fundo full-bleed; o texto fica por cima
-            // com um gradiente (scrim) à esquerda para garantir legibilidade.
+            // Imagem do slide como fundo full-bleed; o texto fica à esquerda e
+            // o botão à direita, com um gradiente (scrim) subtil do lado direito.
             <div className="relative flex h-28 overflow-hidden rounded-2xl bg-ink-900 text-bone-50">
               {b.image_url && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={b.image_url}
-                  alt={b.title}
+                  alt={b.title || "slide"}
                   className="absolute inset-0 h-full w-full object-cover"
                 />
               )}
               <div className="absolute inset-0 bg-gradient-to-l from-ink-900/65 via-ink-900/20 to-transparent" />
-              <div className="relative z-10 flex max-w-[70%] flex-col justify-center gap-1 p-4">
-                {b.subtitle && (
-                  <div className="text-[10px] font-bold uppercase tracking-wide text-gold-400">
-                    {b.subtitle}
-                  </div>
-                )}
-                <div className="font-display text-lg font-bold leading-tight line-clamp-2">
-                  {b.title}
+              <div className="relative z-10 flex h-full w-full items-center justify-between gap-3 p-4">
+                <div className="flex min-w-0 max-w-[60%] flex-col gap-1">
+                  {b.subtitle && (
+                    <div className="text-[10px] font-bold uppercase tracking-wide text-gold-400">
+                      {b.subtitle}
+                    </div>
+                  )}
+                  {b.title && (
+                    <div className="font-display text-lg font-bold leading-tight line-clamp-2">
+                      {b.title}
+                    </div>
+                  )}
                 </div>
                 {b.button_label && (
-                  <span className="mt-1 inline-flex w-fit rounded-lg bg-gold-400 px-3 py-1.5 text-xs font-semibold text-ink-900">
+                  <span className="inline-flex shrink-0 rounded-lg bg-gold-400 px-3 py-1.5 text-xs font-semibold text-ink-900">
                     {b.button_label}
                   </span>
                 )}

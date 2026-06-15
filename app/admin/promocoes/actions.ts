@@ -60,10 +60,6 @@ export async function createBannerAction(formData: FormData) {
   const linkUrl = String(formData.get("link_url") ?? "").trim();
   const file = formData.get("file") as File | null;
 
-  if (!title) {
-    setFlash("Indica um título", "error");
-    return;
-  }
   const fileErr = validateFile(file);
   if (fileErr) {
     setFlash(fileErr, "error");
@@ -123,10 +119,6 @@ export async function updateBannerAction(formData: FormData) {
   const file = formData.get("file") as File | null;
 
   if (!id) return;
-  if (!title) {
-    setFlash("Indica um título", "error");
-    return;
-  }
   const fileErr = validateFile(file);
   if (fileErr) {
     setFlash(fileErr, "error");

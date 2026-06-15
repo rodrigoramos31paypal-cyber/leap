@@ -44,8 +44,8 @@ export default async function AdminSlideshowPage() {
           <form action={createBannerAction} className="mt-4 space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="label">Título</label>
-                <input name="title" required className="input" placeholder="Ex: Receitas Saudáveis" />
+                <label className="label">Título (opcional)</label>
+                <input name="title" className="input" placeholder="Ex: Receitas Saudáveis" />
               </div>
               <div>
                 <label className="label">Etiqueta pequena (opcional)</label>
@@ -105,7 +105,7 @@ export default async function AdminSlideshowPage() {
                 )}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="truncate text-sm font-semibold">{b.title}</span>
+                    <span className="truncate text-sm font-semibold">{b.title || "Sem título"}</span>
                     <span className={b.active ? "chip-ok" : "chip-mute"}>{b.active ? "Activo" : "Inactivo"}</span>
                   </div>
                   {b.subtitle && <div className="truncate text-xs text-ink-500">{b.subtitle}</div>}
@@ -126,8 +126,8 @@ export default async function AdminSlideshowPage() {
                   <input type="hidden" name="id" value={b.id} />
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
-                      <label className="label">Título</label>
-                      <input name="title" required defaultValue={b.title} className="input" />
+                      <label className="label">Título (opcional)</label>
+                      <input name="title" defaultValue={b.title} className="input" />
                     </div>
                     <div>
                       <label className="label">Etiqueta pequena</label>
