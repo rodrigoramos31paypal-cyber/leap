@@ -18,6 +18,12 @@ function hhmm(totalMin: number) {
   const m = totalMin % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
+// Primeiro nome do cliente, truncado a 7 chars para caber dentro do bloco
+// da sessão em qualquer largura de coluna (mobile ~47 px).
+function shortName(full?: string | null) {
+  const first = (full ?? "").trim().split(/\s+/)[0] ?? "";
+  return first.slice(0, 7);
+}
 
 type Preview = {
   dateIso: string;
@@ -38,6 +44,7 @@ export function BookingBlock({
   hourEnd = 22,
   hourHeight = 56,
   snapMin = 15,
+  animate = false,
 }: {
   b: any;
   note?: { body: string } | null;
@@ -47,6 +54,10 @@ export function BookingBlock({
   hourEnd?: number;
   hourHeight?: number;
   snapMin?: number;
+  // Quando true, anima `top`/`height` em transições (ex: troca band↔proportional
+  // do WeekGrid durante drag). Mantemos opt-in para não introduzir motion
+  // noutros sítios que usem o BookingBlock.
+  animate?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -136,13 +147,21 @@ export function BookingBlock({
     const dx = e.clientX - startRef.current.x;
     const dy = e.clientY - startRef.current.y;
     if (!draggingRef.current && Math.hypot(dx, dy) < 5) return; // threshold
-    draggingRef.current = true;
+    if (!draggingRef.current) {
+      // Primeira vez que ultrapassamos o threshold → anuncia drag para o
+      // WeekGrid trocar para grelha proporcional (precisão de 15 min).
+      draggingRef.current = true;
+      window.dispatchEvent(new CustomEvent("agenda:dragstart"));
+    }
     document.body.style.userSelect = "none";
     setPreview(computePreview(e.clientX, e.clientY));
   }
 
   function onPointerCancel() {
     if (!draggable) return;
+    if (draggingRef.current) {
+      window.dispatchEvent(new CustomEvent("agenda:dragend"));
+    }
     startRef.current = null;
     draggingRef.current = false;
     document.body.style.userSelect = "";
@@ -152,6 +171,9 @@ export function BookingBlock({
   function onPointerUp(e: React.PointerEvent) {
     if (!draggable) return;
     const wasDragging = draggingRef.current;
+    if (wasDragging) {
+      window.dispatchEvent(new CustomEvent("agenda:dragend"));
+    }
     startRef.current = null;
     draggingRef.current = false;
     document.body.style.userSelect = "";
@@ -196,7 +218,9 @@ export function BookingBlock({
       ref={ref}
       className={`absolute left-0.5 right-0.5 rounded border text-[10px] transition-colors ${tone} ${
         open ? "z-30 overflow-visible" : "overflow-hidden"
-      } ${draggable ? "cursor-grab active:cursor-grabbing" : ""}`}
+      } ${draggable ? "cursor-grab active:cursor-grabbing" : ""} ${
+        animate ? "transition-[top,height] duration-200 ease-out" : ""
+      }`}
       style={{ ...style, touchAction: draggable ? "none" : undefined }}
     >
       <button
@@ -210,10 +234,10 @@ export function BookingBlock({
           // fallback para teclado/acessibilidade quando não há drag.
           if (!draggable) setOpen((o) => !o);
         }}
-        className="block w-full [cursor:inherit] p-1 text-left"
+        className="block w-full [cursor:inherit] px-0.5 py-0.5 text-left"
       >
-        <div className="font-semibold tabular-nums">{formatTime(b.starts_at)}</div>
-        <div className="truncate font-medium">{b.profiles?.full_name ?? "—"}</div>
+        <div className="font-semibold tabular-nums leading-none">{formatTime(b.starts_at)}</div>
+        <div className="truncate font-medium leading-tight text-[9px]">{shortName(b.profiles?.full_name) || "—"}</div>
       </button>
 
       {/* Pré-visualização durante o arrasto */}
@@ -237,7 +261,7 @@ export function BookingBlock({
             }}
           >
             <div className="font-semibold tabular-nums">{preview.time}</div>
-            <div className="truncate font-medium">{b.profiles?.full_name ?? "—"}</div>
+            <div className="truncate font-medium">{shortName(b.profiles?.full_name) || "—"}</div>
           </div>
         </>
       )}

@@ -8,10 +8,9 @@ import { NoteEditor } from "@/components/note-editor";
 import { getMyNotesMapForBookings } from "@/lib/notes";
 import { getCurrentTrainerId, getAccessibleTrainerIds } from "@/lib/trainer";
 import { BlockPresets } from "@/components/block-presets";
-import { BookingBlock } from "./booking-popover";
 import { BookingDialog } from "./booking-dialog";
 import { RescheduleDialog } from "./reschedule-dialog";
-import { SlotClickLayer } from "./slot-click-layer";
+import { WeekGrid } from "./week-grid";
 import { CardSkeleton } from "@/components/skeleton";
 
 type View = "day" | "week" | "month";
@@ -367,31 +366,9 @@ function BlockItem({ b }: { b: any }) {
   );
 }
 
-// ─── WeekView: hour grid (Google-Calendar style) ────────────────────
-const HOUR_START = 7;
-const HOUR_END = 22;
-const TOTAL_HOURS = HOUR_END - HOUR_START; // 15
-const HOUR_HEIGHT = 56; // px per hour
-
-function timeOffset(d: Date) {
-  const minutesFromStart = (d.getHours() - HOUR_START) * 60 + d.getMinutes();
-  return (minutesFromStart / 60) * HOUR_HEIGHT;
-}
-
-function clampPosition(start: Date, end: Date): { top: number; height: number } | null {
-  const totalMin = TOTAL_HOURS * 60;
-  const rawStart = (start.getHours() - HOUR_START) * 60 + start.getMinutes();
-  const rawEnd = (end.getHours() - HOUR_START) * 60 + end.getMinutes();
-  // BUG-FIX: ignorar slots totalmente fora da janela visível (antes
-  // eram desenhados como uma barrinha encostada ao topo/fundo).
-  if (rawEnd <= 0 || rawStart >= totalMin) return null;
-  const startMin = Math.max(0, rawStart);
-  const endMin = Math.min(totalMin, rawEnd);
-  const top = (startMin / 60) * HOUR_HEIGHT;
-  const height = Math.max(22, ((endMin - startMin) / 60) * HOUR_HEIGHT - 2);
-  return { top, height };
-}
-
+// ─── WeekView: wrapper fino sobre o client component WeekGrid ────────
+// O grosso do layout vive em ./week-grid.tsx (client) — esta função
+// apenas prepara os dados em formato JSON-serializável e delega.
 function WeekView({
   start,
   bookings,
@@ -407,190 +384,16 @@ function WeekView({
   notesMap: Map<string, any>;
   canBook: boolean;
 }) {
-  const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
-  const byDay = bucketByDay(bookings, blocks, reserved); // PERF (#5): 1 passagem
-  const today = new Date();
-  const nowMinutes = today.getHours() * 60 + today.getMinutes();
-  const nowInRange = nowMinutes >= HOUR_START * 60 && nowMinutes <= HOUR_END * 60;
-  const nowTop = timeOffset(today);
-
-  // TODOS os 7 dias cabem no ecrã (requisito do cliente): sem largura
-  // mínima por coluna (minmax(0,1fr)) e sem min-width total, as 7 colunas
-  // encolhem para preencher a viewport — mesmo em telemóvel (~375px →
-  // ~47px/dia). Eixo de horas reduzido a 34px para dar mais espaço aos dias.
-  const GRID_COLS = "34px repeat(7, minmax(0, 1fr))";
-
+  const daysIso = Array.from({ length: 7 }, (_, i) => isoDate(addDays(start, i)));
   return (
-    <div className="card overflow-hidden">
-      <div className="overflow-x-hidden">
-        <div className="w-full">
-          {/* Day headers */}
-          <div
-            className="grid border-b border-ink-900/10 bg-bone-50"
-            style={{ gridTemplateColumns: GRID_COLS }}
-          >
-            <div className="border-r border-ink-900/10" />
-            {days.map((d) => {
-              const isToday = sameDay(d, today);
-              return (
-                <div
-                  key={d.toISOString()}
-                  className="border-r border-ink-900/10 px-0.5 py-2 text-center last:border-r-0"
-                >
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
-                    {weekday(d)}
-                  </div>
-                  <div
-                    className={`font-display text-xl font-bold ${isToday ? "text-gold-600" : ""}`}
-                  >
-                    {d.getDate()}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Time grid */}
-          <div
-            className="grid"
-            style={{ gridTemplateColumns: GRID_COLS, height: TOTAL_HOURS * HOUR_HEIGHT }}
-          >
-          {/* Hour labels column */}
-          <div data-timeaxis className="relative border-r border-ink-900/10 bg-bone-50">
-            {Array.from({ length: TOTAL_HOURS }, (_, i) => (
-              <div
-                key={i}
-                className="absolute right-1 text-[9px] font-medium text-ink-500 tabular-nums"
-                style={{ top: i * HOUR_HEIGHT + 4 }}
-              >
-                {`${String(HOUR_START + i).padStart(2, "0")}:00`}
-              </div>
-            ))}
-          </div>
-
-          {/* Day columns */}
-          {days.map((d) => {
-            const { bookings: dayBookings, blocks: dayBlocks, reserved: dayReserved } =
-              byDay.get(dayKey(d)) ?? EMPTY_DAY;
-            const isToday = sameDay(d, today);
-
-            return (
-              <div
-                key={d.toISOString()}
-                data-daycol={isoDate(d)}
-                className="relative border-r border-ink-900/10 last:border-r-0"
-              >
-                {/* Hour grid lines */}
-                {Array.from({ length: TOTAL_HOURS }, (_, i) => (
-                  <div
-                    key={i}
-                    className="absolute left-0 right-0 border-t border-ink-900/10"
-                    style={{ top: i * HOUR_HEIGHT }}
-                  />
-                ))}
-                {/* Half-hour lighter lines */}
-                {Array.from({ length: TOTAL_HOURS }, (_, i) => (
-                  <div
-                    key={`half-${i}`}
-                    className="absolute left-0 right-0 border-t border-dashed border-ink-900/5"
-                    style={{ top: i * HOUR_HEIGHT + HOUR_HEIGHT / 2 }}
-                  />
-                ))}
-
-                {/* Camada de clique para nova marcação (por baixo dos eventos) */}
-                {canBook && (
-                  <SlotClickLayer
-                    dateIso={isoDate(d)}
-                    hourStart={HOUR_START}
-                    hourEnd={HOUR_END}
-                    hourHeight={HOUR_HEIGHT}
-                  />
-                )}
-
-                {/* Now indicator */}
-                {isToday && nowInRange && (
-                  <div
-                    className="pointer-events-none absolute left-0 right-0 z-20 flex items-center"
-                    style={{ top: nowTop }}
-                  >
-                    <div className="-ml-1 h-2.5 w-2.5 rounded-full bg-red-500" />
-                    <div className="h-px flex-1 bg-red-500" />
-                  </div>
-                )}
-
-                {/* Reserved slots (semana seguinte de uma série recorrente) */}
-                {dayReserved.map((r) => {
-                  const s = new Date(r.starts_at);
-                  const e = new Date(r.ends_at);
-                  const pos = clampPosition(s, e);
-                  if (!pos) return null;
-                  return (
-                    <div
-                      key={`r-${r.series_id}`}
-                      className="absolute left-0.5 right-0.5 overflow-hidden rounded border border-dashed border-ink-900/30 bg-bone-100/80 p-1 text-[10px] text-ink-700"
-                      style={{ top: pos.top, height: pos.height }}
-                      title={`Reservado para ${r.client_name ?? "cliente"}`}
-                    >
-                      <div className="truncate font-semibold uppercase tracking-wide">Reservado</div>
-                      <div className="truncate">{r.client_name ?? "(cliente)"}</div>
-                    </div>
-                  );
-                })}
-
-                {/* Blocks (indisponível) */}
-                {dayBlocks.map((blk) => {
-                  const s = new Date(blk.starts_at);
-                  const e = new Date(blk.ends_at);
-                  const pos = clampPosition(s, e);
-                  if (!pos) return null;
-                  return (
-                    <div
-                      key={`x-${blk.id}`}
-                      className="absolute left-0.5 right-0.5 overflow-hidden rounded border border-red-200 bg-red-50 p-1 text-[10px] text-red-800"
-                      style={{ top: pos.top, height: pos.height }}
-                      title={blk.reason ?? "Indisponível"}
-                    >
-                      <div className="truncate font-semibold">Indisponível</div>
-                      {blk.reason && (
-                        <div className="truncate text-red-700/80">{blk.reason}</div>
-                      )}
-                    </div>
-                  );
-                })}
-
-                {/* Bookings */}
-                {dayBookings.map((b) => {
-                  const s = new Date(b.starts_at);
-                  const e = b.ends_at
-                    ? new Date(b.ends_at)
-                    : new Date(s.getTime() + 60 * 60 * 1000);
-                  const pos = clampPosition(s, e);
-                  if (!pos) return null;
-                  const canDrag =
-                    canBook &&
-                    (b.status === "booked" || b.status === "confirmed") &&
-                    s.getTime() > Date.now();
-                  return (
-                    <BookingBlock
-                      key={`b-${b.id}`}
-                      b={b}
-                      note={notesMap.get(b.id)}
-                      style={{ top: pos.top, height: pos.height }}
-                      draggable={canDrag}
-                      hourStart={HOUR_START}
-                      hourEnd={HOUR_END}
-                      hourHeight={HOUR_HEIGHT}
-                      snapMin={15}
-                    />
-                  );
-                })}
-              </div>
-            );
-          })}
-          </div>
-        </div>
-      </div>
-    </div>
+    <WeekGrid
+      daysIso={daysIso}
+      bookings={bookings}
+      blocks={blocks}
+      reserved={reserved}
+      notesEntries={Array.from(notesMap.entries()) as Array<[string, { body: string }]>}
+      canBook={canBook}
+    />
   );
 }
 
@@ -642,7 +445,7 @@ function MonthView({ gridStart, anchor, bookings, blocks, reserved }: { gridStar
                     <span>{formatTime(b.starts_at)}</span>
                     <span className="hidden sm:inline">
                       {" "}
-                      {b.profiles?.full_name?.split(" ")[0] ?? ""}
+                      {shortName(b.profiles?.full_name)}
                     </span>
                   </div>
                 ))}
@@ -870,5 +673,12 @@ function weekday(d: Date) {
 }
 function fmt(d: Date) {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+// Primeiro nome do cliente, truncado a 7 chars para caber dentro do
+// bloco da sessão (vista de mês: as células são muito estreitas).
+function shortName(full?: string | null) {
+  const first = (full ?? "").trim().split(/\s+/)[0] ?? "";
+  return first.slice(0, 7);
 }
 
