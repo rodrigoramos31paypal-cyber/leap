@@ -221,10 +221,15 @@ export async function createBookingAdmin(args: {
 }
 
 export type RecurringBookingResult = {
+  // ok=false quando nada foi marcado (só conflitos / sem crédito).
   ok: boolean;
   series_id: string | null;
   booking_ids: string[];
-  conflicts: Array<{ week: number; starts_at: string; reason: "booking" | "blocked" | "reserved" }>;
+  conflicts: Array<{
+    week: number;
+    starts_at: string;
+    reason: "booking" | "blocked" | "reserved" | "no_credit";
+  }>;
   /** Nº de semanas efectivamente marcadas (pode ser < requested_count). */
   booked_count: number;
   /** Nº de semanas pedidas originalmente. */

@@ -1,4 +1,5 @@
 "use client";
+// recurring booking: count selector + graceful credit handling
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -9,7 +10,11 @@ import type { SessionType } from "@/types/database";
 
 type CreditSummary = { individual: number; dupla: number; total: number };
 
-type Conflict = { week: number; starts_at: string; reason: string };
+type Conflict = {
+  week: number;
+  starts_at: string;
+  reason: "booking" | "blocked" | "reserved" | "no_credit" | string;
+};
 type PartialResult = { booked_count: number; requested_count: number; conflicts: Conflict[] };
 
 export function BookingFlow({
@@ -39,6 +44,11 @@ export function BookingFlow({
   const [partial, setPartial] = useState<PartialResult | null>(null);
   const [resolved, setResolved] = useState<Set<string>>(new Set());
   const [recurring, setRecurring] = useState(false);
+  // Quantas semanas marcar de uma vez. Default conservador: 4 (ou menos,
+  // se o cliente tiver menos créditos). O cliente ajusta com o stepper.
+  const [recurringCount, setRecurringCount] = useState<number>(() =>
+    Math.min(4, Math.max(2, credits.individual)),
+  );
   const [pending, start] = useTransition();
 
   useEffect(() => {
@@ -110,12 +120,14 @@ export function BookingFlow({
         return;
       }
       if (recurring && availableCredits > 1) {
+        // Salvaguarda: nunca pede mais semanas do que os créditos atuais.
+        const count = Math.max(2, Math.min(availableCredits, recurringCount));
         const res = await bookRecurringAction({
           trainerId,
           startsAtIso: picked,
           durationMin: duration,
           sessionType,
-          sessionsCount: availableCredits,
+          sessionsCount: count,
         });
         // Parcial: marcou as semanas livres; mostra as que falharam com
         // sugestões de horário (mesmo que não tenha marcado nenhuma).
@@ -244,8 +256,8 @@ export function BookingFlow({
             {remaining.length > 0 ? (
               <>
                 <p className="mt-1 text-xs">
-                  Estas semanas já estavam ocupadas. Escolhe outro horário (ou marca-as
-                  mais tarde, quando quiseres):
+                  Estas semanas ficaram por marcar. Para as ocupadas, escolhe outro horário
+                  (ou marca-as mais tarde, quando quiseres):
                 </p>
                 <ul className="mt-2 space-y-3">
                   {remaining.map((c) => (
@@ -253,20 +265,27 @@ export function BookingFlow({
                       <div className="text-xs font-medium">
                         Semana {c.week} · {formatDateTime(c.starts_at)} — {reasonLabel(c.reason)}
                       </div>
-                      <ConflictSuggestions
-                        trainerId={trainerId}
-                        durationMin={duration}
-                        sessionType={sessionType}
-                        conflictStartsAt={c.starts_at}
-                        pickedIso={picked!}
-                        onBooked={() =>
-                          setResolved((prev) => {
-                            const next = new Set(prev);
-                            next.add(c.starts_at);
-                            return next;
-                          })
-                        }
-                      />
+                      {c.reason === "no_credit" ? (
+                        <p className="mt-1 text-xs text-amber-800">
+                          Não tens sessões suficientes para esta semana. Compra mais um pack
+                          para a marcares.
+                        </p>
+                      ) : (
+                        <ConflictSuggestions
+                          trainerId={trainerId}
+                          durationMin={duration}
+                          sessionType={sessionType}
+                          conflictStartsAt={c.starts_at}
+                          pickedIso={picked!}
+                          onBooked={() =>
+                            setResolved((prev) => {
+                              const next = new Set(prev);
+                              next.add(c.starts_at);
+                              return next;
+                            })
+                          }
+                        />
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -298,23 +317,69 @@ export function BookingFlow({
           </div>
 
           {availableCredits > 1 && !rescheduleBookingId && (
-            <label className="mt-3 flex items-start gap-2 rounded-md border border-ink-900/10 bg-bone-50 px-3 py-2 text-xs">
-              <input
-                type="checkbox"
-                checked={recurring}
-                onChange={(e) => setRecurring(e.target.checked)}
-                className="mt-0.5 h-4 w-4 rounded border-ink-900/30"
-              />
-              <span>
-                <span className="flex items-center gap-1 font-semibold">
-                  <Repeat size={12} /> Marcar recorrente
+            <div className="mt-3 rounded-md border border-ink-900/10 bg-bone-50 px-3 py-2 text-xs">
+              <label className="flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={recurring}
+                  onChange={(e) => {
+                    setRecurring(e.target.checked);
+                    if (e.target.checked) {
+                      // Repõe um default sensato sempre que se liga.
+                      setRecurringCount(Math.min(4, availableCredits));
+                    }
+                  }}
+                  className="mt-0.5 h-4 w-4 rounded border-ink-900/30"
+                />
+                <span>
+                  <span className="flex items-center gap-1 font-semibold">
+                    <Repeat size={12} /> Marcar recorrente
+                  </span>
+                  <span className="text-ink-500">
+                    Marca já várias semanas no mesmo dia e hora. Escolhe quantas — não
+                    precisas de usar todas as sessões de uma vez.
+                  </span>
                 </span>
-                <span className="text-ink-500">
-                  Marca as próximas {availableCredits} semanas neste mesmo horário. Vais usar todas
-                  as sessões já. O horário fica reservado para ti na semana seguinte.
-                </span>
-              </span>
-            </label>
+              </label>
+
+              {recurring && (
+                <div className="mt-2 flex items-center justify-between gap-3 rounded-md bg-bone-100 px-2 py-2">
+                  <span className="text-ink-700">Quantas semanas?</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      aria-label="Menos semanas"
+                      onClick={() => setRecurringCount((c) => Math.max(2, c - 1))}
+                      disabled={recurringCount <= 2}
+                      className="flex h-7 w-7 items-center justify-center rounded-md border border-ink-900/20 text-base font-semibold leading-none disabled:opacity-40"
+                    >
+                      −
+                    </button>
+                    <span className="w-6 text-center font-semibold tabular-nums">
+                      {recurringCount}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Mais semanas"
+                      onClick={() =>
+                        setRecurringCount((c) => Math.min(availableCredits, c + 1))
+                      }
+                      disabled={recurringCount >= availableCredits}
+                      className="flex h-7 w-7 items-center justify-center rounded-md border border-ink-900/20 text-base font-semibold leading-none disabled:opacity-40"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              )}
+              {recurring && (
+                <p className="mt-1 text-ink-500">
+                  Usa {recurringCount} de {availableCredits} sessões. Ficam {availableCredits -
+                    recurringCount}{" "}
+                  por usar.
+                </p>
+              )}
+            </div>
           )}
 
           <button onClick={confirm} disabled={pending} className="btn-gold mt-3 w-full">
@@ -323,7 +388,7 @@ export function BookingFlow({
               : rescheduleBookingId
                 ? "Confirmar reagendamento"
                 : recurring && availableCredits > 1
-                  ? `Confirmar ${availableCredits} marcações`
+                  ? `Confirmar ${Math.min(availableCredits, recurringCount)} marcações`
                   : "Confirmar marcação"}
           </button>
         </div>
@@ -487,6 +552,8 @@ function reasonLabel(reason: string) {
       return "horário bloqueado pelo trainer";
     case "reserved":
       return "horário reservado para outro cliente";
+    case "no_credit":
+      return "sem sessões disponíveis para esta semana";
     default:
       return reason;
   }
