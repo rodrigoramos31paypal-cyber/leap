@@ -76,33 +76,47 @@ export async function confirmAttendanceAction(formData: FormData) {
  * início; só muda `ends_at`). Aceita qualquer valor 5–600 min. O bloco
  * na agenda redimensiona-se sozinho após o revalidate.
  */
-export async function updateBookingDurationAction(formData: FormData) {
+export async function updateBookingDurationAction(
+  formData: FormData,
+): Promise<{ ok?: true; conflict?: true; count?: number; error?: string }> {
   const id = String(formData.get("bookingId") ?? "");
   const durationMin = Math.round(Number(formData.get("durationMin") ?? 0));
-  if (!id) return;
+  const force = formData.get("force") === "true";
+  if (!id) return { error: "Marcação não identificada." };
   if (!durationMin || Number.isNaN(durationMin) || durationMin < 5 || durationMin > 600) {
-    setFlash("Duração inválida (5–600 min).", "error");
-    return;
+    return { error: "Duração inválida (5–600 min)." };
   }
   try {
     const supabase = createClient();
-    const { error } = await (supabase as any).rpc("update_booking_duration", {
+    const { data, error } = await (supabase as any).rpc("update_booking_duration", {
       p_booking_id: id,
       p_duration_min: durationMin,
+      p_force: force,
     });
     if (error) throw error;
+    const res = (data ?? {}) as { ok?: boolean; conflict?: boolean; count?: number };
+
+    // Sobreposição com outra sessão e ainda não confirmado → devolve o
+    // aviso (sem gravar). A UI pergunta se o trainer tem a certeza.
+    if (res.ok === false && res.conflict) {
+      return { conflict: true, count: res.count ?? 1 };
+    }
+
     // Atualiza o evento no calendário sincronizado (best-effort): remove
     // o antigo e volta a criar com a nova hora de fim. (pushBooking…
     // sozinho INSERE sempre — duplicaria o evento.)
     await removeBookingFromCalendars(id).catch(() => {});
     await pushBookingToCalendars(id).catch(() => {});
     setFlash(`Duração atualizada para ${durationMin} min.`);
+    revalidateBookingViews();
+    return { ok: true };
   } catch (e) {
     logError("updateBookingDurationAction", e);
     const friendly = userFacingRpcError(e);
-    setFlash(friendly ?? "Não foi possível alterar a duração.", "error");
+    const msg = friendly ?? "Não foi possível alterar a duração.";
+    setFlash(msg, "error");
+    return { error: msg };
   }
-  revalidateBookingViews();
 }
 
 export async function markNoShowAction(formData: FormData) {
