@@ -50,10 +50,9 @@ export default async function ClientDashboard() {
       .limit(4),
     supabase
       .from("purchases")
-      .select("pack_snapshot, sessions_total, sessions_remaining, created_at, expires_at")
+      .select("id, pack_snapshot, sessions_total, sessions_remaining, created_at, expires_at")
       .eq("client_id", user.id)
       .eq("status", "confirmed")
-      .gt("sessions_remaining", 0)
       .order("created_at", { ascending: false })
       .limit(5),
     (supabase as any)
@@ -71,7 +70,9 @@ export default async function ClientDashboard() {
   const nextSession = (upcoming ?? [])[0] as any | undefined;
   const nowMs = Date.now();
   const latestPack = ((latestPackRows ?? []) as any[]).find(
-    (p) => !p.expires_at || new Date(p.expires_at).getTime() >= nowMs,
+    (p) =>
+      p.sessions_remaining > 0 &&
+      (!p.expires_at || new Date(p.expires_at).getTime() >= nowMs),
   ) as any | undefined;
   const packName = latestPack ? (latestPack.pack_snapshot as any)?.name ?? "Pack" : null;
 
@@ -94,9 +95,40 @@ export default async function ClientDashboard() {
     presenca = tot > 0 ? Math.round((attended / tot) * 100) : null;
   }
 
+  // ── Barra "O teu progresso": progresso de sessões USADAS no pack.
+  // 0 usadas → 0% (só fundo cinza). A cada marcação sobe (25/50/75/100% num pack de 4).
+  // Pack esgotado (0 restantes) → mantém 100% até a ÚLTIMA sessão marcada TERMINAR;
+  // a partir do fim dessa sessão a barra fica vazia (cinza).
+  let barPack = latestPack as any | undefined;
+  if (!barPack) {
+    const consumed = ((latestPackRows ?? []) as any[]).find(
+      (p) =>
+        p.sessions_remaining === 0 &&
+        (!p.expires_at || new Date(p.expires_at).getTime() >= nowMs),
+    );
+    if (consumed) {
+      const { data: lastBooking } = await supabase
+        .from("bookings")
+        .select("ends_at")
+        .eq("purchase_id", consumed.id)
+        .in("status", ["booked", "confirmed"])
+        .order("ends_at", { ascending: false })
+        .limit(1);
+      const lastEndMs = (lastBooking ?? [])[0]?.ends_at
+        ? new Date((lastBooking as any)[0].ends_at).getTime()
+        : null;
+      // Ainda dentro (ou antes do fim) da última sessão → mostra 100%.
+      if (lastEndMs && nowMs < lastEndMs) barPack = consumed;
+    }
+  }
+
   const packPct =
-    latestPack && latestPack.sessions_total > 0
-      ? Math.round((latestPack.sessions_remaining / latestPack.sessions_total) * 100)
+    barPack && barPack.sessions_total > 0
+      ? Math.round(
+          ((barPack.sessions_total - barPack.sessions_remaining) /
+            barPack.sessions_total) *
+            100,
+        )
       : 0;
 
   return (
@@ -242,9 +274,9 @@ export default async function ClientDashboard() {
               </div>
             </div>
           </div>
-          {latestPack && (
+          {barPack && (
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-ink-900/10 dark:bg-white/10">
-              <div className="h-full rounded-full bg-gold-400" style={{ width: `${packPct}%` }} />
+              <div className="h-full rounded-full bg-gold-400 transition-all" style={{ width: `${packPct}%` }} />
             </div>
           )}
         </div>
@@ -257,36 +289,4 @@ export default async function ClientDashboard() {
           <Link href="/app/historico" className="text-xs font-medium text-gold-600 hover:text-gold-700">Ver tudo</Link>
         </div>
         {(!recentPast || recentPast.length === 0) ? (
-          <div className="card p-5 text-center text-sm text-ink-500">Ainda sem sessões passadas.</div>
-        ) : (
-          <ul className="space-y-2">
-            {(recentPast as any[]).map((b) => (
-              <li key={b.id}>
-                <Link href={`/app/sessao/${b.id}`} className="card flex items-center justify-between gap-3 p-4 hover:border-gold-400">
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold">{formatDateTime(b.starts_at)}</div>
-                    <div className="text-xs text-ink-500 capitalize">{b.session_type}</div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <StatusChip status={b.status} />
-                    <ChevronRight size={16} className="text-ink-500" />
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </div>
-  );
-}
-
-function StatusChip({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    booked: "chip-gold",
-    confirmed: "chip-ok",
-    cancelled: "chip-mute",
-    no_show: "chip-danger",
-  };
-  return <span className={map[status] ?? "chip-mute"}>{(BOOKING_STATUS as any)[status] ?? status}</span>;
-}
+          <div className="card p-5 text-center text-sm text
