@@ -19,7 +19,7 @@ import { getAccessibleTrainerIds } from "@/lib/trainer";
 import type { SessionType, PaymentMethod } from "@/types/database";
 import { randomUUID } from "crypto";
 import { setFlash } from "@/lib/flash";
-import { logError } from "@/lib/errors";
+import { logError, userFacingRpcError } from "@/lib/errors";
 import { logAudit } from "@/lib/audit";
 import { captureAlert, isAccessDenied } from "@/lib/alerts";
 
@@ -67,6 +67,40 @@ export async function confirmAttendanceAction(formData: FormData) {
   } catch (e) {
     logError("confirmAttendanceAction", e);
     setFlash("Não foi possível confirmar", "error");
+  }
+  revalidateBookingViews();
+}
+
+/**
+ * Ajusta a DURAÇÃO de uma sessão (mantém a mesma marcação e hora de
+ * início; só muda `ends_at`). Aceita qualquer valor 5–600 min. O bloco
+ * na agenda redimensiona-se sozinho após o revalidate.
+ */
+export async function updateBookingDurationAction(formData: FormData) {
+  const id = String(formData.get("bookingId") ?? "");
+  const durationMin = Math.round(Number(formData.get("durationMin") ?? 0));
+  if (!id) return;
+  if (!durationMin || Number.isNaN(durationMin) || durationMin < 5 || durationMin > 600) {
+    setFlash("Duração inválida (5–600 min).", "error");
+    return;
+  }
+  try {
+    const supabase = createClient();
+    const { error } = await (supabase as any).rpc("update_booking_duration", {
+      p_booking_id: id,
+      p_duration_min: durationMin,
+    });
+    if (error) throw error;
+    // Atualiza o evento no calendário sincronizado (best-effort): remove
+    // o antigo e volta a criar com a nova hora de fim. (pushBooking…
+    // sozinho INSERE sempre — duplicaria o evento.)
+    await removeBookingFromCalendars(id).catch(() => {});
+    await pushBookingToCalendars(id).catch(() => {});
+    setFlash(`Duração atualizada para ${durationMin} min.`);
+  } catch (e) {
+    logError("updateBookingDurationAction", e);
+    const friendly = userFacingRpcError(e);
+    setFlash(friendly ?? "Não foi possível alterar a duração.", "error");
   }
   revalidateBookingViews();
 }

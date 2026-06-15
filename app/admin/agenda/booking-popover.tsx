@@ -2,10 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { NotebookPen, ExternalLink, Coins } from "lucide-react";
+import { NotebookPen, ExternalLink, Coins, Clock } from "lucide-react";
 import { formatTime, BOOKING_STATUS } from "@/lib/utils";
 import { NoteEditor } from "@/components/note-editor";
-import { confirmAttendanceAction, markNoShowAction, cancelAdminAction } from "./actions";
+import {
+  confirmAttendanceAction,
+  markNoShowAction,
+  cancelAdminAction,
+  updateBookingDurationAction,
+} from "./actions";
 
 // ── helpers de drag ────────────────────────────────────────────────
 function isoDateOf(d: Date) {
@@ -92,6 +97,9 @@ export function BookingBlock({
     : 60;
   const originIso = isoDateOf(startDate);
   const originTime = hhmm(startDate.getHours() * 60 + startDate.getMinutes());
+
+  // Valor do controlo de duração no popover (presets + input livre).
+  const [durInput, setDurInput] = useState<number>(durationMin);
 
   // ── Mapeamento px↔minutos com linhas de altura variável ──────────
   function minutesToY(totalMin: number): number {
@@ -536,6 +544,49 @@ export function BookingBlock({
                 </form>
               </details>
             </div>
+          )}
+
+          {(b.status === "booked" || b.status === "confirmed") && (
+            <details className="mb-3 border-t border-ink-900/10 pt-3">
+              <summary className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-ink-600 hover:text-ink-900">
+                <Clock size={12} /> Duração · {durationMin} min
+              </summary>
+              <form action={updateBookingDurationAction} className="mt-2 space-y-2">
+                <input type="hidden" name="bookingId" value={b.id} />
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {[30, 45, 60, 90].map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setDurInput(m)}
+                      className={`rounded-md border px-2.5 py-1 text-xs font-medium ${
+                        durInput === m
+                          ? "border-gold-400 bg-gold-50 text-ink-900"
+                          : "border-ink-900/15 hover:bg-ink-900/5"
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                  <div className="inline-flex items-center gap-1">
+                    <input
+                      type="number"
+                      name="durationMin"
+                      min={5}
+                      max={600}
+                      step={5}
+                      value={durInput}
+                      onChange={(e) => setDurInput(Number(e.target.value))}
+                      className="w-16 rounded-md border border-ink-900/15 px-2 py-1 text-xs tabular-nums"
+                    />
+                    <span className="text-xs text-ink-500">min</span>
+                  </div>
+                </div>
+                <button className="w-full rounded-md bg-ink-900 px-3 py-1.5 text-xs font-semibold text-bone-50 hover:bg-ink-700 dark:bg-bone-50 dark:text-ink-900">
+                  Guardar duração
+                </button>
+              </form>
+            </details>
           )}
 
           <details className="border-t border-ink-900/10 pt-3">
