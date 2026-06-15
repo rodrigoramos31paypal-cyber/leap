@@ -879,33 +879,72 @@ function WeekView({
                   );
                 })}
 
-                {/* Bookings */}
-                {dayBookings.map((b) => {
-                  const s = new Date(b.starts_at);
-                  const e = b.ends_at
-                    ? new Date(b.ends_at)
-                    : new Date(s.getTime() + 60 * 60 * 1000);
-                  const pos = clampPosition(layout, s, e);
-                  if (!pos) return null;
-                  const canDrag =
-                    canBook &&
-                    (b.status === "booked" || b.status === "confirmed") &&
-                    s.getTime() > Date.now();
-                  return (
-                    <BookingBlock
-                      key={`b-${b.id}`}
-                      b={b}
-                      note={notesMap.get(b.id)}
-                      style={{ top: pos.top, height: pos.height }}
-                      draggable={canDrag}
-                      rowTops={layout.tops}
-                      rowHeights={layout.heights}
-                      snapMin={15}
-                      sessionsLeft={sessionsLeftMap.get(b.client_id)}
-                      isLastCredit={lastCreditIds.has(b.id)}
-                    />
-                  );
-                })}
+                {/* Bookings (com destaque de sobreposição) */}
+                {(() => {
+                  // Calcula "stacks" de sobreposição entre sessões activas:
+                  // cada sessão recebe quantas outras já estão a decorrer
+                  // (stack) p/ cascata horizontal, e marca-se overlapIds
+                  // p/ todas as envolvidas (bordo âmbar).
+                  const act = dayBookings
+                    .filter((x: any) => x.status === "booked" || x.status === "confirmed")
+                    .map((x: any) => ({
+                      id: x.id,
+                      s: new Date(x.starts_at).getTime(),
+                      e: x.ends_at
+                        ? new Date(x.ends_at).getTime()
+                        : new Date(x.starts_at).getTime() + 3_600_000,
+                    }))
+                    .sort((a: { s: number }, b: { s: number }) => a.s - b.s);
+                  const stackOf = new Map<string, number>();
+                  const overlapIds = new Set<string>();
+                  const live: { id: string; e: number }[] = [];
+                  for (const it of act) {
+                    for (let i = live.length - 1; i >= 0; i--) {
+                      if (live[i].e <= it.s) live.splice(i, 1);
+                    }
+                    stackOf.set(it.id, live.length);
+                    if (live.length > 0) {
+                      overlapIds.add(it.id);
+                      for (const l of live) overlapIds.add(l.id);
+                    }
+                    live.push({ id: it.id, e: it.e });
+                  }
+
+                  return dayBookings.map((b) => {
+                    const s = new Date(b.starts_at);
+                    const e = b.ends_at
+                      ? new Date(b.ends_at)
+                      : new Date(s.getTime() + 60 * 60 * 1000);
+                    const pos = clampPosition(layout, s, e);
+                    if (!pos) return null;
+                    const canDrag =
+                      canBook &&
+                      (b.status === "booked" || b.status === "confirmed") &&
+                      s.getTime() > Date.now();
+                    const isOverlap = overlapIds.has(b.id);
+                    const stack = stackOf.get(b.id) ?? 0;
+                    // Cascata: cada sessão sobreposta desloca-se ~16px à
+                    // direita e fica por cima, deixando a anterior à vista.
+                    const overlapStyle = isOverlap
+                      ? { left: `${2 + stack * 16}px`, zIndex: 20 + stack }
+                      : {};
+                    return (
+                      <BookingBlock
+                        key={`b-${b.id}`}
+                        b={b}
+                        note={notesMap.get(b.id)}
+                        style={{ top: pos.top, height: pos.height, ...overlapStyle }}
+                        draggable={canDrag}
+                        rowTops={layout.tops}
+                        rowHeights={layout.heights}
+                        snapMin={15}
+                        sessionsLeft={sessionsLeftMap.get(b.client_id)}
+                        isLastCredit={lastCreditIds.has(b.id)}
+                        overlap={isOverlap}
+                      />
+                    );
+                  });
+                })()}
               </div>
             );
           })}
