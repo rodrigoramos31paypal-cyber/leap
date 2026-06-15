@@ -1049,6 +1049,10 @@ export type Database = {
         Returns: boolean
       }
       mark_no_show: { Args: { p_booking_id: string }; Returns: undefined }
+      remove_client_sessions: {
+        Args: { p_client_id: string; p_trainer_id: string; p_count: number }
+        Returns: number
+      }
       revert_no_show: {
         Args: { p_booking_id: string; p_new_status: string; p_refund_credit?: boolean }
         Returns: undefined

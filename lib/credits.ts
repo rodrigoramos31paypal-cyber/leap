@@ -98,6 +98,23 @@ export async function confirmPurchase(purchaseId: string) {
   if (error) throw error;
 }
 
+/** Remove N sessões do saldo de um cliente (admin). Devolve quantas
+ *  foram efectivamente removidas (<= pedido se nao havia saldo). */
+export async function removeClientSessions(
+  clientId: string,
+  trainerId: string,
+  count: number,
+): Promise<number> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("remove_client_sessions", {
+    p_client_id: clientId,
+    p_trainer_id: trainerId,
+    p_count: count,
+  });
+  if (error) throw error;
+  return (data as unknown as number) ?? 0;
+}
+
 /** Atribui N sessões personalizadas a um cliente (sem referência a pack). Admin only. */
 export async function createCustomPurchase(args: {
   clientId: string;

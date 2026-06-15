@@ -114,7 +114,7 @@ export default async function ClientDetail({ params }: { params: { id: string } 
       ) : (
         <details className="card p-5">
           <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
-            <Plus size={16} /> Atribuir sessões manualmente
+            <Plus size={16} /> Gerir sessões
           </summary>
           <GrantPackForm
             clientId={profileId}

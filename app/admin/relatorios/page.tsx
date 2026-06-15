@@ -77,6 +77,7 @@ async function ReportStats({ from, to }: { from: Date; to: Date }) {
       .from("purchases")
       .select("amount_cents, sessions_total")
       .eq("status", "confirmed")
+      .neq("payment_method", "complimentary")
       .gte("confirmed_at", from.toISOString())
       .lte("confirmed_at", to.toISOString()),
     supabase

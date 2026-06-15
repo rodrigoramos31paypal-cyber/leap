@@ -121,6 +121,7 @@ async function Kpis({ year, month }: { year: number; month: number }) {
       .from("purchases")
       .select("amount_cents, sessions_total, confirmed_at")
       .eq("status", "confirmed")
+      .neq("payment_method", "complimentary")
       .in("trainer_id", trainerScope)
       .gte("confirmed_at", monthStart.toISOString())
       .lt("confirmed_at", monthEnd.toISOString()),

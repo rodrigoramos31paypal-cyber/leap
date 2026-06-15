@@ -6,6 +6,7 @@ import {
   createPurchase,
   createCustomPurchase,
   confirmPurchase,
+  removeClientSessions,
 } from "@/lib/credits";
 import { getCurrentTrainerId, getAccessibleTrainerIds } from "@/lib/trainer";
 import { createClient } from "@/lib/supabase/server";
@@ -53,10 +54,9 @@ export async function grantPackAction(formData: FormData): Promise<void> {
   const clientId = String(formData.get("clientId") ?? "");
   const method = String(formData.get("method") ?? "manual_cash") as
     | "manual_cash"
-    | "manual_transfer"
     | "manual_mbway"
+    | "manual_revolut"
     | "complimentary";
-  const confirmNow = formData.get("confirmNow") === "on";
 
   if (!clientId) {
     setFlash("Cliente não identificado", "error");
@@ -72,6 +72,41 @@ export async function grantPackAction(formData: FormData): Promise<void> {
     .maybeSingle();
   if (((target?.email as string | null) ?? "").endsWith("@removido.invalid")) {
     setFlash("Conta removida — não é possível atribuir sessões.", "error");
+    return;
+  }
+
+  // ── Modo "remover": tira N sessões do saldo do cliente ──────────
+  if (mode === "remove") {
+    const count = Number(formData.get("remove_sessions") ?? 0);
+    if (!Number.isFinite(count) || count <= 0) {
+      setFlash("Indica um número de sessões válido", "error");
+      return;
+    }
+    const trainerId = (await getCurrentTrainerId()) ?? (await getAccessibleTrainerIds())[0];
+    if (!trainerId) {
+      setFlash("Sem trainer associado", "error");
+      return;
+    }
+    try {
+      const removed = await removeClientSessions(clientId, trainerId, count);
+      await logAudit("credits_adjust", {
+        targetTable: "purchases",
+        targetId: clientId,
+        payload: { action: "remove_sessions", requested: count, removed },
+      });
+      if (removed === 0) {
+        setFlash("O cliente não tinha sessões disponíveis para remover", "info");
+      } else if (removed < count) {
+        setFlash(`Removidas ${removed} sessão(ões) — era o saldo disponível`);
+      } else {
+        setFlash(`Removidas ${removed} sessão(ões) do cliente`);
+      }
+    } catch (e) {
+      logError("grantPackAction:remove", e);
+      if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "removeClientSessions", clientId });
+      setFlash("Não foi possível remover as sessões", "error");
+    }
+    revalidateCreditsViews(clientId);
     return;
   }
 
@@ -112,16 +147,16 @@ export async function grantPackAction(formData: FormData): Promise<void> {
       purchaseId = await createPurchase(packId, method, clientId);
     }
 
-    if (confirmNow) {
-      await confirmPurchase(purchaseId);
-      setFlash(
-        sessionsGranted > 0
-          ? `Atribuídas ${sessionsGranted} sessão(ões) ao cliente`
-          : "Pack atribuído e confirmado",
-      );
-    } else {
-      setFlash("Pack atribuído — a aguardar confirmação de pagamento", "info");
-    }
+    // O checkbox "confirmar já" foi removido: confirmamos SEMPRE. As
+    // sessões ficam imediatamente disponíveis e, se o método for pago
+    // (dinheiro/MBWay/Revolut), o pagamento entra na receita. Cortesia
+    // confirma na mesma mas não conta como receita (ver dashboard).
+    await confirmPurchase(purchaseId);
+    setFlash(
+      sessionsGranted > 0
+        ? `Atribuídas ${sessionsGranted} sessão(ões) ao cliente`
+        : "Pack atribuído e confirmado",
+    );
 
     await logAudit("pack_grant", {
       targetTable: "purchases",
@@ -130,7 +165,6 @@ export async function grantPackAction(formData: FormData): Promise<void> {
         clientId,
         mode,
         method,
-        confirmNow,
         sessionsGranted: sessionsGranted || undefined,
       },
     });
