@@ -121,18 +121,18 @@ input[type="date"]::-webkit-date-and-time-value {
 /* ──────────────────────────────────────────────────────────────
    Sessões sobrepostas na agenda
    ──────────────────────────────────────────────────────────────
-   Mobile (default): cascata horizontal de 16px — em ecrãs estreitos,
-   dividir a largura em duas/três colunas torna os nomes ilegíveis,
-   por isso preferimos empilhar com pequeno offset.
+   Mobile (default): sem cascata e sem dividir colunas — ambas as
+   sessões ficam com a largura cheia da coluna do dia, sobrepostas
+   em z-index. Como o bloco da frente arranca mais abaixo (o seu
+   tempo de início é posterior), o topo do bloco de trás fica visível
+   acima dele com o nome a ler-se em condições. Cada bloco também
+   tem todo o espaço da coluna para o seu próprio texto, em vez de
+   ficar comprimido a 16-30 px.
    Desktop (≥640px): colunas lado-a-lado, dividindo a largura
-   proporcionalmente ao tamanho do grupo de sobreposição.
+   proporcionalmente ao tamanho do grupo de sobreposição (estilo
+   Google Calendar — espaço suficiente para isso).
    `--ov-col` = índice da coluna (0, 1, 2…); `--ov-cols` = total
    de colunas no grupo. Passados via inline style em page.tsx. */
-.booking-overlap-block {
-  left: calc(2px + var(--ov-col, 0) * 16px) !important;
-  right: 2px !important;
-  width: auto !important;
-}
 @media (min-width: 640px) {
   .booking-overlap-block {
     left: calc(var(--ov-col, 0) / var(--ov-cols, 1) * 100% + 2px) !important;
