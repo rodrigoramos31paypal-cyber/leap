@@ -141,3 +141,41 @@ export async function grantPackAction(formData: FormData): Promise<void> {
   }
   revalidateCreditsViews(clientId);
 }
+
+/**
+ * Suspender / reativar a conta de um cliente. Suspenso = continua a
+ * aceder à conta, mas NÃO consegue comprar packs (bloqueado na RPC
+ * create_purchase, qualquer método). Só admin/serviço (validado na RPC).
+ */
+export async function setClientBannedAction(formData: FormData): Promise<void> {
+  const clientId = String(formData.get("clientId") ?? "");
+  const banned = formData.get("banned") === "true";
+  if (!clientId) {
+    setFlash("Cliente não identificado", "error");
+    return;
+  }
+
+  try {
+    const supabase = createClient();
+    const { error } = await (supabase as any).rpc("set_client_banned", {
+      p_client_id: clientId,
+      p_banned: banned,
+    });
+    if (error) throw error;
+    await logAudit(banned ? "client_ban" : "client_unban", {
+      targetTable: "profiles",
+      targetId: clientId,
+      payload: { banned },
+    });
+    setFlash(
+      banned
+        ? "Conta suspensa — o cliente não consegue comprar packs."
+        : "Conta reativada.",
+    );
+  } catch (e) {
+    logError("setClientBannedAction", e);
+    if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "setClientBanned", clientId });
+    setFlash("Não foi possível atualizar o estado da conta", "error");
+  }
+  revalidateCreditsViews(clientId);
+}

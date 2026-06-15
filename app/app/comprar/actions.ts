@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createPurchase } from "@/lib/credits";
 import { ifthenpayEnabled, createIfthenpayPayment } from "@/lib/ifthenpay";
 import { dispatchPurchasePending } from "@/lib/email-dispatch";
-import { logError } from "@/lib/errors";
+import { logError, userFacingRpcError } from "@/lib/errors";
 import { revalidateCreditsViews } from "@/lib/revalidate";
 import type { PaymentMethod } from "@/types/database";
 
@@ -42,6 +42,8 @@ export async function startPurchaseAction({
     return { redirect: redirectUrl };
   } catch (err) {
     logError("startPurchaseAction", err);
-    return { error: "Não foi possível iniciar a compra. Tenta novamente." };
+    // Mensagem de negócio (ex.: conta suspensa) é segura de mostrar.
+    const friendly = userFacingRpcError(err);
+    return { error: friendly ?? "Não foi possível iniciar a compra. Tenta novamente." };
   }
 }
