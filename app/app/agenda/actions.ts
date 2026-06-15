@@ -5,7 +5,7 @@ import { dispatchBookingCreated } from "@/lib/email-dispatch";
 import { pushBookingToCalendars, removeBookingFromCalendars } from "@/lib/calendar-sync";
 import { createClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
-import { logError } from "@/lib/errors";
+import { logError, userFacingRpcError } from "@/lib/errors";
 import { revalidateBookingViews } from "@/lib/revalidate";
 import type { SessionType } from "@/types/database";
 
@@ -61,8 +61,9 @@ export async function bookAction({
     return { ok: true, pending };
   } catch (err) {
     logError("bookAction", err);
-    setFlash("Não foi possível marcar", "error");
-    return { error: "Não foi possível marcar. Tenta novamente." };
+    const friendly = userFacingRpcError(err);
+    setFlash(friendly ?? "Não foi possível marcar", "error");
+    return { error: friendly ?? "Não foi possível marcar. Tenta novamente." };
   }
 }
 
@@ -84,7 +85,10 @@ export async function rescheduleAction({
   });
   if (error) {
     logError("rescheduleAction", error);
-    return { error: "Não foi possível reagendar. O horário pode já estar ocupado." };
+    const friendly = userFacingRpcError(error);
+    return {
+      error: friendly ?? "Não foi possível reagendar. O horário pode já estar ocupado.",
+    };
   }
 
   // Best effort: emails + calendários (a antiga sai, a nova entra).
@@ -157,7 +161,8 @@ export async function bookRecurringAction({
     return { ok: true, result };
   } catch (err) {
     logError("bookRecurringAction", err);
-    setFlash("Não foi possível marcar a série", "error");
-    return { error: "Não foi possível marcar a série. Tenta novamente." };
+    const friendly = userFacingRpcError(err);
+    setFlash(friendly ?? "Não foi possível marcar a série", "error");
+    return { error: friendly ?? "Não foi possível marcar a série. Tenta novamente." };
   }
 }
