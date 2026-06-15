@@ -415,7 +415,7 @@ export function BookingBlock({
       >
         <div className="font-semibold tabular-nums leading-none text-[9px]">{formatTime(b.starts_at)}</div>
         <div
-          className={`${overlap ? "mt-px" : "mt-0.5"} break-words font-medium leading-[1.05] [overflow-wrap:anywhere]`}
+          className={`${overlap ? "mt-0" : "mt-px"} break-words font-medium leading-[1.05] [overflow-wrap:anywhere]`}
           style={{
             // Font responsivo: 6 px mínimo (mobile estreito) → 10 px
             // máximo (tablet+). Em 380 px mobile, 1.95vw ≈ 7.4 px
