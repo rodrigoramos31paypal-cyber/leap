@@ -735,28 +735,50 @@ export function BookingDialog({
                   </>
                 ) : (
                   <div>
-                    <div className="label">Repetir em</div>
+                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                      <div className="label mb-0">Repetir em</div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setBusyWeekdays(new Set([0, 1, 2, 3, 4, 5, 6]))}
+                          className="rounded-md border border-ink-900/15 px-2 py-1 text-[11px] font-medium text-ink-600 hover:bg-ink-900/5"
+                        >
+                          Todos os dias
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBusyWeekdays(new Set())}
+                          className="rounded-md border border-ink-900/15 px-2 py-1 text-[11px] font-medium text-ink-600 hover:bg-ink-900/5"
+                        >
+                          Limpar
+                        </button>
+                      </div>
+                    </div>
+                    {/* Ordem Seg→Dom (como a grelha). dow mantém 0=Dom. */}
                     <div className="flex flex-wrap gap-1.5">
-                      {WEEKDAY_LABELS.map((lbl, dow) => {
+                      {[1, 2, 3, 4, 5, 6, 0].map((dow) => {
                         const on = busyWeekdays.has(dow);
                         return (
                           <button
                             key={dow}
                             type="button"
                             onClick={() => toggleWeekday(dow)}
+                            aria-pressed={on}
                             className={`rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${
                               on
                                 ? "border-ink-900 bg-ink-900 text-white dark:border-bone-50 dark:bg-bone-50 dark:text-ink-900"
                                 : "border-ink-900/15 text-ink-600 hover:bg-ink-900/5"
                             }`}
                           >
-                            {lbl}
+                            {WEEKDAY_LABELS[dow]}
                           </button>
                         );
                       })}
                     </div>
                     <p className="mt-1.5 text-[11px] text-ink-500">
-                      Repete indefinidamente até removeres a recorrência.
+                      {busyWeekdays.size === 0
+                        ? "Escolhe pelo menos um dia."
+                        : `Selecionados: ${busyWeekdays.size} dia${busyWeekdays.size > 1 ? "s" : ""}. Repete todas as semanas até removeres.`}
                     </p>
                   </div>
                 )}
