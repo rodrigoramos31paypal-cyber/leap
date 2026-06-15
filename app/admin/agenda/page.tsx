@@ -171,6 +171,31 @@ async function CalendarView({
       ? new Map<string, any>()
       : await getMyNotesMapForBookings((bookings ?? []).map((b: any) => b.id));
 
+  // Sessões restantes por cliente — soma de `sessions_remaining` em
+  // purchases CONFIRMED e não expiradas. Só relevante em Day/Week
+  // (no Month não há popover por sessão). Saltamos o query no Month.
+  const sessionsLeftMap = new Map<string, number>();
+  if (view !== "month") {
+    const clientIds = Array.from(
+      new Set((bookings ?? []).map((b: any) => b.client_id).filter(Boolean)),
+    );
+    if (clientIds.length > 0) {
+      const { data: creditRows } = await supabase
+        .from("purchases")
+        .select("client_id, sessions_remaining, expires_at, status")
+        .in("client_id", clientIds)
+        .eq("status", "confirmed");
+      const now = Date.now();
+      for (const row of (creditRows ?? []) as any[]) {
+        if (row.expires_at && new Date(row.expires_at).getTime() < now) continue;
+        sessionsLeftMap.set(
+          row.client_id,
+          (sessionsLeftMap.get(row.client_id) ?? 0) + Number(row.sessions_remaining ?? 0),
+        );
+      }
+    }
+  }
+
   return (
     <>
       {view === "day" && (
@@ -183,6 +208,7 @@ async function CalendarView({
           blocks={blocks ?? []}
           reserved={reserved ?? []}
           notesMap={notesMap}
+          sessionsLeftMap={sessionsLeftMap}
           canBook={canBook}
           prevHref={`/admin/agenda?view=week&d=${isoDate(stepBack("week", day))}`}
           nextHref={`/admin/agenda?view=week&d=${isoDate(stepForward("week", day))}`}
@@ -423,6 +449,7 @@ function WeekView({
   blocks,
   reserved,
   notesMap,
+  sessionsLeftMap,
   canBook,
   prevHref,
   nextHref,
@@ -432,6 +459,7 @@ function WeekView({
   blocks: any[];
   reserved: any[];
   notesMap: Map<string, any>;
+  sessionsLeftMap: Map<string, number>;
   canBook: boolean;
   prevHref: string;
   nextHref: string;
@@ -673,6 +701,7 @@ function WeekView({
                       hourEnd={HOUR_END}
                       hourHeight={HOUR_HEIGHT}
                       snapMin={15}
+                      sessionsLeft={sessionsLeftMap.get(b.client_id)}
                     />
                   );
                 })}

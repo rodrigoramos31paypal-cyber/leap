@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { NotebookPen } from "lucide-react";
+import Link from "next/link";
+import { NotebookPen, ExternalLink, Coins } from "lucide-react";
 import { formatTime, BOOKING_STATUS } from "@/lib/utils";
 import { NoteEditor } from "@/components/note-editor";
 import { confirmAttendanceAction, markNoShowAction, cancelAdminAction } from "./actions";
@@ -18,11 +19,18 @@ function hhmm(totalMin: number) {
   const m = totalMin % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
-// Primeiro nome do cliente, truncado a 7 chars para caber dentro do
-// bloco da sessão em qualquer largura de coluna (mobile ~47 px).
+// Primeiro nome do cliente, truncado a 7 chars (usado em sítios onde
+// só cabe uma linha curta, como o preview de drag).
 function shortName(full?: string | null) {
   const first = (full ?? "").trim().split(/\s+/)[0] ?? "";
   return first.slice(0, 7);
+}
+// Primeiro nome com cap generoso (12 chars) — usado no bloco da sessão
+// onde permitimos wrap a 2 linhas via line-clamp; o cap evita que um
+// nome muito longo destrua o layout em colunas estreitas.
+function firstNameLong(full?: string | null) {
+  const first = (full ?? "").trim().split(/\s+/)[0] ?? "";
+  return first.slice(0, 12);
 }
 
 type Preview = {
@@ -44,6 +52,7 @@ export function BookingBlock({
   hourEnd = 22,
   hourHeight = 56,
   snapMin = 15,
+  sessionsLeft,
 }: {
   b: any;
   note?: { body: string } | null;
@@ -53,6 +62,9 @@ export function BookingBlock({
   hourEnd?: number;
   hourHeight?: number;
   snapMin?: number;
+  // Saldo de sessões do cliente (soma de purchases confirmed/não-expiradas).
+  // `undefined` quando não foi pré-carregado; `0` significa zero a sério.
+  sessionsLeft?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -304,8 +316,18 @@ export function BookingBlock({
         }}
         className="block w-full [cursor:inherit] p-1 text-left"
       >
-        <div className="font-semibold tabular-nums">{formatTime(b.starts_at)}</div>
-        <div className="truncate font-medium">{shortName(b.profiles?.full_name) || "—"}</div>
+        <div className="font-semibold tabular-nums leading-none">{formatTime(b.starts_at)}</div>
+        <div
+          className="mt-0.5 break-words font-medium leading-[1.1] text-[9px] [overflow-wrap:anywhere]"
+          style={{
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
+          {firstNameLong(b.profiles?.full_name) || "—"}
+        </div>
       </button>
 
       {/* Pré-visualização durante o arrasto */}
@@ -366,6 +388,37 @@ export function BookingBlock({
               Arrasta o bloco para reagendar.
             </p>
           )}
+
+          {/* Saldo de sessões + link para o perfil. O saldo é o que
+              o cliente ainda tem disponível em packs (não inclui esta
+              sessão se ela já foi descontada). */}
+          <div className="mb-2 flex items-center justify-between gap-2 rounded border border-ink-900/10 bg-bone-50 px-2 py-1.5 text-[11px]">
+            <div className="inline-flex items-center gap-1.5">
+              <Coins size={12} className="text-gold-600" />
+              {sessionsLeft === undefined ? (
+                <span className="text-ink-500">Sessões: —</span>
+              ) : sessionsLeft === 0 ? (
+                <span className="font-semibold text-red-700">
+                  Sem sessões
+                </span>
+              ) : (
+                <span className="text-ink-700">
+                  <span className="font-semibold tabular-nums">
+                    {sessionsLeft}
+                  </span>{" "}
+                  {sessionsLeft === 1 ? "sessão" : "sessões"}
+                </span>
+              )}
+            </div>
+            {b.client_id && (
+              <Link
+                href={`/admin/clientes/${b.client_id}`}
+                className="inline-flex items-center gap-1 text-[10px] font-medium text-ink-600 hover:text-ink-900"
+              >
+                Ver perfil <ExternalLink size={10} />
+              </Link>
+            )}
+          </div>
 
           {(b.status === "booked" || b.status === "confirmed") && (
             <div className="mb-2 flex flex-wrap gap-1">
