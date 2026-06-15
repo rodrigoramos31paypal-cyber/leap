@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   Home,
@@ -55,38 +55,18 @@ export function BottomNav({ variant }: { variant: "client" | "admin" }) {
   const path = usePathname();
   const items = variant === "client" ? clientItems : adminItems;
   const [moreOpen, setMoreOpen] = useState(false);
-  // Long-press na nav "Agenda" → popover com Dia / Semana / Mês.
+  // Tap na nav "Agenda" quando JÁ se está na Agenda → popover com
+  // Dia / Semana / Mês. (Antes era long-press, que disparava selecção
+  // de texto acidental no telemóvel.)
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
-  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longPressFiredRef = useRef(false);
 
-  function startLongPress() {
-    longPressFiredRef.current = false;
-    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
-    longPressTimerRef.current = setTimeout(() => {
-      longPressFiredRef.current = true;
-      setViewMenuOpen(true);
-      // pequeno haptic em mobile (se suportado)
-      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-        try {
-          (navigator as Navigator).vibrate?.(10);
-        } catch {}
-      }
-    }, 500);
-  }
-  function cancelLongPress() {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-  }
-  function onAgendaClickCapture(e: React.MouseEvent) {
-    if (longPressFiredRef.current) {
-      // O Link normalmente navegaria — long-press já abriu o popover,
-      // não queremos navegar.
+  function onAgendaClick(e: React.MouseEvent) {
+    // Só intercepta quando já estamos na Agenda: aí o tap abre/fecha o
+    // selector de vista em vez de (re)navegar. Fora da Agenda, o Link
+    // navega normalmente para /admin/agenda.
+    if (path?.startsWith("/admin/agenda")) {
       e.preventDefault();
-      e.stopPropagation();
-      longPressFiredRef.current = false;
+      setViewMenuOpen((o) => !o);
     }
   }
 
@@ -188,25 +168,12 @@ export function BottomNav({ variant }: { variant: "client" | "admin" }) {
                 <Link
                   href={it.href}
                   aria-current={active ? "page" : undefined}
-                  // Long-press SÓ no item "Agenda" do admin nav: abre
-                  // popover com Dia/Semana/Mês. Tap normal continua a
-                  // navegar para /admin/agenda (vista por defeito).
-                  onPointerDown={isAdminAgenda ? startLongPress : undefined}
-                  onPointerUp={isAdminAgenda ? cancelLongPress : undefined}
-                  onPointerLeave={isAdminAgenda ? cancelLongPress : undefined}
-                  onPointerCancel={isAdminAgenda ? cancelLongPress : undefined}
-                  onContextMenu={
-                    isAdminAgenda
-                      ? (e) => {
-                          // Evita o context menu do browser em mobile
-                          // (que apareceria a competir com o popover).
-                          e.preventDefault();
-                        }
-                      : undefined
-                  }
-                  onClickCapture={
-                    isAdminAgenda ? onAgendaClickCapture : undefined
-                  }
+                  // Tap no item "Agenda" do admin nav: se já estamos na
+                  // Agenda, abre o selector Dia/Semana/Mês; caso contrário
+                  // navega para /admin/agenda (vista por defeito).
+                  onClick={isAdminAgenda ? onAgendaClick : undefined}
+                  aria-haspopup={isAdminAgenda ? "menu" : undefined}
+                  aria-expanded={isAdminAgenda ? viewMenuOpen : undefined}
                   className={cn(
                     "flex flex-col items-center gap-0.5 rounded-md px-3 py-1.5 text-[10px] font-medium transition",
                     active

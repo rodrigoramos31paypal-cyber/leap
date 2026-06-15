@@ -12,27 +12,39 @@
 // ════════════════════════════════════════════════════════════════
 export function SlotClickLayer({
   dateIso,
-  hourStart,
-  hourEnd,
-  hourHeight,
+  rowTops,
+  rowHeights,
 }: {
   dateIso: string;
-  hourStart: number;
-  hourEnd: number;
-  hourHeight: number;
+  // Layout de altura variável (24 horas). Partilhado com a grelha em
+  // page.tsx para que o clique mapeie para a hora certa mesmo quando
+  // algumas linhas estão encolhidas.
+  rowTops: number[];
+  rowHeights: number[];
 }) {
+  // Inverte uma posição vertical (px) para minutos-desde-meia-noite,
+  // percorrendo a tabela de alturas variáveis.
+  function yToMinutes(y: number): number {
+    let h = 23;
+    for (let i = 0; i < 24; i++) {
+      if (y < rowTops[i] + rowHeights[i]) {
+        h = i;
+        break;
+      }
+    }
+    const frac = Math.min(1, Math.max(0, (y - rowTops[h]) / rowHeights[h]));
+    return h * 60 + frac * 60;
+  }
+
   function onClick(e: React.MouseEvent<HTMLDivElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
     const offsetY = e.clientY - rect.top;
-    const rawMin = (offsetY / hourHeight) * 60;
-    // snap a 30 min
+    const rawMin = yToMinutes(offsetY);
+    // snap a 30 min, limitado a 23:30 como última hora de início
     let snapped = Math.round(rawMin / 30) * 30;
-    const minMin = 0;
-    const maxMin = (hourEnd - hourStart) * 60 - 30; // última hora de início (ex: 21:30)
-    snapped = Math.max(minMin, Math.min(maxMin, snapped));
-    const totalMin = hourStart * 60 + snapped;
-    const h = Math.floor(totalMin / 60);
-    const m = totalMin % 60;
+    snapped = Math.max(0, Math.min(24 * 60 - 30, snapped));
+    const h = Math.floor(snapped / 60);
+    const m = snapped % 60;
     const time = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
     window.dispatchEvent(
       new CustomEvent("agenda:newbooking", { detail: { date: dateIso, time } }),

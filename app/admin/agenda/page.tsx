@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { formatTime, BOOKING_STATUS } from "@/lib/utils";
-import { confirmAttendanceAction, markNoShowAction, cancelAdminAction, addBlockQuickAction, deleteBlockAction } from "./actions";
+import { confirmAttendanceAction, markNoShowAction, cancelAdminAction, addBlockQuickAction, deleteBlockAction, skipRecurringDateAction, deleteRecurringBlockAction } from "./actions";
 import { Ban, NotebookPen } from "lucide-react";
 import { NoteEditor } from "@/components/note-editor";
 import { getMyNotesMapForBookings } from "@/lib/notes";
@@ -196,26 +196,89 @@ async function CalendarView({
     }
   }
 
+  // ── Bloqueios RECORRENTES (semanais) ────────────────────────────
+  // Expandidos em instâncias concretas para o intervalo visível, para
+  // renderizarem como "indisponível" e contarem no collapse das linhas.
+  // Um "skip" para uma data limpa a recorrência só nesse dia.
+  const { data: recurringBlocks } = await (supabase as any)
+    .from("trainer_recurring_blocks")
+    .select("id, trainer_id, day_of_week, start_time, end_time, reason, active")
+    .in("trainer_id", scope)
+    .eq("active", true);
+  const { data: blockSkips } = await (supabase as any)
+    .from("trainer_recurring_block_skips")
+    .select("trainer_id, skip_date")
+    .in("trainer_id", scope)
+    .gte("skip_date", isoDate(rangeStart))
+    .lt("skip_date", isoDate(rangeEnd));
+  const skipSet = new Set<string>();
+  for (const s of (blockSkips ?? []) as any[]) skipSet.add(`${s.trainer_id}:${s.skip_date}`);
+
+  const recurringInstances: any[] = [];
+  if (((recurringBlocks ?? []) as any[]).length > 0) {
+    const totalDays = Math.round((rangeEnd.getTime() - rangeStart.getTime()) / 86_400_000);
+    for (let i = 0; i < totalDays; i++) {
+      const dt = addDays(rangeStart, i);
+      const iso = isoDate(dt);
+      const dow = dt.getDay();
+      for (const rb of (recurringBlocks ?? []) as any[]) {
+        if (Number(rb.day_of_week) !== dow) continue;
+        if (skipSet.has(`${rb.trainer_id}:${iso}`)) continue;
+        const [sh, sm] = String(rb.start_time).split(":").map(Number);
+        const [eh, em] = String(rb.end_time).split(":").map(Number);
+        const [yy, mm, dd] = iso.split("-").map(Number);
+        recurringInstances.push({
+          id: `rb:${rb.id}:${iso}`,
+          recurring_id: rb.id,
+          is_recurring: true,
+          trainer_id: rb.trainer_id,
+          starts_at: lisbonWallToUtc(yy, mm - 1, dd, sh, sm).toISOString(),
+          ends_at: lisbonWallToUtc(yy, mm - 1, dd, eh, em).toISOString(),
+          reason: rb.reason,
+        });
+      }
+    }
+  }
+  const allBlocks: any[] = [...((blocks ?? []) as any[]), ...recurringInstances];
+
+  // Horário de trabalho do(s) trainer(s) — determina que horas podem
+  // encolher na vista de semana. Só carregado nessa vista.
+  const availMap: AvailMap = new Map();
+  if (view === "week") {
+    const { data: av } = await (supabase as any)
+      .from("trainer_availability")
+      .select("day_of_week, start_time, end_time, active")
+      .in("trainer_id", scope)
+      .eq("active", true);
+    for (const row of (av ?? []) as any[]) {
+      const dow = Number(row.day_of_week);
+      const arr = availMap.get(dow) ?? [];
+      arr.push([parseHM(String(row.start_time)), parseHM(String(row.end_time))]);
+      availMap.set(dow, arr);
+    }
+  }
+
   return (
     <>
       {view === "day" && (
-        <DayView day={day} bookings={bookings ?? []} blocks={blocks ?? []} reserved={reserved ?? []} notesMap={notesMap} />
+        <DayView day={day} bookings={bookings ?? []} blocks={allBlocks} reserved={reserved ?? []} notesMap={notesMap} />
       )}
       {view === "week" && (
         <WeekView
           start={rangeStart}
           bookings={bookings ?? []}
-          blocks={blocks ?? []}
+          blocks={allBlocks}
           reserved={reserved ?? []}
           notesMap={notesMap}
           sessionsLeftMap={sessionsLeftMap}
           canBook={canBook}
+          avail={availMap}
           prevHref={`/admin/agenda?view=week&d=${isoDate(stepBack("week", day))}`}
           nextHref={`/admin/agenda?view=week&d=${isoDate(stepForward("week", day))}`}
         />
       )}
       {view === "month" && (
-        <MonthView gridStart={rangeStart} anchor={day} bookings={bookings ?? []} blocks={blocks ?? []} reserved={reserved ?? []} />
+        <MonthView gridStart={rangeStart} anchor={day} bookings={bookings ?? []} blocks={allBlocks} reserved={reserved ?? []} />
       )}
     </>
   );
@@ -359,44 +422,84 @@ function BlockItem({ b }: { b: any }) {
     <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <div className="font-semibold">Indisponível · {formatTime(b.starts_at)}–{formatTime(b.ends_at)}</div>
+          <div className="font-semibold">
+            Ocupado · {formatTime(b.starts_at)}–{formatTime(b.ends_at)}
+            {b.is_recurring && (
+              <span className="ml-1 rounded bg-red-100 px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide text-red-700">
+                recorrente
+              </span>
+            )}
+          </div>
           {b.reason && <div className="text-red-700/80">{b.reason}</div>}
         </div>
-        <form action={deleteBlockAction}>
-          <input type="hidden" name="id" value={b.id} />
-          <button
-            type="submit"
-            className="rounded p-1 text-red-700 hover:bg-red-100"
-            aria-label="Remover bloqueio"
-            title="Remover bloqueio"
-          >
-            ✕
-          </button>
-        </form>
+        {b.is_recurring ? (
+          <div className="flex shrink-0 items-center gap-1">
+            <form action={skipRecurringDateAction}>
+              <input type="hidden" name="trainerId" value={b.trainer_id} />
+              <input type="hidden" name="date" value={isoDate(new Date(b.starts_at))} />
+              <button
+                type="submit"
+                className="rounded px-1.5 py-1 text-[10px] font-medium text-red-700 hover:bg-red-100"
+                title="Limpar a recorrência só neste dia"
+              >
+                Só hoje
+              </button>
+            </form>
+            <form action={deleteRecurringBlockAction}>
+              <input type="hidden" name="id" value={b.recurring_id} />
+              <button
+                type="submit"
+                className="rounded p-1 text-red-700 hover:bg-red-100"
+                aria-label="Remover recorrência"
+                title="Remover a recorrência (todas as semanas)"
+              >
+                ✕
+              </button>
+            </form>
+          </div>
+        ) : (
+          <form action={deleteBlockAction}>
+            <input type="hidden" name="id" value={b.id} />
+            <button
+              type="submit"
+              className="rounded p-1 text-red-700 hover:bg-red-100"
+              aria-label="Remover bloqueio"
+              title="Remover bloqueio"
+            >
+              ✕
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );
 }
 
 // ─── WeekView: hour grid (Google-Calendar style) ────────────────────
-// HOUR_START/END expandido para 00–24 (Jun 2026) para permitir mover
-// sessões para horários fora das horas-tipo (ex: cliente excepcional
-// das 06:30). A grelha é scrollável internamente — ao abrir a Agenda
-// o `AgendaScrollTo7am` posiciona o scroll nas 07:00 por defeito.
-// PRIME_START/END marcam o intervalo "normal" do trainer; as faixas
-// fora deste intervalo ficam visualmente mais escuras como pista de
-// que são horas off (ainda interactivas).
+// A grelha cobre 00–24h. As linhas-hora têm ALTURA VARIÁVEL (Jun 2026):
+//  • Horas "úteis" (dentro do horário de trabalho do trainer e/ou com
+//    sessões) ficam à altura cheia (FULL_HOUR_HEIGHT) — legíveis ao
+//    minuto.
+//  • Horas onde NADA pode ser marcado (fora do horário de trabalho OU
+//    totalmente bloqueadas) e SEM sessões encolhem para uma faixa fina
+//    (COLLAPSED_HOUR_HEIGHT). Assim cabem muito mais horas no ecrã sem
+//    scroll, mantendo as horas de trabalho confortáveis.
+//  • Em vista de semana uma hora só encolhe se for "encolhível" nos 7
+//    dias visíveis (as colunas partilham a mesma grelha de horas). Se o
+//    trainer puser uma sessão por cima de uma hora bloqueada (override),
+//    essa hora volta a ficar cheia automaticamente.
 const HOUR_START = 0;
 const HOUR_END = 24;
 const TOTAL_HOURS = HOUR_END - HOUR_START; // 24
-const PRIME_START = 7;
-const PRIME_END = 21;
-// HOUR_HEIGHT subido de 56→88 (Jun 2026) para que cada slot de 15 min
-// passe a ter ~22 px em vez de 14 px — sessões a :15/:30/:45 ficam
-// visualmente distintas dentro do rectângulo da hora. Combinado com
-// as gridlines a cada 15 min mais abaixo, o utilizador consegue
-// "ler" a posição vertical de uma sessão sem ambiguidade.
-const HOUR_HEIGHT = 88; // px per hour
+const FULL_HOUR_HEIGHT = 80; // px — hora útil (slot de 15 min ≈ 20 px)
+const COLLAPSED_HOUR_HEIGHT = 22; // px — hora não-marcável encolhida
+
+type RowLayout = {
+  heights: number[]; // length 24
+  tops: number[]; // length 24, topo cumulativo de cada hora
+  total: number; // altura total da grelha
+  collapsed: boolean[]; // length 24
+};
 
 // Devolve hora/minuto de `d` no timezone Europe/Lisbon, independente
 // do timezone do runtime. WeekView é Server Component — em Vercel o
@@ -421,26 +524,98 @@ function localHM(d: Date): { hour: number; minute: number } {
   return { hour, minute };
 }
 
-function timeOffset(d: Date) {
+function localMinutes(d: Date): number {
   const { hour, minute } = localHM(d);
-  const minutesFromStart = (hour - HOUR_START) * 60 + minute;
-  return (minutesFromStart / 60) * HOUR_HEIGHT;
+  return hour * 60 + minute;
 }
 
-function clampPosition(start: Date, end: Date): { top: number; height: number } | null {
+// Posição vertical (px) de um instante (em minutos-desde-meia-noite)
+// dentro da grelha de altura variável.
+function yForMinutes(layout: RowLayout, totalMin: number): number {
+  const clamped = Math.max(0, Math.min(TOTAL_HOURS * 60, totalMin));
+  const h = Math.min(23, Math.floor(clamped / 60));
+  const frac = (clamped - h * 60) / 60;
+  return layout.tops[h] + frac * layout.heights[h];
+}
+
+function clampPosition(
+  layout: RowLayout,
+  start: Date,
+  end: Date,
+): { top: number; height: number } | null {
   const totalMin = TOTAL_HOURS * 60;
-  const s = localHM(start);
-  const e = localHM(end);
-  const rawStart = (s.hour - HOUR_START) * 60 + s.minute;
-  const rawEnd = (e.hour - HOUR_START) * 60 + e.minute;
-  // BUG-FIX: ignorar slots totalmente fora da janela visível (antes
-  // eram desenhados como uma barrinha encostada ao topo/fundo).
-  if (rawEnd <= 0 || rawStart >= totalMin) return null;
-  const startMin = Math.max(0, rawStart);
-  const endMin = Math.min(totalMin, rawEnd);
-  const top = (startMin / 60) * HOUR_HEIGHT;
-  const height = Math.max(22, ((endMin - startMin) / 60) * HOUR_HEIGHT - 2);
+  const startMin = localMinutes(start);
+  let endMin = localMinutes(end);
+  if (endMin <= startMin) endMin = startMin + 60; // safety (cruza meia-noite)
+  if (endMin <= 0 || startMin >= totalMin) return null;
+  const top = yForMinutes(layout, Math.max(0, startMin));
+  const bottom = yForMinutes(layout, Math.min(totalMin, endMin));
+  const height = Math.max(18, bottom - top - 2);
   return { top, height };
+}
+
+// ─── Layout das linhas-hora (altura variável) ───────────────────────
+type AvailMap = Map<number, Array<[number, number]>>; // dow → [startMin,endMin][]
+
+function parseHM(t: string): number {
+  const [h, m] = t.split(":").map((n) => parseInt(n, 10));
+  return (h || 0) * 60 + (m || 0);
+}
+
+function overlapsHour(startsIso: string, endsIso: string | null, hs: number, he: number): boolean {
+  const s = localMinutes(new Date(startsIso));
+  let e = endsIso ? localMinutes(new Date(endsIso)) : s + 60;
+  if (e <= s) e = s + 60;
+  return s < he && e > hs;
+}
+
+function hourFullyBlocked(blocks: any[], hs: number, he: number): boolean {
+  for (const blk of blocks) {
+    const s = localMinutes(new Date(blk.starts_at));
+    let e = localMinutes(new Date(blk.ends_at));
+    if (e <= s) e = TOTAL_HOURS * 60;
+    if (s <= hs && e >= he) return true;
+  }
+  return false;
+}
+
+// Uma hora está "cheia" (não encolhe) num dado dia se tiver uma sessão
+// (booking/reserved) OU se for marcável (dentro do horário de trabalho e
+// não totalmente bloqueada).
+function hourIsFullOnDay(h: number, dow: number, bucket: DayBucket, avail: AvailMap): boolean {
+  const hs = h * 60;
+  const he = hs + 60;
+  for (const b of bucket.bookings) if (overlapsHour(b.starts_at, b.ends_at, hs, he)) return true;
+  for (const r of bucket.reserved) if (overlapsHour(r.starts_at, r.ends_at, hs, he)) return true;
+  const windows = avail.get(dow) ?? [];
+  const withinWorking = windows.some(([s, e]) => s < he && e > hs);
+  if (!withinWorking) return false; // fora do horário → encolhível
+  return !hourFullyBlocked(bucket.blocks, hs, he); // bloqueada toda → encolhível
+}
+
+function buildRowLayout(days: Date[], byDay: Map<string, DayBucket>, avail: AvailMap): RowLayout {
+  const collapsed: boolean[] = [];
+  for (let h = 0; h < 24; h++) {
+    let anyFull = false;
+    for (const d of days) {
+      const bucket = byDay.get(dayKey(d)) ?? EMPTY_DAY;
+      if (hourIsFullOnDay(h, d.getDay(), bucket, avail)) {
+        anyFull = true;
+        break;
+      }
+    }
+    collapsed[h] = !anyFull;
+  }
+  const heights: number[] = [];
+  const tops: number[] = [];
+  let acc = 0;
+  for (let h = 0; h < 24; h++) {
+    const ht = collapsed[h] ? COLLAPSED_HOUR_HEIGHT : FULL_HOUR_HEIGHT;
+    heights[h] = ht;
+    tops[h] = acc;
+    acc += ht;
+  }
+  return { heights, tops, total: acc, collapsed };
 }
 
 function WeekView({
@@ -451,6 +626,7 @@ function WeekView({
   notesMap,
   sessionsLeftMap,
   canBook,
+  avail,
   prevHref,
   nextHref,
 }: {
@@ -461,40 +637,39 @@ function WeekView({
   notesMap: Map<string, any>;
   sessionsLeftMap: Map<string, number>;
   canBook: boolean;
+  avail: AvailMap;
   prevHref: string;
   nextHref: string;
 }) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const byDay = bucketByDay(bookings, blocks, reserved); // PERF (#5): 1 passagem
   const today = new Date();
+
+  // Layout das linhas-hora (altura variável). Horas não-marcáveis e sem
+  // sessões encolhem para uma faixa fina → cabem mais horas no ecrã.
+  const layout = buildRowLayout(days, byDay, avail);
+  const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => HOUR_START + i);
+
   // Mesma razão que `localHM`: o servidor pode estar em UTC, queremos
   // a hora actual em Europe/Lisbon para posicionar a linha do "agora".
   const todayHM = localHM(today);
   const nowMinutes = todayHM.hour * 60 + todayHM.minute;
   const nowInRange = nowMinutes >= HOUR_START * 60 && nowMinutes <= HOUR_END * 60;
-  const nowTop = timeOffset(today);
+  const nowTop = yForMinutes(layout, nowMinutes);
 
   // TODOS os 7 dias cabem no ecrã (requisito do cliente): sem largura
   // mínima por coluna (minmax(0,1fr)) e sem min-width total, as 7 colunas
   // encolhem para preencher a viewport — mesmo em telemóvel (~375px →
-  // ~47px/dia). Eixo de horas reduzido a 34px para dar mais espaço aos dias.
+  // ~47px/dia). Eixo de horas reduzido a 22px para dar mais espaço aos dias.
   const GRID_COLS = "22px repeat(7, minmax(0, 1fr))";
-
-  // Off-hours overlay: faixas mais escuras antes de PRIME_START e
-  // depois de PRIME_END, dentro de cada coluna (eixo + dias). Sinaliza
-  // ao trainer que aquelas horas estão fora do horário-tipo, mas
-  // continuam totalmente interactivas para reagendamentos pontuais.
-  const offTopHeight = PRIME_START * HOUR_HEIGHT;
-  const offBottomTop = PRIME_END * HOUR_HEIGHT;
-  const offBottomHeight = (HOUR_END - PRIME_END) * HOUR_HEIGHT;
 
   return (
     <WeekSwipeNav prevHref={prevHref} nextHref={nextHref}>
     <div className="card overflow-hidden">
       <div className="overflow-x-hidden">
-        {/* Container scrollável vertical: a grelha é alta (24×88 px =
-            2112 px) então corta a 75 vh e os day-headers (sticky)
-            ficam visíveis enquanto o trainer scrolla pelas horas. */}
+        {/* Container scrollável vertical: corta a 75 vh e os day-headers
+            (sticky) ficam visíveis enquanto o trainer scrolla. Com as
+            horas mortas encolhidas, um dia de trabalho cabe sem scroll. */}
         <div
           id="agenda-week-scroll"
           className="w-full overflow-y-auto"
@@ -529,31 +704,21 @@ function WeekView({
           {/* Time grid */}
           <div
             className="grid"
-            style={{ gridTemplateColumns: GRID_COLS, height: TOTAL_HOURS * HOUR_HEIGHT }}
+            style={{ gridTemplateColumns: GRID_COLS, height: layout.total }}
           >
           {/* Hour labels column */}
           <div data-timeaxis className="relative border-r border-ink-900/10 bg-bone-50">
-            {/* Off-hours overlay (eixo). */}
-            <div
-              className="pointer-events-none absolute left-0 right-0 bg-ink-900/[0.05]"
-              style={{ top: 0, height: offTopHeight }}
-            />
-            <div
-              className="pointer-events-none absolute left-0 right-0 bg-ink-900/[0.05]"
-              style={{ top: offBottomTop, height: offBottomHeight }}
-            />
-            {Array.from({ length: TOTAL_HOURS }, (_, i) => {
-              const hourOfDay = HOUR_START + i;
-              const isOff = hourOfDay < PRIME_START || hourOfDay >= PRIME_END;
+            {hours.map((h) => {
+              const isCollapsed = layout.collapsed[h];
               return (
                 <div
-                  key={i}
+                  key={h}
                   className={`absolute right-1 text-[9px] font-medium tabular-nums ${
-                    isOff ? "text-ink-400/80" : "text-ink-500"
+                    isCollapsed ? "text-ink-400/70" : "text-ink-500"
                   }`}
-                  style={{ top: i * HOUR_HEIGHT + 4 }}
+                  style={{ top: layout.tops[h] + (isCollapsed ? 1 : 4) }}
                 >
-                  {String(hourOfDay).padStart(2, "0")}
+                  {String(h).padStart(2, "0")}
                 </div>
               );
             })}
@@ -571,59 +736,51 @@ function WeekView({
                 data-daycol={isoDate(d)}
                 className="relative border-r border-ink-900/10 last:border-r-0"
               >
-                {/* Off-hours overlay (coluna dia) — pointer-events-none
-                    para deixar o SlotClickLayer continuar a receber
-                    cliques nas horas off (caso excepcional do trainer). */}
-                <div
-                  className="pointer-events-none absolute left-0 right-0 bg-ink-900/[0.05]"
-                  style={{ top: 0, height: offTopHeight }}
-                />
-                <div
-                  className="pointer-events-none absolute left-0 right-0 bg-ink-900/[0.05]"
-                  style={{ top: offBottomTop, height: offBottomHeight }}
-                />
-                {/* Hour grid lines */}
-                {Array.from({ length: TOTAL_HOURS }, (_, i) => (
-                  <div
-                    key={i}
-                    className="absolute left-0 right-0 border-t border-ink-900/10"
-                    style={{ top: i * HOUR_HEIGHT }}
-                  />
-                ))}
-                {/* Half-hour lighter lines + quarter-hour ticks.
-                    A linha pontilhada cheia continua a marcar a meia-
-                    hora (mais forte) e duas linhas mais ténues marcam
-                    :15 e :45 — o utilizador vê de relance em que
-                    quarto da hora uma sessão começa. */}
-                {Array.from({ length: TOTAL_HOURS }, (_, i) => (
-                  <div
-                    key={`half-${i}`}
-                    className="absolute left-0 right-0 border-t border-dashed border-ink-900/10"
-                    style={{ top: i * HOUR_HEIGHT + HOUR_HEIGHT / 2 }}
-                  />
-                ))}
-                {Array.from({ length: TOTAL_HOURS }, (_, i) => (
-                  <div
-                    key={`q1-${i}`}
-                    className="absolute left-0 right-0 border-t border-dotted border-ink-900/5"
-                    style={{ top: i * HOUR_HEIGHT + HOUR_HEIGHT / 4 }}
-                  />
-                ))}
-                {Array.from({ length: TOTAL_HOURS }, (_, i) => (
-                  <div
-                    key={`q3-${i}`}
-                    className="absolute left-0 right-0 border-t border-dotted border-ink-900/5"
-                    style={{ top: i * HOUR_HEIGHT + (HOUR_HEIGHT * 3) / 4 }}
-                  />
-                ))}
+                {/* Sombreado das linhas encolhidas (horas não-marcáveis) +
+                    gridlines por hora. As linhas a 1/4, 1/2 e 3/4 só nas
+                    horas cheias (nas encolhidas não há espaço). */}
+                {hours.map((h) => {
+                  const isCollapsed = layout.collapsed[h];
+                  const top = layout.tops[h];
+                  const ht = layout.heights[h];
+                  return (
+                    <div key={`row-${h}`}>
+                      {isCollapsed && (
+                        <div
+                          className="pointer-events-none absolute left-0 right-0 bg-ink-900/[0.05]"
+                          style={{ top, height: ht }}
+                        />
+                      )}
+                      <div
+                        className="pointer-events-none absolute left-0 right-0 border-t border-ink-900/10"
+                        style={{ top }}
+                      />
+                      {!isCollapsed && (
+                        <>
+                          <div
+                            className="pointer-events-none absolute left-0 right-0 border-t border-dashed border-ink-900/10"
+                            style={{ top: top + ht / 2 }}
+                          />
+                          <div
+                            className="pointer-events-none absolute left-0 right-0 border-t border-dotted border-ink-900/5"
+                            style={{ top: top + ht / 4 }}
+                          />
+                          <div
+                            className="pointer-events-none absolute left-0 right-0 border-t border-dotted border-ink-900/5"
+                            style={{ top: top + (ht * 3) / 4 }}
+                          />
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
 
                 {/* Camada de clique para nova marcação (por baixo dos eventos) */}
                 {canBook && (
                   <SlotClickLayer
                     dateIso={isoDate(d)}
-                    hourStart={HOUR_START}
-                    hourEnd={HOUR_END}
-                    hourHeight={HOUR_HEIGHT}
+                    rowTops={layout.tops}
+                    rowHeights={layout.heights}
                   />
                 )}
 
@@ -642,7 +799,7 @@ function WeekView({
                 {dayReserved.map((r) => {
                   const s = new Date(r.starts_at);
                   const e = new Date(r.ends_at);
-                  const pos = clampPosition(s, e);
+                  const pos = clampPosition(layout, s, e);
                   if (!pos) return null;
                   return (
                     <div
@@ -661,7 +818,7 @@ function WeekView({
                 {dayBlocks.map((blk) => {
                   const s = new Date(blk.starts_at);
                   const e = new Date(blk.ends_at);
-                  const pos = clampPosition(s, e);
+                  const pos = clampPosition(layout, s, e);
                   if (!pos) return null;
                   return (
                     <div
@@ -684,7 +841,7 @@ function WeekView({
                   const e = b.ends_at
                     ? new Date(b.ends_at)
                     : new Date(s.getTime() + 60 * 60 * 1000);
-                  const pos = clampPosition(s, e);
+                  const pos = clampPosition(layout, s, e);
                   if (!pos) return null;
                   const canDrag =
                     canBook &&
@@ -697,9 +854,8 @@ function WeekView({
                       note={notesMap.get(b.id)}
                       style={{ top: pos.top, height: pos.height }}
                       draggable={canDrag}
-                      hourStart={HOUR_START}
-                      hourEnd={HOUR_END}
-                      hourHeight={HOUR_HEIGHT}
+                      rowTops={layout.tops}
+                      rowHeights={layout.heights}
                       snapMin={15}
                       sessionsLeft={sessionsLeftMap.get(b.client_id)}
                     />
@@ -712,8 +868,8 @@ function WeekView({
         </div>
       </div>
     </div>
-    {/* Posiciona o scroll interno em 07:00 ao montar a vista. */}
-    <AgendaScrollTo7am />
+    {/* Posiciona o scroll interno na 1ª hora útil ao montar a vista. */}
+    <AgendaScrollTo7am top={layout.tops[7]} />
     </WeekSwipeNav>
   );
 }
@@ -924,6 +1080,31 @@ function isoDate(d: Date) {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+// Converte uma hora-de-parede em Europe/Lisbon para o instante UTC
+// correcto (trata DST). `mo` é 0-based (como Date.UTC). Usado para
+// expandir bloqueios recorrentes (start_time/end_time) em instantes.
+function tzOffsetMinutesLisbon(date: Date): number {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Lisbon",
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const p: Record<string, string> = {};
+  for (const part of dtf.formatToParts(date)) p[part.type] = part.value;
+  const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
+  return (asUTC - date.getTime()) / 60000;
+}
+function lisbonWallToUtc(y: number, mo: number, d: number, h: number, mi: number): Date {
+  const guess = Date.UTC(y, mo, d, h, mi, 0);
+  const off = tzOffsetMinutesLisbon(new Date(guess));
+  return new Date(guess - off * 60000);
 }
 function startOfWeek(d: Date) {
   const x = new Date(d);
