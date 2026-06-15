@@ -153,41 +153,8 @@ export async function GET(request: NextRequest) {
     if (res.ok) lowSent++;
   }
 
-  // ── 2) Packs a expirar (uma vez por compra) ─────────────────────
-  for (const p of (expiring ?? []) as any[]) {
-    if (disabled.has(p.client_id)) continue;
-    const prof = profileMap.get(p.client_id);
-    if (!prof) continue;
-
-    const { data: claimed, error: claimErr } = await (supabase as any)
-      .from("engagement_alerts")
-      .insert({ user_id: p.client_id, kind: "pack_expiring", ref_id: p.id })
-      .select("id")
-      .maybeSingle();
-    if (claimErr || !claimed) continue;
-
-    const when = formatDateTime(p.expires_at);
-    const packName = (p.pack_snapshot as any)?.name ?? "pack";
-
-    await (supabase as any).from("notifications").insert({
-      user_id: p.client_id,
-      type: "credit_alert",
-      title: "Pack a expirar",
-      body: `O teu pack expira a ${when} e ainda tens ${p.sessions_remaining} ${
-        p.sessions_remaining === 1 ? "sessão" : "sessões"
-      } por usar.`,
-      link: "/app/comprar",
-    });
-
-    const tpl = emailTemplates.packExpiring({
-      clientName: prof.full_name ?? "atleta",
-      remaining: p.sessions_remaining,
-      when,
-      packName,
-    });
-    const res = await sendEmail({ to: prof.email, ...tpl });
-    if (res.ok) expirySent++;
-  }
+  // ── 2) Packs a expirar — REMOVIDO (0067 · afinação de notificações).
+  //    Já não enviamos avisos de "pack a expirar" (in-app nem email).
 
   return NextResponse.json({
     ok: true,
