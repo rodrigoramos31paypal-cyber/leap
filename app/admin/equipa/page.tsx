@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient, getSessionUser, getCurrentProfile } from "@/lib/supabase/server";
-import { addTrainerAction, toggleTrainerActiveAction, deleteTrainerAction, grantAdminByEmailAction } from "./actions";
+import { addTrainerAction, toggleTrainerActiveAction, demoteTrainerAction, grantAdminByEmailAction } from "./actions";
 import { Plus, UserCheck, UserX, ShieldCheck } from "lucide-react";
 
 export default async function EquipaPage() {
@@ -113,10 +113,10 @@ export default async function EquipaPage() {
                         {t.active ? "Desactivar" : "Activar"}
                       </button>
                     </form>
-                    <form action={deleteTrainerAction}>
+                    <form action={demoteTrainerAction}>
                       <input type="hidden" name="id" value={t.id} />
                       <button className="btn-outline border-red-200 text-xs text-red-700 hover:bg-red-50">
-                        Remover
+                        {t.profiles?.role === "owner" ? "Revogar admin" : "Remover"}
                       </button>
                     </form>
                   </>
