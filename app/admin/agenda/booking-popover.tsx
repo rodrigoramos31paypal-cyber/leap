@@ -364,7 +364,16 @@ export function BookingBlock({
       className={`absolute left-0.5 right-0.5 overflow-hidden rounded border text-[10px] transition-colors ${tone} ${lastCreditRing} ${
         overlap ? "!border-2 !border-amber-500" : ""
       } ${draggable ? "cursor-grab active:cursor-grabbing" : ""}`}
-      style={{ ...style, touchAction: draggable ? "none" : undefined }}
+      style={{
+        ...style,
+        // Quando o popover está aberto, sobe o z-index do bloco acima
+        // de qualquer outro BookingBlock (que pode estar com zIndex 20+col
+        // por causa da side-by-side cascade). Sem isto, sessões vizinhas
+        // ficavam visualmente em cima do modal por causa do stacking
+        // context criado pelo z-index do próprio bloco.
+        ...(open ? { zIndex: 60 } : {}),
+        touchAction: draggable ? "none" : undefined,
+      }}
     >
       {isLastCredit && b.status !== "cancelled" && (
         <span
@@ -600,7 +609,7 @@ export function BookingBlock({
                       step={5}
                       value={durInput}
                       onChange={(e) => setDurInput(Number(e.target.value))}
-                      className="w-16 rounded-md border border-ink-900/15 px-2 py-1 text-xs tabular-nums dark:border-white/15 dark:bg-ink-900 dark:text-bone-50"
+                      className="w-16 appearance-none rounded-md border border-ink-900/15 bg-white px-2 py-1 text-xs tabular-nums text-ink-900 [color-scheme:light] dark:border-white/15 dark:bg-ink-800 dark:text-bone-50 dark:[color-scheme:dark]"
                     />
                     <span className="text-xs text-ink-500 dark:text-bone-50/60">min</span>
                   </div>
