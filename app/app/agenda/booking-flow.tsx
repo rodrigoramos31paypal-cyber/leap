@@ -247,7 +247,8 @@ export function BookingFlow({
         const remaining = partial.conflicts.filter((c) => !resolved.has(c.starts_at));
         const booked = partial.booked_count + resolved.size;
         return (
-          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4">
+            <div className="max-h-[85vh] w-full overflow-y-auto rounded-t-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900 shadow-xl sm:max-w-md sm:rounded-2xl">
             <div className="font-semibold">
               {booked > 0
                 ? `Marcadas ${booked} de ${partial.requested_count} sessões.`
@@ -300,11 +301,12 @@ export function BookingFlow({
             >
               Concluir
             </button>
+            </div>
           </div>
         );
       })()}
 
-      {picked && (
+      {picked && !partial && (
         <div className="card sticky bottom-24 z-20 p-4 md:bottom-4">
           <div className="flex items-center justify-between text-sm">
             <div>
