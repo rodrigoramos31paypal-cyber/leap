@@ -478,7 +478,7 @@ function WeekView({
   // mínima por coluna (minmax(0,1fr)) e sem min-width total, as 7 colunas
   // encolhem para preencher a viewport — mesmo em telemóvel (~375px →
   // ~47px/dia). Eixo de horas reduzido a 34px para dar mais espaço aos dias.
-  const GRID_COLS = "34px repeat(7, minmax(0, 1fr))";
+  const GRID_COLS = "22px repeat(7, minmax(0, 1fr))";
 
   // Off-hours overlay: faixas mais escuras antes de PRIME_START e
   // depois de PRIME_END, dentro de cada coluna (eixo + dias). Sinaliza
@@ -553,7 +553,7 @@ function WeekView({
                   }`}
                   style={{ top: i * HOUR_HEIGHT + 4 }}
                 >
-                  {`${String(hourOfDay).padStart(2, "0")}:00`}
+                  {String(hourOfDay).padStart(2, "0")}
                 </div>
               );
             })}
