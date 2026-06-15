@@ -960,6 +960,7 @@ function WeekView({
                         sessionsLeft={sessionsLeftMap.get(b.client_id)}
                         isLastCredit={lastCreditIds.has(b.id)}
                         overlap={isOverlap}
+                        overlapCol={col}
                       />
                     );
                   });
