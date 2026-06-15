@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
-import { getAccessibleTrainerIds } from "@/lib/trainer";
+import { getAccessibleTrainerIds, getClientIdsInScope } from "@/lib/trainer";
 import { cn } from "@/lib/utils";
 import { Pagination } from "@/components/pagination";
 import { ClientSearch } from "@/components/client-search";
 import { ListSkeleton } from "@/components/skeleton";
 
-type Tab = "upcoming" | "past" | "new" | "esgotar";
+type Tab = "todos" | "upcoming" | "past" | "new" | "esgotar";
 
 type ClientRow = {
   id: string;
@@ -19,11 +19,14 @@ type ClientRow = {
 const PAGE_SIZE = 10;
 
 function resolveTab(raw?: string): Tab {
-  return raw === "past" || raw === "new" || raw === "esgotar" ? (raw as Tab) : "upcoming";
+  return raw === "todos" || raw === "past" || raw === "new" || raw === "esgotar"
+    ? (raw as Tab)
+    : "upcoming";
 }
 
 function labelFor(tab: Tab, q: string): string {
   if (q) return "";
+  if (tab === "todos") return "Todos os clientes";
   if (tab === "upcoming") return "Clientes com próximas sessões";
   if (tab === "past") return "Clientes com sessões passadas";
   if (tab === "new") return "Clientes registados recentemente";
@@ -59,6 +62,7 @@ export default function ClientesPage({
 
       {!q && (
         <div className="flex flex-wrap gap-1 rounded-lg border border-ink-900/10 bg-white p-1 text-sm dark:border-white/10 dark:bg-ink-800">
+          <TabLink current={tab} value="todos" label="Todos" />
           <TabLink current={tab} value="upcoming" label="Próximas sessões" />
           <TabLink current={tab} value="past" label="Sessões passadas" />
           <TabLink current={tab} value="new" label="Novos clientes" />
@@ -95,6 +99,8 @@ async function ClientList({ q, tab, page }: { q: string; tab: Tab; page: number 
       .range(from, to);
     clients = (data ?? []) as ClientRow[];
     total = count ?? clients.length;
+  } else if (tab === "todos") {
+    ({ clients, total } = await loadAllClientsPage(trainerIds, from));
   } else if (tab === "upcoming" || tab === "past") {
     ({ clients, total } = await loadScopedClientPage(tab, trainerIds, trainerScope, from));
   } else if (tab === "new") {
@@ -184,6 +190,28 @@ async function ClientList({ q, tab, page }: { q: string; tab: Tab; page: number 
 // ou falhar por qualquer motivo, caímos para a lógica antiga em JS —
 // idêntica ao comportamento anterior. Zero breakage no deploy.
 // ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
+// Tab "todos" — TODOS os clientes no âmbito do trainer (mesmo conjunto
+// que alimenta o KPI "Total de clientes" do dashboard). Ordena por nome
+// e pagina 10/página. `total` = nº de clientes no âmbito (bate com o KPI).
+// ════════════════════════════════════════════════════════════════
+async function loadAllClientsPage(
+  trainerIds: string[],
+  from: number,
+): Promise<{ clients: ClientRow[]; total: number }> {
+  const supabase = createClient();
+  const ids = await getClientIdsInScope(trainerIds);
+  if (ids.length === 0) return { clients: [], total: 0 };
+  const { data, count } = await supabase
+    .from("profiles")
+    .select("id, full_name, email, phone", { count: "exact" })
+    .eq("role", "client")
+    .in("id", ids)
+    .order("full_name")
+    .range(from, from + PAGE_SIZE - 1);
+  return { clients: (data ?? []) as ClientRow[], total: count ?? 0 };
+}
+
 async function loadScopedClientPage(
   tab: "upcoming" | "past" | "esgotar",
   trainerIds: string[],

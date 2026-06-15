@@ -152,7 +152,7 @@ async function Kpis({ year, month }: { year: number; month: number }) {
   return (
     <>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat icon={<TrendingUp size={16} />} label="Receita do mês" value={eur(revenue)} />
+        <Stat icon={<TrendingUp size={16} />} label="Receita do mês" value={eur(revenue)} href="/admin/pagamentos?tab=confirmados" />
         <Stat icon={<Users size={16} />} label="Clientes ativos no mês" value={String(activeClients)} />
         <Stat icon={<Package size={16} />} label="Packs vendidos" value={String(packsSold)} />
         <Stat
@@ -165,7 +165,7 @@ async function Kpis({ year, month }: { year: number; month: number }) {
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat icon={<Users size={16} />} label="Total de clientes" value={String(totalClientsInScope)} />
+        <Stat icon={<Users size={16} />} label="Total de clientes" value={String(totalClientsInScope)} href="/admin/clientes?tab=todos" />
         <Stat icon={<Calendar size={16} />} label="Sessões marcadas no mês" value={String(sessionsBooked)} />
         <Stat icon={<TrendingUp size={16} />} label="Receita média por cliente activo" value={eur(avgRevenuePerClient)} />
         <Stat
