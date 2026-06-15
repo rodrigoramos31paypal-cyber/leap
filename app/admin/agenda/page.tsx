@@ -176,7 +176,12 @@ async function CalendarView({
   // purchases CONFIRMED e não expiradas. Só relevante em Day/Week
   // (no Month não há popover por sessão). Saltamos o query no Month.
   const sessionsLeftMap = new Map<string, number>();
-  if (view !== "month") {
+  // "Última sessão / último crédito": IDs das marcações a sinalizar a
+  // vermelho. Um cliente cujo saldo de packs chegou a 0 (gastou o
+  // último crédito) tem a sua ÚLTIMA marcação ativa marcada aqui, para
+  // alertar o treinador de que aquele cliente fica sem sessões.
+  const lastCreditIds = new Set<string>();
+  {
     const clientIds = Array.from(
       new Set((bookings ?? []).map((b: any) => b.client_id).filter(Boolean)),
     );
@@ -193,6 +198,32 @@ async function CalendarView({
           row.client_id,
           (sessionsLeftMap.get(row.client_id) ?? 0) + Number(row.sessions_remaining ?? 0),
         );
+      }
+
+      // Clientes com saldo de packs == 0 (último crédito gasto). Têm de
+      // ter um registo de saldo (>= 1 pack confirmado) — um cliente sem
+      // packs (ex.: cortesia) não entra no mapa e não é sinalizado.
+      const zeroClients = clientIds.filter(
+        (id: string) => sessionsLeftMap.get(id) === 0,
+      );
+      if (zeroClients.length > 0) {
+        // A ÚLTIMA marcação ativa (mais tardia no tempo) de cada cliente
+        // sem saldo é a "sessão do último crédito". Procuramos sem
+        // limite de data para apanhar a última real, mesmo fora da
+        // janela visível.
+        const { data: lastRows } = await supabase
+          .from("bookings")
+          .select("id, client_id, starts_at")
+          .in("client_id", zeroClients)
+          .in("trainer_id", scope)
+          .in("status", ["booked", "confirmed"])
+          .order("starts_at", { ascending: false });
+        const seen = new Set<string>();
+        for (const row of (lastRows ?? []) as any[]) {
+          if (seen.has(row.client_id)) continue; // só a mais tardia por cliente
+          seen.add(row.client_id);
+          lastCreditIds.add(row.id);
+        }
       }
     }
   }
@@ -262,7 +293,7 @@ async function CalendarView({
   return (
     <>
       {view === "day" && (
-        <DayView day={day} bookings={bookings ?? []} blocks={allBlocks} reserved={reserved ?? []} notesMap={notesMap} />
+        <DayView day={day} bookings={bookings ?? []} blocks={allBlocks} reserved={reserved ?? []} notesMap={notesMap} lastCreditIds={lastCreditIds} />
       )}
       {view === "week" && (
         <WeekView
@@ -272,6 +303,7 @@ async function CalendarView({
           reserved={reserved ?? []}
           notesMap={notesMap}
           sessionsLeftMap={sessionsLeftMap}
+          lastCreditIds={lastCreditIds}
           canBook={canBook}
           avail={availMap}
           prevHref={`/admin/agenda?view=week&d=${isoDate(stepBack("week", day))}`}
@@ -279,18 +311,18 @@ async function CalendarView({
         />
       )}
       {view === "month" && (
-        <MonthView gridStart={rangeStart} anchor={day} bookings={bookings ?? []} blocks={allBlocks} reserved={reserved ?? []} />
+        <MonthView gridStart={rangeStart} anchor={day} bookings={bookings ?? []} blocks={allBlocks} reserved={reserved ?? []} lastCreditIds={lastCreditIds} />
       )}
     </>
   );
 }
 
-function BookingItem({ b, note }: { b: any; note?: { body: string } | null }) {
+function BookingItem({ b, note, isLastCredit = false }: { b: any; note?: { body: string } | null; isLastCredit?: boolean }) {
   return (
-    <li className="rounded-md bg-bone-100 p-2 text-xs">
+    <li className={`rounded-md bg-bone-100 p-2 text-xs ${isLastCredit ? "ring-2 ring-inset ring-red-500" : ""}`}>
       <div className="font-semibold tabular-nums">{formatTime(b.starts_at)}</div>
       <div className="mt-0.5">{b.profiles?.full_name ?? "—"}</div>
-      <div className="mt-1">
+      <div className="mt-1 flex flex-wrap items-center gap-1">
         <span
           className={
             b.status === "confirmed"
@@ -304,6 +336,11 @@ function BookingItem({ b, note }: { b: any; note?: { body: string } | null }) {
         >
           {(BOOKING_STATUS as any)[b.status] ?? b.status}
         </span>
+        {isLastCredit && (
+          <span className="inline-flex items-center gap-1 rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
+            <span className="h-1.5 w-1.5 rounded-full bg-red-500" /> Último crédito
+          </span>
+        )}
       </div>
       {(b.status === "booked" || b.status === "confirmed") && (
         <div className="mt-2 flex flex-wrap gap-1">
@@ -355,12 +392,14 @@ function DayView({
   blocks,
   reserved,
   notesMap,
+  lastCreditIds,
 }: {
   day: Date;
   bookings: any[];
   blocks: any[];
   reserved: any[];
   notesMap: Map<string, any>;
+  lastCreditIds: Set<string>;
 }) {
   const dayBookings = bookings.filter((b) => sameDay(new Date(b.starts_at), day));
   const dayBlocks = blocks.filter((b) => sameDay(new Date(b.starts_at), day));
@@ -392,7 +431,7 @@ function DayView({
             <li key={`${it.kind}-${it.data.id}`} className="grid grid-cols-[60px_1fr] gap-3 border-b border-ink-900/5 pb-2 last:border-0">
               <div className="text-xs font-medium text-ink-500 tabular-nums">{formatTime(it.at)}</div>
               {it.kind === "booking" ? (
-                <ul><BookingItem b={it.data} note={notesMap.get(it.data.id)} /></ul>
+                <ul><BookingItem b={it.data} note={notesMap.get(it.data.id)} isLastCredit={lastCreditIds.has(it.data.id)} /></ul>
               ) : it.kind === "reserved" ? (
                 <ReservedItem r={it.data} />
               ) : (
@@ -626,6 +665,7 @@ function WeekView({
   reserved,
   notesMap,
   sessionsLeftMap,
+  lastCreditIds,
   canBook,
   avail,
   prevHref,
@@ -637,6 +677,7 @@ function WeekView({
   reserved: any[];
   notesMap: Map<string, any>;
   sessionsLeftMap: Map<string, number>;
+  lastCreditIds: Set<string>;
   canBook: boolean;
   avail: AvailMap;
   prevHref: string;
@@ -861,6 +902,7 @@ function WeekView({
                       rowHeights={layout.heights}
                       snapMin={15}
                       sessionsLeft={sessionsLeftMap.get(b.client_id)}
+                      isLastCredit={lastCreditIds.has(b.id)}
                     />
                   );
                 })}
@@ -878,7 +920,7 @@ function WeekView({
 }
 
 
-function MonthView({ gridStart, anchor, bookings, blocks, reserved }: { gridStart: Date; anchor: Date; bookings: any[]; blocks: any[]; reserved: any[] }) {
+function MonthView({ gridStart, anchor, bookings, blocks, reserved, lastCreditIds }: { gridStart: Date; anchor: Date; bookings: any[]; blocks: any[]; reserved: any[]; lastCreditIds: Set<string> }) {
   const days = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
   const byDay = bucketByDay(bookings, blocks, reserved); // PERF (#5): 1 passagem
   const currentMonth = anchor.getMonth();
@@ -920,8 +962,13 @@ function MonthView({ gridStart, anchor, bookings, blocks, reserved }: { gridStar
                 {dayBookings.slice(0, 3).map((b) => (
                   <div
                     key={b.id}
-                    className="truncate whitespace-nowrap rounded bg-gold-50 px-0.5 py-0.5 text-[9px] leading-tight text-ink-900 tabular-nums sm:px-1 sm:text-[10px]"
+                    className={`truncate whitespace-nowrap rounded bg-gold-50 px-0.5 py-0.5 text-[9px] leading-tight text-ink-900 tabular-nums sm:px-1 sm:text-[10px] ${
+                      lastCreditIds.has(b.id) ? "ring-1 ring-inset ring-red-500" : ""
+                    }`}
                   >
+                    {lastCreditIds.has(b.id) && (
+                      <span className="mr-0.5 inline-block h-1.5 w-1.5 rounded-full bg-red-500 align-middle" />
+                    )}
                     <span>{formatTime(b.starts_at)}</span>
                     <span className="hidden sm:inline">
                       {" "}
