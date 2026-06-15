@@ -362,7 +362,7 @@ export function BookingBlock({
       ref={ref}
       data-event-block
       className={`absolute left-0.5 right-0.5 overflow-hidden rounded border text-[10px] transition-colors ${tone} ${lastCreditRing} ${
-        overlap ? "!border-2 !border-amber-500" : ""
+        overlap ? "booking-overlap-block !border-2 !border-amber-500" : ""
       } ${draggable ? "cursor-grab active:cursor-grabbing" : ""}`}
       style={{
         ...style,
