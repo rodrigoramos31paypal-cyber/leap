@@ -32,12 +32,16 @@ export function BookingDialog({
   defaultDuration,
   viewedDate,
   packs,
+  hideTrigger = false,
 }: {
   trainerId: string;
   durations: number[];
   defaultDuration: number;
   viewedDate: string; // ISO yyyy-mm-dd
   packs: PackLite[];
+  // Quando true, não renderiza o botão "Nova marcação" — o diálogo
+  // só abre via evento `agenda:newbooking` (clique num slot da grelha).
+  hideTrigger?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -211,16 +215,18 @@ export function BookingDialog({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => {
-          reset();
-          setOpen(true);
-        }}
-        className="btn-primary inline-flex items-center gap-1.5"
-      >
-        <CalendarPlus size={16} /> Nova marcação
-      </button>
+      {!hideTrigger && (
+        <button
+          type="button"
+          onClick={() => {
+            reset();
+            setOpen(true);
+          }}
+          className="btn-primary inline-flex items-center gap-1.5"
+        >
+          <CalendarPlus size={16} /> Nova marcação
+        </button>
+      )}
 
       {open && (
         <div
