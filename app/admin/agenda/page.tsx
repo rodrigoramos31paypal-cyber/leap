@@ -893,7 +893,11 @@ function WeekView({
                   // coluna mais baixa livre (greedy + reuso quando uma
                   // sessão termina antes de a próxima começar).
                   const act = dayBookings
-                    .filter((x: any) => x.status === "booked" || x.status === "confirmed")
+                    // Inclui no_show: uma falta tambem ocupa o slot, por isso
+                    // tem de entrar no calculo de sobreposicao (colunas/z-index)
+                    // — senao uma sessao nova largada por cima tapava a falta em
+                    // vez de a mostrar lado-a-lado/atras.
+                    .filter((x: any) => x.status === "booked" || x.status === "confirmed" || x.status === "no_show")
                     .map((x: any) => ({
                       id: x.id,
                       s: new Date(x.starts_at).getTime(),
