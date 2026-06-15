@@ -8,12 +8,13 @@ import { NoteEditor } from "@/components/note-editor";
 import { getMyNotesMapForBookings } from "@/lib/notes";
 import { getAccessibleTrainerIds } from "@/lib/trainer";
 import { GrantPackForm } from "./grant-pack-form";
+import { setClientBannedAction } from "./actions";
 
 export default async function ClientDetail({ params }: { params: { id: string } }) {
   const supabase = createClient();
-  const { data: profile } = await supabase
+  const { data: profile } = await (supabase as any)
     .from("profiles")
-    .select("id, full_name, email, phone")
+    .select("id, full_name, email, phone, banned")
     .eq("id", params.id)
     .single();
   if (!profile) {
@@ -74,6 +75,28 @@ export default async function ClientDetail({ params }: { params: { id: string } 
           <NotebookPen size={12} /> Ver minhas notas deste cliente
         </Link>
       </div>
+
+      {/* Suspensão de conta — bloqueia a compra de packs (qualquer método). */}
+      {profile.banned && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+          Conta suspensa — este cliente não consegue comprar packs.
+        </div>
+      )}
+      {!isDeleted && (
+        <form action={setClientBannedAction}>
+          <input type="hidden" name="clientId" value={profileId} />
+          <input type="hidden" name="banned" value={profile.banned ? "false" : "true"} />
+          <button
+            className={
+              profile.banned
+                ? "btn-primary text-xs"
+                : "btn-outline border-red-200 text-xs text-red-700 hover:bg-red-50"
+            }
+          >
+            {profile.banned ? "Reativar conta" : "Suspender conta (bloquear compras)"}
+          </button>
+        </form>
+      )}
 
       {/* Dupla escondida — mostramos apenas o total. */}
       <div className="grid gap-3 sm:grid-cols-1">
