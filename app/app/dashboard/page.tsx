@@ -95,41 +95,26 @@ export default async function ClientDashboard() {
     presenca = tot > 0 ? Math.round((attended / tot) * 100) : null;
   }
 
-  // ── Barra "O teu progresso": progresso de sessões USADAS no pack.
-  // 0 usadas → 0% (só fundo cinza). A cada marcação sobe (25/50/75/100% num pack de 4).
-  // Pack esgotado (0 restantes) → mantém 100% até a ÚLTIMA sessão marcada TERMINAR;
-  // a partir do fim dessa sessão a barra fica vazia (cinza).
-  let barPack = latestPack as any | undefined;
-  if (!barPack) {
-    const consumed = ((latestPackRows ?? []) as any[]).find(
-      (p) =>
-        p.sessions_remaining === 0 &&
-        (!p.expires_at || new Date(p.expires_at).getTime() >= nowMs),
-    );
-    if (consumed) {
-      const { data: lastBooking } = await supabase
-        .from("bookings")
-        .select("ends_at")
-        .eq("purchase_id", consumed.id)
-        .in("status", ["booked", "confirmed"])
-        .order("ends_at", { ascending: false })
-        .limit(1);
-      const lastEndMs = (lastBooking ?? [])[0]?.ends_at
-        ? new Date((lastBooking as any)[0].ends_at).getTime()
-        : null;
-      // Ainda dentro (ou antes do fim) da última sessão → mostra 100%.
-      if (lastEndMs && nowMs < lastEndMs) barPack = consumed;
-    }
+  // Barra "O teu progresso": progresso de sessoes FINALIZADAS no pack atual.
+  // A barra reflete o pack comprado mais recente. Uma sessao so conta quando esta
+  // FINALIZADA (1 minuto depois do fim do horario marcado, ends_at), nao quando e
+  // marcada. Pack de 4: 0% ate a 1a sessao acabar -> 25 / 50 / 75 / 100%.
+  // Quando a ultima sessao termina mantem-se a 100% ate ser comprado um novo pack;
+  // o novo pack (0 sessoes finalizadas) recomeca em 0%.
+  const barPack = ((latestPackRows ?? []) as any[])[0] as any | undefined;
+  let packPct = 0;
+  if (barPack && barPack.sessions_total > 0) {
+    const { data: packBookings } = await supabase
+      .from("bookings")
+      .select("ends_at")
+      .eq("purchase_id", barPack.id)
+      .in("status", ["booked", "confirmed", "no_show"]);
+    const finalizeBeforeMs = nowMs - 60_000; // finalizada 1 min apos o fim
+    const finalized = ((packBookings ?? []) as any[]).filter(
+      (b) => b.ends_at && new Date(b.ends_at).getTime() <= finalizeBeforeMs,
+    ).length;
+    packPct = Math.min(100, Math.round((finalized / barPack.sessions_total) * 100));
   }
-
-  const packPct =
-    barPack && barPack.sessions_total > 0
-      ? Math.round(
-          ((barPack.sessions_total - barPack.sessions_remaining) /
-            barPack.sessions_total) *
-            100,
-        )
-      : 0;
 
   return (
     <div className="space-y-3">
@@ -289,4 +274,36 @@ export default async function ClientDashboard() {
           <Link href="/app/historico" className="text-xs font-medium text-gold-600 hover:text-gold-700">Ver tudo</Link>
         </div>
         {(!recentPast || recentPast.length === 0) ? (
-          <div className="card p-5 text-center text-sm text
+          <div className="card p-5 text-center text-sm text-ink-500">Ainda sem sessões passadas.</div>
+        ) : (
+          <ul className="space-y-2">
+            {(recentPast as any[]).map((b) => (
+              <li key={b.id}>
+                <Link href={`/app/sessao/${b.id}`} className="card flex items-center justify-between gap-3 p-4 hover:border-gold-400">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold">{formatDateTime(b.starts_at)}</div>
+                    <div className="text-xs text-ink-500 capitalize">{b.session_type}</div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <StatusChip status={b.status} />
+                    <ChevronRight size={16} className="text-ink-500" />
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function StatusChip({ status }: { status: string }) {
+  const map: Record<string, string> = {
+    booked: "chip-gold",
+    confirmed: "chip-ok",
+    cancelled: "chip-mute",
+    no_show: "chip-danger",
+  };
+  return <span className={map[status] ?? "chip-mute"}>{(BOOKING_STATUS as any)[status] ?? status}</span>;
+}
