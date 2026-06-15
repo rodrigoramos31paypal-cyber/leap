@@ -113,6 +113,34 @@ export async function getAvailableSlots(args: {
     busy.push({ start: new Date(b.starts_at!).getTime(), end: new Date(b.ends_at!).getTime() });
   }
 
+  // ── Bloqueios RECORRENTES (semanais) ────────────────────────────
+  // Repetem-se no mesmo dia-da-semana/horas até serem removidos. Não se
+  // aplicam num dia concreto se houver um "skip" para essa data (o
+  // trainer limpou/ajustou a recorrência nesse dia).
+  const dateStr = `${y}-${String(mo + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  const [{ data: recurring }, { data: skips }] = await Promise.all([
+    (supabase as any)
+      .from("public_recurring_blocks")
+      .select("start_time, end_time")
+      .eq("trainer_id", trainerId)
+      .eq("day_of_week", dow),
+    (supabase as any)
+      .from("public_recurring_block_skips")
+      .select("skip_date")
+      .eq("trainer_id", trainerId)
+      .eq("skip_date", dateStr),
+  ]);
+  if (((skips ?? []) as any[]).length === 0) {
+    for (const rb of (recurring ?? []) as any[]) {
+      const [rsh, rsm] = String(rb.start_time).split(":").map(Number);
+      const [reh, rem] = String(rb.end_time).split(":").map(Number);
+      busy.push({
+        start: wallToUtc(y, mo, d, rsh, rsm).getTime(),
+        end: wallToUtc(y, mo, d, reh, rem).getTime(),
+      });
+    }
+  }
+
   const slots: Slot[] = [];
   const slotMs = durationMin * 60_000;
   const stepMs = (durationMin + buffer) * 60_000;

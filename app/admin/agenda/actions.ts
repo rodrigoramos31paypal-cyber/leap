@@ -437,3 +437,143 @@ export async function addBlockQuickAction(formData: FormData) {
   setFlash("Bloqueio criado");
   revalidateAvailabilityViews();
 }
+
+// ════════════════════════════════════════════════════════════════
+// createBusyAction · novo separador "Ocupado" no diálogo da Agenda.
+// Marca um intervalo de horas como indisponível para marcações de
+// clientes (o trainer pode sempre sobrepor uma sessão por cima).
+//
+//   • mode = "single"    → bloqueio pontual só naquele dia
+//                          (trainer_blocked_times). Se replaceRecurring
+//                          estiver ligado, cria também um "skip" para
+//                          limpar a recorrência nesse dia (permite
+//                          ajustar a recorrência num dia específico).
+//   • mode = "recurring" → regra semanal indefinida para os dias-da-
+//                          semana escolhidos (trainer_recurring_blocks).
+// ════════════════════════════════════════════════════════════════
+export async function createBusyAction(
+  formData: FormData,
+): Promise<{ ok?: true; error?: string }> {
+  const trainerId = String(formData.get("trainerId") ?? "");
+  const mode = String(formData.get("mode") ?? "single"); // "single" | "recurring"
+  const date = String(formData.get("date") ?? "");
+  const from = String(formData.get("from") ?? "");
+  const to = String(formData.get("to") ?? "");
+  const reasonRaw = String(formData.get("reason") ?? "").trim().slice(0, 200);
+  const reason = reasonRaw.length > 0 ? reasonRaw : null;
+
+  if (!trainerId) return { error: "Treinador em falta." };
+  if (!/^\d{2}:\d{2}$/.test(from) || !/^\d{2}:\d{2}$/.test(to)) {
+    return { error: "Indica as horas de início e fim." };
+  }
+  if (to <= from) return { error: "A hora de fim tem de ser depois do início." };
+
+  // SEC: o trainerId tem de estar no scope do utilizador autenticado.
+  const accessible = await getAccessibleTrainerIds();
+  if (!accessible.includes(trainerId)) {
+    return { error: "Sem permissão para este treinador." };
+  }
+
+  const supabase = createClient();
+
+  if (mode === "recurring") {
+    // Dias-da-semana (0=domingo … 6=sábado). Default: o dia clicado.
+    let weekdays = String(formData.get("weekdays") ?? "")
+      .split(",")
+      .map((s) => parseInt(s.trim(), 10))
+      .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6);
+    if (weekdays.length === 0 && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      weekdays = [new Date(date + "T00:00:00Z").getUTCDay()];
+    }
+    if (weekdays.length === 0) return { error: "Escolhe pelo menos um dia da semana." };
+
+    const rows = Array.from(new Set(weekdays)).map((dow) => ({
+      trainer_id: trainerId,
+      day_of_week: dow,
+      start_time: from,
+      end_time: to,
+      reason,
+    }));
+    const { error } = await (supabase as any).from("trainer_recurring_blocks").insert(rows);
+    if (error) {
+      logError("createBusyAction:recurring", error);
+      return { error: "Não foi possível criar o horário ocupado." };
+    }
+    setFlash("Horário ocupado (recorrente) criado");
+    revalidateAvailabilityViews();
+    return { ok: true };
+  }
+
+  // single
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "Indica o dia." };
+  const start = lisbonWallClockToUTC(date, from);
+  const end = lisbonWallClockToUTC(date, to);
+  if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+    return { error: "Data ou horas inválidas." };
+  }
+
+  const { error: insErr } = await supabase.from("trainer_blocked_times").insert({
+    trainer_id: trainerId,
+    starts_at: start.toISOString(),
+    ends_at: end.toISOString(),
+    reason,
+  });
+  if (insErr) {
+    logError("createBusyAction:single", insErr);
+    return { error: "Não foi possível criar o horário ocupado." };
+  }
+
+  // Substituir a recorrência neste dia → cria um "skip" para a data.
+  const replaceRecurring = formData.get("replaceRecurring") === "true";
+  if (replaceRecurring) {
+    await (supabase as any)
+      .from("trainer_recurring_block_skips")
+      .upsert({ trainer_id: trainerId, skip_date: date }, { onConflict: "trainer_id,skip_date" });
+  }
+
+  setFlash("Horário ocupado criado");
+  revalidateAvailabilityViews();
+  return { ok: true };
+}
+
+// Remove uma regra recorrente inteira (todas as semanas).
+export async function deleteRecurringBlockAction(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const supabase = createClient();
+  const { data: rb } = await (supabase as any)
+    .from("trainer_recurring_blocks")
+    .select("trainer_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!rb) {
+    setFlash("Recorrência não encontrada", "error");
+    return;
+  }
+  const accessible = await getAccessibleTrainerIds();
+  if (!accessible.includes((rb as any).trainer_id)) {
+    setFlash("Sem permissão para remover esta recorrência", "error");
+    return;
+  }
+  await (supabase as any).from("trainer_recurring_blocks").delete().eq("id", id);
+  setFlash("Recorrência removida");
+  revalidateAvailabilityViews();
+}
+
+// Limpa a recorrência só num dia concreto (cria um "skip" para a data).
+export async function skipRecurringDateAction(formData: FormData) {
+  const trainerId = String(formData.get("trainerId") ?? "");
+  const date = String(formData.get("date") ?? "");
+  if (!trainerId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  const accessible = await getAccessibleTrainerIds();
+  if (!accessible.includes(trainerId)) {
+    setFlash("Sem permissão", "error");
+    return;
+  }
+  const supabase = createClient();
+  await (supabase as any)
+    .from("trainer_recurring_block_skips")
+    .upsert({ trainer_id: trainerId, skip_date: date }, { onConflict: "trainer_id,skip_date" });
+  setFlash("Recorrência limpa neste dia");
+  revalidateAvailabilityViews();
+}

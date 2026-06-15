@@ -49,9 +49,8 @@ export function BookingBlock({
   note,
   style,
   draggable = false,
-  hourStart = 7,
-  hourEnd = 22,
-  hourHeight = 56,
+  rowTops,
+  rowHeights,
   snapMin = 15,
   sessionsLeft,
 }: {
@@ -59,9 +58,11 @@ export function BookingBlock({
   note?: { body: string } | null;
   style: React.CSSProperties;
   draggable?: boolean;
-  hourStart?: number;
-  hourEnd?: number;
-  hourHeight?: number;
+  // Layout de altura variável (24 horas), partilhado com a grelha em
+  // page.tsx — necessário para o arrasto mapear px↔hora correctamente
+  // mesmo com linhas encolhidas.
+  rowTops: number[];
+  rowHeights: number[];
   snapMin?: number;
   // Saldo de sessões do cliente (soma de purchases confirmed/não-expiradas).
   // `undefined` quando não foi pré-carregado; `0` significa zero a sério.
@@ -86,6 +87,25 @@ export function BookingBlock({
     : 60;
   const originIso = isoDateOf(startDate);
   const originTime = hhmm(startDate.getHours() * 60 + startDate.getMinutes());
+
+  // ── Mapeamento px↔minutos com linhas de altura variável ──────────
+  function minutesToY(totalMin: number): number {
+    const clamped = Math.max(0, Math.min(24 * 60, totalMin));
+    const h = Math.min(23, Math.floor(clamped / 60));
+    const frac = (clamped - h * 60) / 60;
+    return rowTops[h] + frac * rowHeights[h];
+  }
+  function yToMinutes(y: number): number {
+    let h = 23;
+    for (let i = 0; i < 24; i++) {
+      if (y < rowTops[i] + rowHeights[i]) {
+        h = i;
+        break;
+      }
+    }
+    const frac = Math.min(1, Math.max(0, (y - rowTops[h]) / rowHeights[h]));
+    return h * 60 + frac * 60;
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -128,20 +148,22 @@ export function BookingBlock({
       col = best;
     }
     const r = col.getBoundingClientRect();
-    const totalMin = (hourEnd - hourStart) * 60;
-    const rawMin = ((clientY - r.top) / hourHeight) * 60;
+    const totalMin = 24 * 60;
+    const rawMin = yToMinutes(clientY - r.top);
     let snapped = Math.round(rawMin / snapMin) * snapMin;
     snapped = Math.max(0, Math.min(Math.max(0, totalMin - durationMin), snapped));
-    const time = hhmm(hourStart * 60 + snapped);
+    const time = hhmm(snapped);
     const axis = document.querySelector<HTMLElement>("[data-timeaxis]");
     const axisLeft = axis ? axis.getBoundingClientRect().left : r.left - 44;
+    const top = r.top + minutesToY(snapped);
+    const bottom = r.top + minutesToY(snapped + durationMin);
     return {
       dateIso: col.dataset.daycol ?? originIso,
       time,
       colLeft: r.left,
       colWidth: r.width,
-      top: r.top + (snapped / 60) * hourHeight,
-      height: Math.max(20, (durationMin / 60) * hourHeight - 2),
+      top,
+      height: Math.max(20, bottom - top - 2),
       axisLeft,
     };
   }
@@ -363,13 +385,13 @@ export function BookingBlock({
       )}
 
       {open && (
-        // Bottom-sheet em mobile (items-end + rounded-top), modal centrado
-        // em desktop (sm:items-center + max-w + p-4). Espelha o pattern
-        // do BookingDialog. Resolve o overflow horizontal que acontecia
-        // quando o popover absoluto (w-64 = 256 px) era ancorado a um
-        // dia da direita e estendia para fora do ecrã.
+        // Modal centrado no ecrã (mobile e desktop). Antes era um
+        // bottom-sheet (items-end) em mobile; o cliente preferia o
+        // painel a aparecer ao centro. Resolve também o overflow
+        // horizontal que acontecia quando o popover absoluto era
+        // ancorado a um dia da direita e estendia para fora do ecrã.
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-ink-900/40 p-0 sm:items-center sm:p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 p-4"
           onPointerDown={(e) => {
             // Backdrop click fecha; cliques no card interno param aqui
             // via stopPropagation.
@@ -377,7 +399,7 @@ export function BookingBlock({
           }}
         >
           <div
-            className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white p-4 text-sm text-ink-900 shadow-xl dark:bg-ink-800 sm:max-w-sm sm:rounded-2xl"
+            className="max-h-[92vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-4 text-sm text-ink-900 shadow-xl dark:bg-ink-800"
             onPointerDown={(e) => e.stopPropagation()}
           >
           <div className="mb-3 flex items-center justify-between gap-2">

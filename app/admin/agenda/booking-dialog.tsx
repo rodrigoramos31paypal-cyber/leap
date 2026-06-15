@@ -13,10 +13,10 @@
 // ════════════════════════════════════════════════════════════════
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarPlus, Package, Search, UserPlus, X } from "lucide-react";
+import { Ban, CalendarPlus, Package, Search, UserPlus, X } from "lucide-react";
 import { eur } from "@/lib/utils";
 import { searchClientsAction, type ClientHit } from "@/app/admin/clientes/search-action";
-import { createAgendaBookingAction } from "./actions";
+import { createAgendaBookingAction, createBusyAction } from "./actions";
 
 type PackLite = { id: string; name: string; sessions: number; price_cents: number };
 
@@ -25,6 +25,20 @@ const TIME_OPTIONS = Array.from({ length: 30 }, (_, i) => {
   const m = (i % 2) * 30;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }); // 07:00 → 21:30
+
+// Horas 00:00 → 23:30 (separador "Ocupado", que cobre o dia todo).
+const BUSY_TIMES = Array.from({ length: 48 }, (_, i) => {
+  const h = Math.floor(i / 2);
+  const m = (i % 2) * 30;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+});
+
+// 0 = domingo … 6 = sábado (convenção de trainer_availability / Postgres dow).
+const WEEKDAY_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+function weekdayOf(iso: string): number {
+  const d = new Date(iso + "T00:00:00Z");
+  return Number.isNaN(d.getTime()) ? 1 : d.getUTCDay();
+}
 
 export function BookingDialog({
   trainerId,
@@ -48,10 +62,21 @@ export function BookingDialog({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  // Separador principal: marcar uma sessão vs marcar tempo ocupado.
+  const [tab, setTab] = useState<"session" | "busy">("session");
+
   // Campos
   const [mode, setMode] = useState<"existing" | "new">("existing");
   const [date, setDate] = useState(viewedDate);
   const [time, setTime] = useState("08:00");
+
+  // Separador "Ocupado"
+  const [busyFrom, setBusyFrom] = useState("11:00");
+  const [busyTo, setBusyTo] = useState("17:00");
+  const [busyReason, setBusyReason] = useState("");
+  const [busyScope, setBusyScope] = useState<"single" | "recurring">("single");
+  const [busyWeekdays, setBusyWeekdays] = useState<Set<number>>(new Set([weekdayOf(viewedDate)]));
+  const [replaceRecurring, setReplaceRecurring] = useState(false);
   const [duration, setDuration] = useState(String(defaultDuration));
   const [sessionType, setSessionType] = useState<"individual" | "dupla">("individual");
   const [deduct, setDeduct] = useState(true);
@@ -77,6 +102,13 @@ export function BookingDialog({
   const [grantMethod, setGrantMethod] = useState("manual_mbway");
 
   function reset() {
+    setTab("session");
+    setBusyFrom("11:00");
+    setBusyTo("17:00");
+    setBusyReason("");
+    setBusyScope("single");
+    setBusyWeekdays(new Set([weekdayOf(viewedDate)]));
+    setReplaceRecurring(false);
     setMode("existing");
     setDate(viewedDate);
     setTime("08:00");
@@ -104,7 +136,10 @@ export function BookingDialog({
     function onNewBooking(e: Event) {
       const detail = (e as CustomEvent).detail as { date?: string; time?: string };
       reset();
-      if (detail?.date) setDate(detail.date);
+      if (detail?.date) {
+        setDate(detail.date);
+        setBusyWeekdays(new Set([weekdayOf(detail.date)]));
+      }
       if (detail?.time) setTime(detail.time);
       setOpen(true);
     }
@@ -213,6 +248,49 @@ export function BookingDialog({
     });
   }
 
+  function submitBusy() {
+    setError(null);
+    if (busyTo <= busyFrom) {
+      setError("A hora de fim tem de ser depois do início.");
+      return;
+    }
+    if (busyScope === "recurring" && busyWeekdays.size === 0) {
+      setError("Escolhe pelo menos um dia da semana.");
+      return;
+    }
+    const fd = new FormData();
+    fd.set("trainerId", trainerId);
+    fd.set("mode", busyScope === "recurring" ? "recurring" : "single");
+    fd.set("date", date);
+    fd.set("from", busyFrom);
+    fd.set("to", busyTo);
+    fd.set("reason", busyReason.trim());
+    if (busyScope === "recurring") {
+      fd.set("weekdays", Array.from(busyWeekdays).join(","));
+    } else if (replaceRecurring) {
+      fd.set("replaceRecurring", "true");
+    }
+    startTransition(async () => {
+      const res = await createBusyAction(fd);
+      if (res?.error) {
+        setError(res.error);
+        return;
+      }
+      setOpen(false);
+      reset();
+      router.refresh();
+    });
+  }
+
+  function toggleWeekday(dow: number) {
+    setBusyWeekdays((prev) => {
+      const next = new Set(prev);
+      if (next.has(dow)) next.delete(dow);
+      else next.add(dow);
+      return next;
+    });
+  }
+
   return (
     <>
       {!hideTrigger && (
@@ -230,14 +308,16 @@ export function BookingDialog({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-ink-900/40 p-0 sm:items-center sm:p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 p-4"
           onPointerDown={(e) => {
             if (e.target === e.currentTarget) setOpen(false);
           }}
         >
-          <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl dark:bg-ink-800 sm:max-w-md sm:rounded-2xl">
+          <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-xl dark:bg-ink-800">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-display text-lg font-bold">Marcar sessão</h2>
+              <h2 className="font-display text-lg font-bold">
+                {tab === "busy" ? "Marcar indisponível" : "Marcar sessão"}
+              </h2>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
@@ -248,6 +328,30 @@ export function BookingDialog({
               </button>
             </div>
 
+            {/* Separador principal: Sessão vs Ocupado */}
+            <div className="mb-4 inline-flex w-full items-center gap-1 rounded-lg border border-ink-900/10 bg-bone-50 p-1 text-sm dark:border-white/10 dark:bg-ink-900">
+              <button
+                type="button"
+                onClick={() => { setTab("session"); setError(null); }}
+                className={`flex-1 rounded-md px-3 py-1.5 font-medium transition ${
+                  tab === "session" ? "bg-ink-900 text-white dark:bg-bone-50 dark:text-ink-900" : "text-ink-600"
+                }`}
+              >
+                Sessão
+              </button>
+              <button
+                type="button"
+                onClick={() => { setTab("busy"); setError(null); }}
+                className={`flex-1 rounded-md px-3 py-1.5 font-medium transition ${
+                  tab === "busy" ? "bg-ink-900 text-white dark:bg-bone-50 dark:text-ink-900" : "text-ink-600"
+                }`}
+              >
+                Ocupado
+              </button>
+            </div>
+
+            {tab === "session" && (
+            <>
             {/* Modo: cliente existente vs novo */}
             <div className="mb-4 inline-flex w-full items-center gap-1 rounded-lg border border-ink-900/10 bg-bone-50 p-1 text-sm dark:border-white/10 dark:bg-ink-900">
               <button
@@ -547,6 +651,129 @@ export function BookingDialog({
                 </span>
               </span>
             </label>
+            </>
+            )}
+
+            {tab === "busy" && (
+              <div className="mb-4 space-y-4">
+                <p className="rounded-lg border border-ink-900/10 bg-bone-50 px-3 py-2 text-[12px] text-ink-600 dark:border-white/10 dark:bg-ink-900">
+                  Marca um intervalo como indisponível para marcações de clientes. Podes
+                  sempre sobrepor uma sessão por cima, arrastando ou clicando.
+                </p>
+
+                {/* Intervalo de horas */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="min-w-0">
+                    <label className="label" htmlFor="busy_from">Das</label>
+                    <select
+                      id="busy_from"
+                      value={busyFrom}
+                      onChange={(e) => setBusyFrom(e.target.value)}
+                      className="input"
+                    >
+                      {BUSY_TIMES.map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="min-w-0">
+                    <label className="label" htmlFor="busy_to">Até</label>
+                    <select
+                      id="busy_to"
+                      value={busyTo}
+                      onChange={(e) => setBusyTo(e.target.value)}
+                      className="input"
+                    >
+                      {BUSY_TIMES.slice(1).map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Âmbito: só este dia vs recorrente */}
+                <div className="inline-flex w-full items-center gap-1 rounded-lg border border-ink-900/10 bg-bone-50 p-1 text-sm dark:border-white/10 dark:bg-ink-900">
+                  <button
+                    type="button"
+                    onClick={() => setBusyScope("single")}
+                    className={`flex-1 rounded-md px-3 py-1.5 font-medium transition ${
+                      busyScope === "single" ? "bg-ink-900 text-white dark:bg-bone-50 dark:text-ink-900" : "text-ink-600"
+                    }`}
+                  >
+                    Só este dia
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBusyScope("recurring")}
+                    className={`flex-1 rounded-md px-3 py-1.5 font-medium transition ${
+                      busyScope === "recurring" ? "bg-ink-900 text-white dark:bg-bone-50 dark:text-ink-900" : "text-ink-600"
+                    }`}
+                  >
+                    Repetir todas as semanas
+                  </button>
+                </div>
+
+                {busyScope === "single" ? (
+                  <>
+                    <p className="text-[12px] text-ink-500">
+                      Dia: <span className="font-medium text-ink-700">{date}</span>
+                    </p>
+                    <label className="flex items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={replaceRecurring}
+                        onChange={(e) => setReplaceRecurring(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 rounded border-ink-900/30"
+                      />
+                      <span>
+                        <span className="font-medium">Substituir o horário ocupado recorrente neste dia</span>
+                        <span className="block text-[11px] text-ink-500">
+                          Liga isto se queres ajustar/limpar a recorrência apenas neste dia.
+                        </span>
+                      </span>
+                    </label>
+                  </>
+                ) : (
+                  <div>
+                    <div className="label">Repetir em</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {WEEKDAY_LABELS.map((lbl, dow) => {
+                        const on = busyWeekdays.has(dow);
+                        return (
+                          <button
+                            key={dow}
+                            type="button"
+                            onClick={() => toggleWeekday(dow)}
+                            className={`rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${
+                              on
+                                ? "border-ink-900 bg-ink-900 text-white dark:border-bone-50 dark:bg-bone-50 dark:text-ink-900"
+                                : "border-ink-900/15 text-ink-600 hover:bg-ink-900/5"
+                            }`}
+                          >
+                            {lbl}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-1.5 text-[11px] text-ink-500">
+                      Repete indefinidamente até removeres a recorrência.
+                    </p>
+                  </div>
+                )}
+
+                {/* Motivo */}
+                <div>
+                  <label className="label" htmlFor="busy_reason">Motivo (opcional)</label>
+                  <input
+                    id="busy_reason"
+                    value={busyReason}
+                    onChange={(e) => setBusyReason(e.target.value)}
+                    placeholder="Ex: outro emprego, almoço, formação…"
+                    className="input"
+                  />
+                </div>
+              </div>
+            )}
 
             {error && (
               <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
@@ -563,15 +790,27 @@ export function BookingDialog({
               >
                 Cancelar
               </button>
-              <button
-                type="button"
-                onClick={submit}
-                disabled={pending}
-                className="btn-primary inline-flex items-center gap-1.5"
-              >
-                <CalendarPlus size={16} />
-                {pending ? "A marcar…" : "Marcar"}
-              </button>
+              {tab === "busy" ? (
+                <button
+                  type="button"
+                  onClick={submitBusy}
+                  disabled={pending}
+                  className="btn-primary inline-flex items-center gap-1.5"
+                >
+                  <Ban size={16} />
+                  {pending ? "A guardar…" : "Marcar ocupado"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={submit}
+                  disabled={pending}
+                  className="btn-primary inline-flex items-center gap-1.5"
+                >
+                  <CalendarPlus size={16} />
+                  {pending ? "A marcar…" : "Marcar"}
+                </button>
+              )}
             </div>
           </div>
         </div>
