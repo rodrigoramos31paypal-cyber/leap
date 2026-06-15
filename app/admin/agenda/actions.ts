@@ -487,7 +487,8 @@ export async function createBusyAction(
     }
     if (weekdays.length === 0) return { error: "Escolhe pelo menos um dia da semana." };
 
-    const rows = Array.from(new Set(weekdays)).map((dow) => ({
+    const uniqueWeekdays = Array.from(new Set(weekdays));
+    const rows = uniqueWeekdays.map((dow) => ({
       trainer_id: trainerId,
       day_of_week: dow,
       start_time: from,
@@ -499,6 +500,28 @@ export async function createBusyAction(
       logError("createBusyAction:recurring", error);
       return { error: "Não foi possível criar o horário ocupado." };
     }
+
+    // Limpa "skips" futuros que caiam nos dias-da-semana agora marcados.
+    // Um skip é uma excepção "ignora a recorrência nesta data"; se sobrar
+    // de um teste antigo (ex: "Só hoje"), esconderia esta nova recorrência
+    // nessa data (era o motivo de hoje não aparecer). Removemos apenas os
+    // que coincidem com os dias agora marcados, de hoje em diante.
+    const todayIso = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Lisbon" }).format(new Date());
+    const { data: futureSkips } = await (supabase as any)
+      .from("trainer_recurring_block_skips")
+      .select("id, skip_date")
+      .eq("trainer_id", trainerId)
+      .gte("skip_date", todayIso);
+    const skipIdsToClear = ((futureSkips ?? []) as any[])
+      .filter((s) => uniqueWeekdays.includes(new Date(String(s.skip_date) + "T00:00:00Z").getUTCDay()))
+      .map((s) => s.id);
+    if (skipIdsToClear.length > 0) {
+      await (supabase as any)
+        .from("trainer_recurring_block_skips")
+        .delete()
+        .in("id", skipIdsToClear);
+    }
+
     setFlash("Horário ocupado (recorrente) criado");
     revalidateAvailabilityViews();
     return { ok: true };
