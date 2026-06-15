@@ -218,13 +218,103 @@ export async function toggleTrainerActiveAction(formData: FormData) {
   revalidateTeamViews();
 }
 
-export async function deleteTrainerAction(formData: FormData) {
-  await requireOwner();
-  const id = String(formData.get("id") ?? "");
-  const admin = createAdminClient();
-  // não apagamos auth.users para preservar histórico; só remove trainer
-  const { error } = await admin.from("trainers").delete().eq("id", id);
-  if (error) { logError("deleteTrainerAction", error); setFlash("Não foi possível remover trainer", "error"); }
-  else setFlash("Trainer removido");
-  revalidateTeamViews();
+/**
+ * Remover trainer / Revogar admin.
+ *
+ * Regra (pedido do dono):
+ *   • NEGA se o trainer ainda tem sessões AGENDADAS (futuras e activas)
+ *     — primeiro cancela/conclui essas sessões.
+ *   • Caso contrário, despromove a conta a CLIENTE: perde acesso de
+ *     admin/trainer e passa a ver a app como um cliente normal. O
+ *     registo de trainer é apagado se estiver limpo, ou desactivado se
+ *     tiver histórico (marcações passadas / compras / séries — FK
+ *     restrict impede o delete), preservando o histórico.
+ *
+ * Usada tanto pelo botão "Remover" (trainers) como "Revogar admin"
+ * (contas owner).
+ */
+export async function demoteTrainerAction(formData: FormData) {
+  try {
+    const ownerId = await requireOwner();
+    const id = String(formData.get("id") ?? "");
+    if (!id) { setFlash("Trainer inválido.", "error"); return; }
+
+    const admin = createAdminClient();
+
+    // Carrega o trainer + perfil associado.
+    const { data: tr, error: trErr } = await admin
+      .from("trainers")
+      .select("id, profile_id, profiles:profile_id(full_name, role)")
+      .eq("id", id)
+      .maybeSingle();
+    if (trErr || !tr) {
+      logError("demoteTrainerAction:load", trErr);
+      setFlash("Trainer não encontrado.", "error");
+      return;
+    }
+    const t = tr as { id: string; profile_id: string; profiles: { full_name: string | null; role: string } | null };
+    const profileId = t.profile_id;
+    const role = t.profiles?.role ?? "trainer";
+    const name = t.profiles?.full_name ?? null;
+    const isOwner = role === "owner";
+
+    // Nunca despromover a própria conta.
+    if (profileId === ownerId) {
+      setFlash("Não podes remover a tua própria conta.", "error");
+      return;
+    }
+
+    // 1) Sessões AGENDADAS (futuras + activas) → bloqueia.
+    const nowIso = new Date().toISOString();
+    const { count: scheduled } = await admin
+      .from("bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("trainer_id", id)
+      .in("status", ["booked", "confirmed"])
+      .gte("starts_at", nowIso);
+    if ((scheduled ?? 0) > 0) {
+      setFlash(
+        `Tem ${scheduled} sessão(ões) agendada(s). Cancela-as ou conclui antes de ${isOwner ? "revogar" : "remover"}.`,
+        "error",
+      );
+      return;
+    }
+
+    // 2) Despromove a conta a cliente.
+    const { error: roleErr } = await admin
+      .from("profiles")
+      .update({ role: "client" })
+      .eq("id", profileId);
+    if (roleErr) {
+      logError("demoteTrainerAction:demote", roleErr);
+      setFlash("Não foi possível remover.", "error");
+      return;
+    }
+
+    // 3) Histórico? (bookings/purchases/séries têm FK restrict → não dá delete)
+    const [{ count: bk }, { count: pu }, { count: se }] = await Promise.all([
+      admin.from("bookings").select("id", { count: "exact", head: true }).eq("trainer_id", id),
+      admin.from("purchases").select("id", { count: "exact", head: true }).eq("trainer_id", id),
+      admin.from("booking_series").select("id", { count: "exact", head: true }).eq("trainer_id", id),
+    ]);
+    const hasHistory = (bk ?? 0) > 0 || (pu ?? 0) > 0 || (se ?? 0) > 0;
+
+    if (hasHistory) {
+      // Preserva histórico: desactiva o registo de trainer.
+      await admin.from("trainers").update({ active: false }).eq("id", id);
+    } else {
+      // Limpo: remove o registo (cascata trata settings/horários/blocos).
+      await admin.from("trainers").delete().eq("id", id);
+    }
+
+    revalidateTeamViews();
+    setFlash(
+      isOwner
+        ? `Admin revogado — ${name ?? "a conta"} passou a cliente.`
+        : `Trainer removido — ${name ?? "a conta"} passou a cliente.`,
+    );
+  } catch (e) {
+    logError("demoteTrainerAction", e);
+    setFlash("Não foi possível remover.", "error");
+  }
 }
