@@ -11,11 +11,13 @@ import { getMyNotesMapForBookings } from "@/lib/notes";
 export default async function HistoricoPage({
   searchParams,
 }: {
-  searchParams: { tab?: string; ok?: string; f?: string };
+  searchParams: { tab?: string; ok?: string; f?: string; c?: string };
 }) {
   const tab = searchParams.tab === "compras" ? "compras" : "sessoes";
   const sessFilter: "todas" | "futuras" | "passadas" =
     searchParams.f === "futuras" || searchParams.f === "passadas" ? searchParams.f : "todas";
+  const compFilter: "todas" | "confirmadas" | "rejeitadas" =
+    searchParams.c === "confirmadas" || searchParams.c === "rejeitadas" ? searchParams.c : "todas";
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
@@ -54,13 +56,21 @@ export default async function HistoricoPage({
 
       {tab === "sessoes" && (
         <div className="flex flex-wrap gap-1.5">
-          <FilterChip label="Todas" f="todas" active={sessFilter === "todas"} />
-          <FilterChip label="Futuras" f="futuras" active={sessFilter === "futuras"} />
-          <FilterChip label="Passadas" f="passadas" active={sessFilter === "passadas"} />
+          <FilterChip label="Todas" href="/app/historico" active={sessFilter === "todas"} />
+          <FilterChip label="Futuras" href="/app/historico?f=futuras" active={sessFilter === "futuras"} />
+          <FilterChip label="Passadas" href="/app/historico?f=passadas" active={sessFilter === "passadas"} />
         </div>
       )}
 
-      {tab === "sessoes" ? <SessoesTab userId={user.id} filter={sessFilter} /> : <ComprasTab userId={user.id} />}
+      {tab === "compras" && (
+        <div className="flex flex-wrap gap-1.5">
+          <FilterChip label="Todas" href="/app/historico?tab=compras" active={compFilter === "todas"} />
+          <FilterChip label="Confirmadas" href="/app/historico?tab=compras&c=confirmadas" active={compFilter === "confirmadas"} />
+          <FilterChip label="Rejeitadas" href="/app/historico?tab=compras&c=rejeitadas" active={compFilter === "rejeitadas"} />
+        </div>
+      )}
+
+      {tab === "sessoes" ? <SessoesTab userId={user.id} filter={sessFilter} /> : <ComprasTab userId={user.id} filter={compFilter} />}
     </div>
   );
 }
@@ -78,10 +88,10 @@ function TabLink({ href, active, label }: { href: string; active: boolean; label
   );
 }
 
-function FilterChip({ label, f, active }: { label: string; f: string; active: boolean }) {
+function FilterChip({ label, href, active }: { label: string; href: string; active: boolean }) {
   return (
     <Link
-      href={f === "todas" ? "/app/historico" : `/app/historico?f=${f}`}
+      href={href}
       className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
         active
           ? "border-ink-900 bg-ink-900 text-white dark:border-bone-50 dark:bg-bone-50 dark:text-ink-900"
@@ -167,15 +177,18 @@ async function SessoesTab({ userId, filter }: { userId: string; filter: "todas" 
   );
 }
 
-async function ComprasTab({ userId }: { userId: string }) {
+async function ComprasTab({ userId, filter }: { userId: string; filter: "todas" | "confirmadas" | "rejeitadas" }) {
   const supabase = createClient();
   // PERF: limita explicitamente — antes era sem limite e podia trazer
   // o histórico todo do cliente. Os campos pedidos também foram
   // restringidos aos que a UI usa.
-  const { data: purchases } = await supabase
+  let query = supabase
     .from("purchases")
     .select("id, status, amount_cents, sessions_remaining, sessions_total, pack_snapshot, created_at")
-    .eq("client_id", userId)
+    .eq("client_id", userId);
+  if (filter === "confirmadas") query = query.eq("status", "confirmed");
+  else if (filter === "rejeitadas") query = query.eq("status", "rejected");
+  const { data: purchases } = await query
     .order("created_at", { ascending: false })
     .limit(50);
 

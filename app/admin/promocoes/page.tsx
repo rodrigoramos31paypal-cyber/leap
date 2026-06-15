@@ -70,7 +70,7 @@ export default async function AdminSlideshowPage() {
                 <input name="button_label" className="input" placeholder="Ex: Comprar agora" />
               </div>
               <div>
-                <label className="label">Link do botão (opcional)</label>
+                <label className="label">Link do slide (abre ao tocar)</label>
                 <input name="link_url" type="url" className="input" placeholder="https://..." />
               </div>
             </div>
@@ -140,7 +140,7 @@ export default async function AdminSlideshowPage() {
                       <input name="button_label" defaultValue={b.button_label ?? ""} className="input" />
                     </div>
                     <div>
-                      <label className="label">Link do botão</label>
+                      <label className="label">Link do slide (abre ao tocar)</label>
                       <input name="link_url" type="url" defaultValue={b.link_url ?? ""} className="input" />
                     </div>
                   </div>

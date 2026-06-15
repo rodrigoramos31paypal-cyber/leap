@@ -34,7 +34,7 @@ export function PromoCarousel({ banners }: { banners: PromoBanner[] }) {
           const card = (
             // Imagem do slide como fundo full-bleed; o texto fica à esquerda e
             // o botão à direita, com um gradiente (scrim) subtil do lado direito.
-            <div className="relative flex h-28 overflow-hidden rounded-2xl bg-ink-900 text-bone-50">
+            <div className="relative flex h-28 overflow-hidden rounded-2xl bg-ink-900 text-bone-50 transition active:scale-[0.99]">
               {b.image_url && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -58,7 +58,7 @@ export function PromoCarousel({ banners }: { banners: PromoBanner[] }) {
                   )}
                 </div>
                 {b.button_label && (
-                  <span className="inline-flex shrink-0 rounded-lg bg-gold-400 px-3 py-1.5 text-xs font-semibold text-ink-900">
+                  <span className="pointer-events-none inline-flex shrink-0 rounded-lg bg-gold-400 px-3 py-1.5 text-xs font-semibold text-ink-900">
                     {b.button_label}
                   </span>
                 )}
@@ -68,7 +68,7 @@ export function PromoCarousel({ banners }: { banners: PromoBanner[] }) {
           return (
             <div key={b.id} className="shrink-0 basis-full snap-center">
               {b.link_url ? (
-                <a href={b.link_url} target="_blank" rel="noopener noreferrer" className="block h-full">
+                <a href={b.link_url} target="_blank" rel="noopener noreferrer" className="block h-full cursor-pointer">
                   {card}
                 </a>
               ) : (
