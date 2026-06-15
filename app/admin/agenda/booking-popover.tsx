@@ -145,10 +145,20 @@ export function BookingBlock({
     const rect = container.getBoundingClientRect();
     const EDGE = 70; // px da margem que activa scroll
     const MAX_VEL = 12; // px por frame (~720 px/s a 60 fps)
+    // BUG-FIX: clampar as bordas efectivas à VIEWPORT. O container
+    // (max-h 75 vh) muitas vezes estende-se para fora da janela
+    // visível — `rect.bottom` pode ser > window.innerHeight, e como
+    // o `clientY` está limitado à viewport, a zona-bottom nunca era
+    // alcançada. Ao limitar `effectiveBottom` à viewport, garantimos
+    // que arrastar para o fundo do ecrã activa scroll-down.
+    const viewportBottom =
+      typeof window !== "undefined" ? window.innerHeight : rect.bottom;
+    const effectiveTop = Math.max(rect.top, 0);
+    const effectiveBottom = Math.min(rect.bottom, viewportBottom);
     // 50 px extra no topo cobrem o sticky day-header — se o cursor
     // entrar nessa zona já queremos scrollar para cima.
-    const topZone = rect.top + 50 + EDGE;
-    const bottomZone = rect.bottom - EDGE;
+    const topZone = effectiveTop + 50 + EDGE;
+    const bottomZone = effectiveBottom - EDGE;
     let vel = 0;
     if (clientY < topZone) {
       const dist = topZone - clientY;
