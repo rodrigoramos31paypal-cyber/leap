@@ -366,7 +366,7 @@ export function BookingBlock({
     <div
       ref={ref}
       data-event-block
-      className={`absolute left-0.5 right-0.5 overflow-hidden rounded border text-[10px] transition-colors ${tone} ${lastCreditRing} ${
+      className={`absolute left-0.5 right-0.5 overflow-hidden rounded border text-[10px] transition-colors select-none ${tone} ${lastCreditRing} ${
         overlap
           ? `booking-overlap-block ${
               // Sem !border-2: a borda fica na mesma espessura (1px) que
@@ -390,7 +390,13 @@ export function BookingBlock({
         // context criado pelo z-index do próprio bloco.
         ...(open ? { zIndex: 60 } : {}),
         touchAction: draggable ? "none" : undefined,
-      }}
+        // iOS: impede a seleção de texto / menu "callout" quando se
+        // carrega no bloco durante demasiado tempo (long-press), que
+        // antes pintava a página de azul e bloqueava o arrasto.
+        WebkitUserSelect: "none",
+        WebkitTouchCallout: "none",
+        userSelect: "none",
+      } as React.CSSProperties}
     >
       {isLastCredit && b.status !== "cancelled" && (
         <span
@@ -415,7 +421,7 @@ export function BookingBlock({
       >
         <div className="font-semibold tabular-nums leading-none text-[9px]">{formatTime(b.starts_at)}</div>
         <div
-          className={`${overlap ? "mt-0" : "mt-px"} break-words font-medium leading-[1.05] [overflow-wrap:anywhere]`}
+          className={`${overlap ? "mt-0" : "mt-px"} break-words font-medium leading-[1.2] [overflow-wrap:anywhere]`}
           style={{
             // Font responsivo: 6 px mínimo (mobile estreito) → 10 px
             // máximo (tablet+). Em 380 px mobile, 1.95vw ≈ 7.4 px
