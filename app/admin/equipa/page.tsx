@@ -24,6 +24,13 @@ export default async function EquipaPage() {
     .select("id, slug, active, bio, profile_id, profiles:profile_id(full_name, email, phone, role)")
     .order("slug");
 
+  // Só mostra staff actual. Contas despromovidas a cliente (via Remover /
+  // Revogar admin) mantêm o registo de trainer por causa do histórico de
+  // marcações/compras (FK), mas deixam de ser equipa — escondemo-las aqui.
+  const team = (trainers ?? []).filter(
+    (t: any) => t.profiles?.role === "owner" || t.profiles?.role === "trainer",
+  );
+
   return (
     <div className="space-y-5">
       <div>
@@ -85,7 +92,7 @@ export default async function EquipaPage() {
       </details>
 
       <ul className="space-y-2">
-        {(trainers ?? []).map((t: any) => (
+        {team.map((t: any) => (
           <li key={t.id} className="card p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -125,7 +132,7 @@ export default async function EquipaPage() {
             </div>
           </li>
         ))}
-        {(trainers?.length ?? 0) === 0 && (
+        {team.length === 0 && (
           <li className="card p-5 text-center text-sm text-ink-500">Sem trainers.</li>
            )}
       </ul>
