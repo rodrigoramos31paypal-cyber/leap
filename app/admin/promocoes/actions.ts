@@ -1,45 +1,166 @@
 "use server";
 
+import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getCurrentTrainerId, getAccessibleTrainerIds } from "@/lib/trainer";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
+
+const MAX_SLIDES = 3;
+const MAX_BYTES = 5 * 1024 * 1024;
+const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
+const BUCKET = "slideshow";
 
 function revalidate() {
   revalidatePath("/admin/promocoes");
   revalidatePath("/app/dashboard");
 }
 
+// Valida um ficheiro de imagem opcional. Devolve mensagem de erro ou null.
+function validateFile(file: File | null): string | null {
+  if (!file || file.size === 0) return null; // sem ficheiro = ok (opcional)
+  if (file.size > MAX_BYTES) return "Imagem demasiado grande (máx. 5 MB)";
+  if (!ALLOWED.includes(file.type)) return "Formato não suportado (usa JPG, PNG ou WEBP)";
+  return null;
+}
+
+// Faz upload da imagem para o bucket "slideshow" e devolve a URL pública
+// (com cache-busting) ou null em caso de erro.
+async function uploadSlideImage(trainerId: string, file: File): Promise<string | null> {
+  const admin = createAdminClient();
+  const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+  const path = `${trainerId}/${randomUUID()}.${ext}`;
+  const buf = Buffer.from(await file.arrayBuffer());
+  const { error } = await admin.storage.from(BUCKET).upload(path, buf, {
+    contentType: file.type,
+    upsert: true,
+    cacheControl: "3600",
+  });
+  if (error) {
+    logError("uploadSlideImage", error);
+    return null;
+  }
+  const { data } = admin.storage.from(BUCKET).getPublicUrl(path);
+  return `${data.publicUrl}?v=${Date.now()}`;
+}
+
+// Extrai o caminho dentro do bucket a partir da URL pública (para apagar).
+function storagePathFromUrl(url: string | null): string | null {
+  if (!url) return null;
+  const after = url.split(`/object/public/${BUCKET}/`)[1];
+  if (!after) return null;
+  return after.split("?")[0];
+}
+
 export async function createBannerAction(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const subtitle = String(formData.get("subtitle") ?? "").trim();
-  const imageUrl = String(formData.get("image_url") ?? "").trim();
   const buttonLabel = String(formData.get("button_label") ?? "").trim();
   const linkUrl = String(formData.get("link_url") ?? "").trim();
+  const file = formData.get("file") as File | null;
+
   if (!title) {
     setFlash("Indica um título", "error");
     return;
   }
-  const trainerId = (await getCurrentTrainerId()) ?? (await getAccessibleTrainerIds())[0];
+  const fileErr = validateFile(file);
+  if (fileErr) {
+    setFlash(fileErr, "error");
+    return;
+  }
+
+  const scope = await getAccessibleTrainerIds();
+  const trainerId = (await getCurrentTrainerId()) ?? scope[0];
   if (!trainerId) {
     setFlash("Sem trainer associado", "error");
     return;
   }
+
+  // Limite de 3 slides (defesa em profundidade — a UI também esconde o form).
   const supabase = createClient();
+  const { count } = await (supabase as any)
+    .from("promo_banners")
+    .select("id", { count: "exact", head: true })
+    .in("trainer_id", scope.length ? scope : [""]);
+  if ((count ?? 0) >= MAX_SLIDES) {
+    setFlash(`Máximo de ${MAX_SLIDES} slides. Remove um para adicionar outro.`, "error");
+    return;
+  }
+
+  let imageUrl: string | null = null;
+  if (file && file.size > 0) {
+    imageUrl = await uploadSlideImage(trainerId, file);
+    if (!imageUrl) {
+      setFlash("Não foi possível carregar a imagem", "error");
+      return;
+    }
+  }
+
   const { error } = await (supabase as any).from("promo_banners").insert({
     trainer_id: trainerId,
     title,
     subtitle: subtitle || null,
-    image_url: imageUrl || null,
+    image_url: imageUrl,
     button_label: buttonLabel || null,
     link_url: linkUrl || null,
   });
   if (error) {
     logError("createBannerAction", error);
-    setFlash("Não foi possível criar o banner", "error");
+    setFlash("Não foi possível criar o slide", "error");
   } else {
-    setFlash("Banner criado");
+    setFlash("Slide criado");
+  }
+  revalidate();
+}
+
+export async function updateBannerAction(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  const title = String(formData.get("title") ?? "").trim();
+  const subtitle = String(formData.get("subtitle") ?? "").trim();
+  const buttonLabel = String(formData.get("button_label") ?? "").trim();
+  const linkUrl = String(formData.get("link_url") ?? "").trim();
+  const file = formData.get("file") as File | null;
+
+  if (!id) return;
+  if (!title) {
+    setFlash("Indica um título", "error");
+    return;
+  }
+  const fileErr = validateFile(file);
+  if (fileErr) {
+    setFlash(fileErr, "error");
+    return;
+  }
+
+  const patch: Record<string, any> = {
+    title,
+    subtitle: subtitle || null,
+    button_label: buttonLabel || null,
+    link_url: linkUrl || null,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (file && file.size > 0) {
+    const scope = await getAccessibleTrainerIds();
+    const trainerId = (await getCurrentTrainerId()) ?? scope[0];
+    if (trainerId) {
+      const url = await uploadSlideImage(trainerId, file);
+      if (!url) {
+        setFlash("Não foi possível carregar a imagem", "error");
+        return;
+      }
+      patch.image_url = url;
+    }
+  }
+
+  const supabase = createClient();
+  const { error } = await (supabase as any).from("promo_banners").update(patch).eq("id", id);
+  if (error) {
+    logError("updateBannerAction", error);
+    setFlash("Não foi possível guardar", "error");
+  } else {
+    setFlash("Slide actualizado");
   }
   revalidate();
 }
@@ -57,7 +178,7 @@ export async function toggleBannerAction(formData: FormData) {
     logError("toggleBannerAction", error);
     setFlash("Não foi possível atualizar", "error");
   } else {
-    setFlash(active ? "Banner activado" : "Banner desactivado");
+    setFlash(active ? "Slide activado" : "Slide desactivado");
   }
   revalidate();
 }
@@ -66,12 +187,30 @@ export async function deleteBannerAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   const supabase = createClient();
+
+  // Buscamos a imagem antes de apagar a linha para limpar o storage.
+  const { data: row } = await (supabase as any)
+    .from("promo_banners")
+    .select("image_url")
+    .eq("id", id)
+    .maybeSingle();
+
   const { error } = await (supabase as any).from("promo_banners").delete().eq("id", id);
   if (error) {
     logError("deleteBannerAction", error);
     setFlash("Não foi possível remover", "error");
-  } else {
-    setFlash("Banner removido");
+    revalidate();
+    return;
   }
+
+  // Best-effort: remover o ficheiro do bucket (não bloqueia o fluxo).
+  const path = storagePathFromUrl((row as any)?.image_url ?? null);
+  if (path) {
+    const admin = createAdminClient();
+    const { error: rmErr } = await admin.storage.from(BUCKET).remove([path]);
+    if (rmErr) logError("deleteBannerAction:storage", rmErr);
+  }
+
+  setFlash("Slide removido");
   revalidate();
 }
