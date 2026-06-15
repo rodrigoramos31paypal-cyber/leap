@@ -11,9 +11,11 @@ import { getMyNotesMapForBookings } from "@/lib/notes";
 export default async function HistoricoPage({
   searchParams,
 }: {
-  searchParams: { tab?: string; ok?: string };
+  searchParams: { tab?: string; ok?: string; f?: string };
 }) {
   const tab = searchParams.tab === "compras" ? "compras" : "sessoes";
+  const sessFilter: "todas" | "futuras" | "passadas" =
+    searchParams.f === "futuras" || searchParams.f === "passadas" ? searchParams.f : "todas";
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
@@ -50,7 +52,15 @@ export default async function HistoricoPage({
         <TabLink href="/app/historico?tab=compras" active={tab === "compras"} label="Compras" />
       </div>
 
-      {tab === "sessoes" ? <SessoesTab userId={user.id} /> : <ComprasTab userId={user.id} />}
+      {tab === "sessoes" && (
+        <div className="flex flex-wrap gap-1.5">
+          <FilterChip label="Todas" f="todas" active={sessFilter === "todas"} />
+          <FilterChip label="Futuras" f="futuras" active={sessFilter === "futuras"} />
+          <FilterChip label="Passadas" f="passadas" active={sessFilter === "passadas"} />
+        </div>
+      )}
+
+      {tab === "sessoes" ? <SessoesTab userId={user.id} filter={sessFilter} /> : <ComprasTab userId={user.id} />}
     </div>
   );
 }
@@ -68,14 +78,36 @@ function TabLink({ href, active, label }: { href: string; active: boolean; label
   );
 }
 
-async function SessoesTab({ userId }: { userId: string }) {
+function FilterChip({ label, f, active }: { label: string; f: string; active: boolean }) {
+  return (
+    <Link
+      href={f === "todas" ? "/app/historico" : `/app/historico?f=${f}`}
+      className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+        active
+          ? "border-ink-900 bg-ink-900 text-white dark:border-bone-50 dark:bg-bone-50 dark:text-ink-900"
+          : "border-ink-900/15 text-ink-600 hover:bg-ink-900/5 dark:border-white/15 dark:text-bone-100"
+      }`}
+    >
+      {label}
+    </Link>
+  );
+}
+
+async function SessoesTab({ userId, filter }: { userId: string; filter: "todas" | "futuras" | "passadas" }) {
   const supabase = createClient();
-  const { data: bookings } = await supabase
+  const nowIso = new Date().toISOString();
+  let query = supabase
     .from("bookings")
     .select("*")
-    .eq("client_id", userId)
-    .order("starts_at", { ascending: false })
-    .limit(50);
+    .eq("client_id", userId);
+  if (filter === "futuras") {
+    query = query.gte("starts_at", nowIso).order("starts_at", { ascending: true });
+  } else if (filter === "passadas") {
+    query = query.lt("starts_at", nowIso).order("starts_at", { ascending: false });
+  } else {
+    query = query.order("starts_at", { ascending: false });
+  }
+  const { data: bookings } = await query.limit(50);
 
   if (!bookings || bookings.length === 0) {
     return <div className="card p-5 text-center text-sm text-ink-500">Sem sessões ainda.</div>;
