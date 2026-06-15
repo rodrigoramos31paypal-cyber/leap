@@ -378,15 +378,41 @@ const TOTAL_HOURS = HOUR_END - HOUR_START; // 15
 // "ler" a posição vertical de uma sessão sem ambiguidade.
 const HOUR_HEIGHT = 88; // px per hour
 
+// Devolve hora/minuto de `d` no timezone Europe/Lisbon, independente
+// do timezone do runtime. WeekView é Server Component — em Vercel o
+// servidor corre em UTC, e `Date.prototype.getHours()` devolveria a
+// hora UTC. Resultado: uma sessão às 10:30 PT (= 09:30 UTC em Junho,
+// horário de Verão) seria posicionada na faixa das 09:30 enquanto
+// `formatTime` (hidratado no cliente em PT) mostrava "10:30". Esta
+// função alinha a matemática de posição com o que o cliente vê.
+function localHM(d: Date): { hour: number; minute: number } {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Lisbon",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  let hour = 0;
+  let minute = 0;
+  for (const p of parts) {
+    if (p.type === "hour") hour = parseInt(p.value, 10);
+    else if (p.type === "minute") minute = parseInt(p.value, 10);
+  }
+  return { hour, minute };
+}
+
 function timeOffset(d: Date) {
-  const minutesFromStart = (d.getHours() - HOUR_START) * 60 + d.getMinutes();
+  const { hour, minute } = localHM(d);
+  const minutesFromStart = (hour - HOUR_START) * 60 + minute;
   return (minutesFromStart / 60) * HOUR_HEIGHT;
 }
 
 function clampPosition(start: Date, end: Date): { top: number; height: number } | null {
   const totalMin = TOTAL_HOURS * 60;
-  const rawStart = (start.getHours() - HOUR_START) * 60 + start.getMinutes();
-  const rawEnd = (end.getHours() - HOUR_START) * 60 + end.getMinutes();
+  const s = localHM(start);
+  const e = localHM(end);
+  const rawStart = (s.hour - HOUR_START) * 60 + s.minute;
+  const rawEnd = (e.hour - HOUR_START) * 60 + e.minute;
   // BUG-FIX: ignorar slots totalmente fora da janela visível (antes
   // eram desenhados como uma barrinha encostada ao topo/fundo).
   if (rawEnd <= 0 || rawStart >= totalMin) return null;
@@ -415,7 +441,10 @@ function WeekView({
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const byDay = bucketByDay(bookings, blocks, reserved); // PERF (#5): 1 passagem
   const today = new Date();
-  const nowMinutes = today.getHours() * 60 + today.getMinutes();
+  // Mesma razão que `localHM`: o servidor pode estar em UTC, queremos
+  // a hora actual em Europe/Lisbon para posicionar a linha do "agora".
+  const todayHM = localHM(today);
+  const nowMinutes = todayHM.hour * 60 + todayHM.minute;
   const nowInRange = nowMinutes >= HOUR_START * 60 && nowMinutes <= HOUR_END * 60;
   const nowTop = timeOffset(today);
 
