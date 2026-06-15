@@ -543,12 +543,12 @@ export function BookingBlock({
               )}
               <form action={markNoShowAction}>
                 <input type="hidden" name="bookingId" value={b.id} />
-                <button className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700">
+                <button className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300">
                   Falta
                 </button>
               </form>
               <details className="relative w-full">
-                <summary className="cursor-pointer list-none rounded-md border border-ink-900/10 px-3 py-1.5 text-xs font-semibold text-ink-600 hover:bg-ink-900/5 sm:inline-block sm:w-auto">
+                <summary className="cursor-pointer list-none rounded-md border border-ink-900/10 px-3 py-1.5 text-xs font-semibold text-ink-600 hover:bg-ink-900/5 dark:border-white/15 dark:text-bone-50 dark:hover:bg-white/5 sm:inline-block sm:w-auto">
                   Cancelar
                 </summary>
                 <form action={cancelAdminAction} className="mt-2 space-y-2">
@@ -586,7 +586,7 @@ export function BookingBlock({
                       className={`rounded-md border px-2.5 py-1 text-xs font-medium ${
                         durInput === m
                           ? "border-gold-400 bg-gold-50 text-ink-900"
-                          : "border-ink-900/15 hover:bg-ink-900/5"
+                          : "border-ink-900/15 hover:bg-ink-900/5 dark:border-white/15 dark:text-bone-50 dark:hover:bg-white/5"
                       }`}
                     >
                       {m}
@@ -600,9 +600,9 @@ export function BookingBlock({
                       step={5}
                       value={durInput}
                       onChange={(e) => setDurInput(Number(e.target.value))}
-                      className="w-16 rounded-md border border-ink-900/15 px-2 py-1 text-xs tabular-nums"
+                      className="w-16 rounded-md border border-ink-900/15 px-2 py-1 text-xs tabular-nums dark:border-white/15 dark:bg-ink-900 dark:text-bone-50"
                     />
-                    <span className="text-xs text-ink-500">min</span>
+                    <span className="text-xs text-ink-500 dark:text-bone-50/60">min</span>
                   </div>
                 </div>
                 {overlapWarn === null ? (
@@ -610,7 +610,7 @@ export function BookingBlock({
                     type="button"
                     disabled={savingDur}
                     onClick={() => saveDuration(false)}
-                    className="w-full rounded-md bg-ink-900 px-3 py-1.5 text-xs font-semibold text-bone-50 hover:bg-ink-700 disabled:opacity-50 dark:bg-bone-50 dark:text-ink-900"
+                    className="w-full rounded-md bg-ink-900 px-3 py-1.5 text-xs font-semibold text-bone-50 hover:bg-ink-700 disabled:opacity-50 dark:bg-ink-700 dark:hover:bg-ink-600"
                   >
                     {savingDur ? "A guardar…" : "Guardar duração"}
                   </button>
