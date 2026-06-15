@@ -85,12 +85,17 @@ export async function getAvailableSlots(args: {
   const buffer = settings?.buffer_between_sessions_min ?? 0;
 
   // marcações ativas + bloqueios
+  // SEC/CORRECÇÃO: lê de `public_busy_times` (vista) e NÃO de `bookings`.
+  // A query corre sob a RLS do utilizador, e em `bookings` cada cliente
+  // só vê as SUAS marcações — por isso as sessões de outros clientes não
+  // bloqueavam os slots e apareciam horários que se sobrepunham. A vista
+  // expõe apenas os intervalos ocupados (sem identidade) a authenticated.
+  // (`as any` porque a vista não está nos tipos gerados — ver 0064.)
   const [{ data: bookings }, { data: blocks }] = await Promise.all([
-    supabase
-      .from("bookings")
-      .select("starts_at, ends_at, status")
+    (supabase as any)
+      .from("public_busy_times")
+      .select("starts_at, ends_at")
       .eq("trainer_id", trainerId)
-      .in("status", ["booked", "confirmed"])
       .gte("starts_at", dayStart.toISOString())
       .lt("starts_at", dayEnd.toISOString()),
     // SEC: lê da vista pública (sem `reason`) — base table é admin-only.
