@@ -23,6 +23,39 @@ import { logError } from "@/lib/errors";
 import { logAudit } from "@/lib/audit";
 import { captureAlert, isAccessDenied } from "@/lib/alerts";
 
+// ────────────────────────────────────────────────────────────────
+// lisbonWallClockToUTC · interpreta um par (date, time) submetido
+// por um formulário do trainer como hora-de-parede em Europe/Lisbon
+// e devolve o instante UTC equivalente.
+//
+// Porquê: estas server actions correm em Vercel (UTC). Construir
+// `new Date("2026-06-15T10:15:00")` no servidor interpreta a string
+// como hora LOCAL do runtime (UTC) → o slot "10:15" submetido pelo
+// trainer ficaria gravado como 10:15 UTC = 11:15 PT em horário de
+// Verão. Esta função alinha sempre a interpretação a Europe/Lisbon,
+// independentemente do TZ do runtime. Trata DST automaticamente.
+// ────────────────────────────────────────────────────────────────
+function lisbonWallClockToUTC(dateIso: string, timeHHMM: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateIso)) return null;
+  if (!/^\d{2}:\d{2}$/.test(timeHHMM)) return null;
+  // 1. Primeiro palpite: trata a string como se fosse UTC.
+  const naive = new Date(`${dateIso}T${timeHHMM}:00Z`);
+  if (Number.isNaN(naive.getTime())) return null;
+  // 2. Lê o que esse instante mostra no relógio de Lisboa.
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Lisbon",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(naive);
+  const lh = parseInt(parts.find((p) => p.type === "hour")!.value, 10);
+  const lm = parseInt(parts.find((p) => p.type === "minute")!.value, 10);
+  const [wantH, wantM] = timeHHMM.split(":").map((n) => parseInt(n, 10));
+  // 3. Corrige pela diferença (em Verão é +60 min, no Inverno 0).
+  const diffMin = (lh * 60 + lm) - (wantH * 60 + wantM);
+  return new Date(naive.getTime() - diffMin * 60_000);
+}
+
 export async function confirmAttendanceAction(formData: FormData) {
   const id = String(formData.get("bookingId") ?? "");
   if (!id) return;
@@ -156,8 +189,8 @@ export async function createAgendaBookingAction(
     return { error: "Sem permissão para este treinador." };
   }
 
-  const startsAt = new Date(`${date}T${time}:00`);
-  if (Number.isNaN(startsAt.getTime())) {
+  const startsAt = lisbonWallClockToUTC(date, time);
+  if (!startsAt || Number.isNaN(startsAt.getTime())) {
     return { error: "Data ou hora inválida." };
   }
 
@@ -370,23 +403,29 @@ export async function addBlockQuickAction(formData: FormData) {
   const reasonRaw = String(formData.get("reason") ?? "").trim().slice(0, 200);
   const reason = reasonRaw.length > 0 ? reasonRaw : null;
 
-  // Suporta dois formatos: (starts_at + ends_at) ou (date + from + to).
-  // BUG-FIX: garantir que tem segundos (`:00`) para máxima fiabilidade na parse.
-  if (!startsAt && date && from) startsAt = `${date}T${from}:00`;
-  if (!endsAt && date && to) endsAt = `${date}T${to}:00`;
+  if (!trainerId) return;
 
-  if (!trainerId || !startsAt || !endsAt) return;
+  // Resolve start/end: o caso comum é (date + from + to) — interpretado
+  // como wall-clock Europe/Lisbon. O fallback (starts_at + ends_at) já
+  // vem como ISO completa do cliente.
+  let start: Date | null = null;
+  let end: Date | null = null;
+  if (date && from && to) {
+    start = lisbonWallClockToUTC(date, from);
+    end = lisbonWallClockToUTC(date, to);
+  } else if (startsAt && endsAt) {
+    start = new Date(startsAt);
+    end = new Date(endsAt);
+  }
+  if (!start || !end) return;
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return;
+  if (end <= start) return;
 
   // SEC: defense-in-depth — confirmar que o trainerId pertence ao scope
   // do utilizador autenticado. RLS já bloqueia clientes, mas isto evita
   // que um trainer crie blocks para outro trainer.
   const accessible = await getAccessibleTrainerIds();
   if (!accessible.includes(trainerId)) return;
-
-  const start = new Date(startsAt);
-  const end = new Date(endsAt);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return;
-  if (end <= start) return;
 
   const supabase = createClient();
   await supabase.from("trainer_blocked_times").insert({

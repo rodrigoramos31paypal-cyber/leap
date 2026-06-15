@@ -63,9 +63,16 @@ export function RescheduleDialog() {
     if (!detail) return;
     setError(null);
     startTransition(async () => {
+      // O wall-clock que o trainer escolheu (ex: "10:15") é hora local
+      // do browser (PT). Convertemos AQUI para ISO UTC antes de enviar —
+      // se mandássemos a string naive, o server action a correr em UTC
+      // gravaria 10:15 UTC = 11:15 PT (offset de +1h em horário de Verão).
+      const startsAtIso = new Date(
+        `${detail.newDateIso}T${detail.newTime}:00`,
+      ).toISOString();
       const res = await rescheduleBookingAdminAction({
         bookingId: detail.bookingId,
-        startsAtIso: `${detail.newDateIso}T${detail.newTime}:00`,
+        startsAtIso,
         durationMin: detail.durationMin,
         notify,
       });
