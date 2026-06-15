@@ -60,6 +60,7 @@ export function BookingBlock({
   sessionsLeft,
   isLastCredit = false,
   overlap = false,
+  overlapCol = 0,
 }: {
   b: any;
   note?: { body: string } | null;
@@ -78,9 +79,13 @@ export function BookingBlock({
   // de packs == 0). Sinalizada a vermelho na agenda para alertar o
   // treinador de que o cliente fica sem sessões.
   isLastCredit?: boolean;
-  // `true` quando esta sessão se sobrepõe a outra — destaca o bordo a
-  // âmbar (o posicionamento em cascata vem via `style`).
+  // `true` quando esta sessão se sobrepõe a outra — destaca o bordo
+  // (cor depende de `overlapCol` para distinguir sessões empilhadas).
   overlap?: boolean;
+  // Índice da coluna dentro do grupo de sobreposição (0, 1, 2…).
+  // Mapeia para uma cor de bordo diferente, ajudando a distinguir
+  // visualmente sessões empilhadas em mobile.
+  overlapCol?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -362,7 +367,16 @@ export function BookingBlock({
       ref={ref}
       data-event-block
       className={`absolute left-0.5 right-0.5 overflow-hidden rounded border text-[10px] transition-colors ${tone} ${lastCreditRing} ${
-        overlap ? "booking-overlap-block !border-2 !border-amber-500" : ""
+        overlap
+          ? `booking-overlap-block !border-2 ${
+              [
+                "!border-amber-500",
+                "!border-violet-500",
+                "!border-sky-500",
+                "!border-rose-500",
+              ][overlapCol % 4]
+            }`
+          : ""
       } ${draggable ? "cursor-grab active:cursor-grabbing" : ""}`}
       style={{
         ...style,
@@ -398,15 +412,17 @@ export function BookingBlock({
       >
         <div className="font-semibold tabular-nums leading-none text-[9px]">{formatTime(b.starts_at)}</div>
         <div
-          className="mt-0.5 break-words font-medium leading-[1.05] [overflow-wrap:anywhere]"
+          className={`${overlap ? "mt-px" : "mt-0.5"} break-words font-medium leading-[1.05] [overflow-wrap:anywhere]`}
           style={{
             // Font responsivo: 7 px mínimo (mobile estreito) → 10 px
             // máximo (tablet+). Em 380 px mobile, 2.2vw ≈ 8.4 px →
             // permite ~7-8 chars na primeira linha; nomes maiores
-            // partem para a 2ª via line-clamp.
+            // partem para a 2ª via line-clamp. Em sobreposição
+            // limitamos a 1 linha para reduzir altura e não tocar na
+            // borda do bloco da frente que vem por baixo.
             fontSize: "clamp(7px, 2.2vw, 10px)",
             display: "-webkit-box",
-            WebkitLineClamp: 2,
+            WebkitLineClamp: overlap ? 1 : 2,
             WebkitBoxOrient: "vertical",
             overflow: "hidden",
           }}
