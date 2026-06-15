@@ -25,12 +25,13 @@ function shortName(full?: string | null) {
   const first = (full ?? "").trim().split(/\s+/)[0] ?? "";
   return first.slice(0, 7);
 }
-// Primeiro nome com cap generoso (12 chars) — usado no bloco da sessão
-// onde permitimos wrap a 2 linhas via line-clamp; o cap evita que um
-// nome muito longo destrua o layout em colunas estreitas.
+// Primeiro nome com cap generoso (14 chars) — usado no bloco da sessão
+// onde permitimos wrap a 2 linhas via line-clamp e font ~8 px em mobile;
+// o cap evita que um nome muito longo destrua o layout em colunas
+// estreitas, mas é grande o suficiente para "Alexandre" / "Constança".
 function firstNameLong(full?: string | null) {
   const first = (full ?? "").trim().split(/\s+/)[0] ?? "";
-  return first.slice(0, 12);
+  return first.slice(0, 14);
 }
 
 type Preview = {
@@ -298,9 +299,9 @@ export function BookingBlock({
     <div
       ref={ref}
       data-event-block
-      className={`absolute left-0.5 right-0.5 rounded border text-[10px] transition-colors ${tone} ${
-        open ? "z-30 overflow-visible" : "overflow-hidden"
-      } ${draggable ? "cursor-grab active:cursor-grabbing" : ""}`}
+      className={`absolute left-0.5 right-0.5 overflow-hidden rounded border text-[10px] transition-colors ${tone} ${
+        draggable ? "cursor-grab active:cursor-grabbing" : ""
+      }`}
       style={{ ...style, touchAction: draggable ? "none" : undefined }}
     >
       <button
@@ -314,12 +315,17 @@ export function BookingBlock({
           // fallback para teclado/acessibilidade quando não há drag.
           if (!draggable) setOpen((o) => !o);
         }}
-        className="block w-full [cursor:inherit] p-1 text-left"
+        className="block w-full [cursor:inherit] px-0.5 py-0.5 text-left"
       >
-        <div className="font-semibold tabular-nums leading-none">{formatTime(b.starts_at)}</div>
+        <div className="font-semibold tabular-nums leading-none text-[9px]">{formatTime(b.starts_at)}</div>
         <div
-          className="mt-0.5 break-words font-medium leading-[1.1] text-[9px] [overflow-wrap:anywhere]"
+          className="mt-0.5 break-words font-medium leading-[1.05] [overflow-wrap:anywhere]"
           style={{
+            // Font responsivo: 7 px mínimo (mobile estreito) → 10 px
+            // máximo (tablet+). Em 380 px mobile, 2.2vw ≈ 8.4 px →
+            // permite ~7-8 chars na primeira linha; nomes maiores
+            // partem para a 2ª via line-clamp.
+            fontSize: "clamp(7px, 2.2vw, 10px)",
             display: "-webkit-box",
             WebkitLineClamp: 2,
             WebkitBoxOrient: "vertical",
@@ -357,14 +363,30 @@ export function BookingBlock({
       )}
 
       {open && (
-        <div className="absolute left-0 top-full z-30 mt-1 w-64 rounded-md border border-ink-900/10 bg-white p-3 text-xs text-ink-900 shadow-lg">
-          <div className="mb-2 flex items-center justify-between gap-2">
+        // Bottom-sheet em mobile (items-end + rounded-top), modal centrado
+        // em desktop (sm:items-center + max-w + p-4). Espelha o pattern
+        // do BookingDialog. Resolve o overflow horizontal que acontecia
+        // quando o popover absoluto (w-64 = 256 px) era ancorado a um
+        // dia da direita e estendia para fora do ecrã.
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-ink-900/40 p-0 sm:items-center sm:p-4"
+          onPointerDown={(e) => {
+            // Backdrop click fecha; cliques no card interno param aqui
+            // via stopPropagation.
+            if (e.target === e.currentTarget) setOpen(false);
+          }}
+        >
+          <div
+            className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white p-4 text-sm text-ink-900 shadow-xl dark:bg-ink-800 sm:max-w-sm sm:rounded-2xl"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+          <div className="mb-3 flex items-center justify-between gap-2">
             <div>
-              <div className="font-semibold tabular-nums">
+              <div className="font-display text-base font-bold tabular-nums">
                 {formatTime(b.starts_at)}
                 {b.ends_at ? `–${formatTime(b.ends_at)}` : ""}
               </div>
-              <div className="text-[11px] text-ink-500">
+              <div className="text-xs text-ink-500">
                 {b.profiles?.full_name ?? "—"}
               </div>
             </div>
@@ -384,7 +406,7 @@ export function BookingBlock({
           </div>
 
           {draggable && (
-            <p className="mb-2 rounded bg-bone-100 px-2 py-1 text-[10px] text-ink-500">
+            <p className="mb-3 rounded bg-bone-100 px-2.5 py-1.5 text-[11px] text-ink-500">
               Arrasta o bloco para reagendar.
             </p>
           )}
@@ -392,9 +414,9 @@ export function BookingBlock({
           {/* Saldo de sessões + link para o perfil. O saldo é o que
               o cliente ainda tem disponível em packs (não inclui esta
               sessão se ela já foi descontada). */}
-          <div className="mb-2 flex items-center justify-between gap-2 rounded border border-ink-900/10 bg-bone-50 px-2 py-1.5 text-[11px]">
+          <div className="mb-3 flex items-center justify-between gap-2 rounded-md border border-ink-900/10 bg-bone-50 px-3 py-2 text-xs">
             <div className="inline-flex items-center gap-1.5">
-              <Coins size={12} className="text-gold-600" />
+              <Coins size={14} className="text-gold-600" />
               {sessionsLeft === undefined ? (
                 <span className="text-ink-500">Sessões: —</span>
               ) : sessionsLeft === 0 ? (
@@ -413,19 +435,19 @@ export function BookingBlock({
             {b.client_id && (
               <Link
                 href={`/admin/clientes/${b.client_id}`}
-                className="inline-flex items-center gap-1 text-[10px] font-medium text-ink-600 hover:text-ink-900"
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-ink-600 hover:text-ink-900"
               >
-                Ver perfil <ExternalLink size={10} />
+                Ver perfil <ExternalLink size={11} />
               </Link>
             )}
           </div>
 
           {(b.status === "booked" || b.status === "confirmed") && (
-            <div className="mb-2 flex flex-wrap gap-1">
+            <div className="mb-3 flex flex-wrap gap-1.5">
               {b.status === "booked" && (
                 <form action={confirmAttendanceAction}>
                   <input type="hidden" name="bookingId" value={b.id} />
-                  <button className="rounded bg-ink-900 px-2 py-1 text-[10px] font-semibold text-bone-50 hover:bg-ink-700">
+                  <button className="rounded-md bg-ink-900 px-3 py-1.5 text-xs font-semibold text-bone-50 hover:bg-ink-700">
                     ✓ Aceitar
                   </button>
                 </form>
@@ -433,24 +455,24 @@ export function BookingBlock({
               {b.status === "confirmed" && (
                 <form action={confirmAttendanceAction}>
                   <input type="hidden" name="bookingId" value={b.id} />
-                  <button className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700">
+                  <button className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
                     ✓ Presente
                   </button>
                 </form>
               )}
               <form action={markNoShowAction}>
                 <input type="hidden" name="bookingId" value={b.id} />
-                <button className="rounded border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-700">
+                <button className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700">
                   Falta
                 </button>
               </form>
-              <details className="relative">
-                <summary className="cursor-pointer list-none rounded border border-ink-900/10 px-2 py-1 text-[10px] font-semibold text-ink-600 hover:bg-ink-900/5">
+              <details className="relative w-full">
+                <summary className="cursor-pointer list-none rounded-md border border-ink-900/10 px-3 py-1.5 text-xs font-semibold text-ink-600 hover:bg-ink-900/5 sm:inline-block sm:w-auto">
                   Cancelar
                 </summary>
-                <form action={cancelAdminAction} className="mt-2 space-y-1.5">
+                <form action={cancelAdminAction} className="mt-2 space-y-2">
                   <input type="hidden" name="bookingId" value={b.id} />
-                  <label className="block text-[10px] font-medium text-ink-600">
+                  <label className="block text-xs font-medium text-ink-600">
                     Motivo (opcional)
                   </label>
                   <textarea
@@ -458,9 +480,9 @@ export function BookingBlock({
                     rows={2}
                     maxLength={500}
                     placeholder="Ex: trainer indisponível"
-                    className="w-full rounded border border-ink-900/10 px-2 py-1 text-[10px]"
+                    className="w-full rounded-md border border-ink-900/10 px-2 py-1.5 text-xs"
                   />
-                  <button className="w-full rounded bg-red-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-red-700">
+                  <button className="w-full rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700">
                     Confirmar cancelamento
                   </button>
                 </form>
@@ -468,14 +490,15 @@ export function BookingBlock({
             </div>
           )}
 
-          <details className="border-t border-ink-900/10 pt-2">
-            <summary className="inline-flex cursor-pointer items-center gap-1 text-[10px] font-semibold text-ink-600 hover:text-ink-900">
-              <NotebookPen size={10} /> Minhas notas{note ? " · ✓" : ""}
+          <details className="border-t border-ink-900/10 pt-3">
+            <summary className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-ink-600 hover:text-ink-900">
+              <NotebookPen size={12} /> Minhas notas{note ? " · ✓" : ""}
             </summary>
             <div className="mt-2">
               <NoteEditor bookingId={b.id} initialBody={note?.body} compact />
             </div>
           </details>
+          </div>
         </div>
       )}
     </div>
