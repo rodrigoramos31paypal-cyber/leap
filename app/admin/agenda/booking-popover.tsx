@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { NotebookPen, ExternalLink, Coins, Clock } from "lucide-react";
 import { formatTime, BOOKING_STATUS } from "@/lib/utils";
@@ -100,6 +100,7 @@ export function BookingBlock({
 
   // Valor do controlo de duração no popover (presets + input livre).
   const [durInput, setDurInput] = useState<number>(durationMin);
+  const [savingDur, startDurTransition] = useTransition();
 
   // ── Mapeamento px↔minutos com linhas de altura variável ──────────
   function minutesToY(totalMin: number): number {
@@ -551,8 +552,7 @@ export function BookingBlock({
               <summary className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-ink-600 hover:text-ink-900">
                 <Clock size={12} /> Duração · {durationMin} min
               </summary>
-              <form action={updateBookingDurationAction} className="mt-2 space-y-2">
-                <input type="hidden" name="bookingId" value={b.id} />
+              <div className="mt-2 space-y-2">
                 <div className="flex flex-wrap items-center gap-1.5">
                   {[30, 45, 60, 90].map((m) => (
                     <button
@@ -571,7 +571,6 @@ export function BookingBlock({
                   <div className="inline-flex items-center gap-1">
                     <input
                       type="number"
-                      name="durationMin"
                       min={5}
                       max={600}
                       step={5}
@@ -582,10 +581,23 @@ export function BookingBlock({
                     <span className="text-xs text-ink-500">min</span>
                   </div>
                 </div>
-                <button className="w-full rounded-md bg-ink-900 px-3 py-1.5 text-xs font-semibold text-bone-50 hover:bg-ink-700 dark:bg-bone-50 dark:text-ink-900">
-                  Guardar duração
+                <button
+                  type="button"
+                  disabled={savingDur}
+                  onClick={() => {
+                    const fd = new FormData();
+                    fd.set("bookingId", b.id);
+                    fd.set("durationMin", String(durInput));
+                    startDurTransition(async () => {
+                      await updateBookingDurationAction(fd);
+                      setOpen(false); // fecha o popover após guardar
+                    });
+                  }}
+                  className="w-full rounded-md bg-ink-900 px-3 py-1.5 text-xs font-semibold text-bone-50 hover:bg-ink-700 disabled:opacity-50 dark:bg-bone-50 dark:text-ink-900"
+                >
+                  {savingDur ? "A guardar…" : "Guardar duração"}
                 </button>
-              </form>
+              </div>
             </details>
           )}
 
