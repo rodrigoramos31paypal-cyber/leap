@@ -31,7 +31,9 @@ export function GrantPackForm({
           onClick={() => setMode("pack")}
           className={cn(
             "rounded-md px-2.5 py-1 font-medium transition",
-            mode === "pack" ? "bg-ink-900 text-white" : "text-ink-600 hover:bg-ink-900/5",
+            mode === "pack"
+              ? "bg-ink-900 text-white dark:bg-bone-50 dark:text-ink-900"
+              : "text-ink-600 hover:bg-ink-900/5",
           )}
         >
           Pack existente
@@ -41,7 +43,9 @@ export function GrantPackForm({
           onClick={() => setMode("custom")}
           className={cn(
             "rounded-md px-2.5 py-1 font-medium transition",
-            mode === "custom" ? "bg-ink-900 text-white" : "text-ink-600 hover:bg-ink-900/5",
+            mode === "custom"
+              ? "bg-ink-900 text-white dark:bg-bone-50 dark:text-ink-900"
+              : "text-ink-600 hover:bg-ink-900/5",
           )}
         >
           Sessões avulso

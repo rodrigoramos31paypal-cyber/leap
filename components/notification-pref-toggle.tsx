@@ -46,7 +46,7 @@ export function NotificationPrefToggle({
         } ${pending ? "opacity-60" : ""}`}
       >
         <span
-          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${
+          className={`absolute top-0.5 h-5 w-5 rounded-full bg-[#fff] shadow transition-all ${
             on ? "left-[22px]" : "left-0.5"
           }`}
         />
