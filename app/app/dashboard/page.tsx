@@ -7,6 +7,13 @@ import { Calendar, ShoppingBag, Sparkles, AlertCircle, ChevronRight } from "luci
 import { PushSubscribeCard } from "@/components/push-subscribe-card";
 import { PromoCarousel } from "@/components/promo-carousel";
 
+// Fillers temporários até o cliente fornecer os banners reais.
+const FILLER_BANNERS = [
+  { id: "f1", title: "O teu ebook em destaque", subtitle: "Espaço promocional", button_label: "Saber mais", image_url: null, link_url: null },
+  { id: "f2", title: "Plano de nutrição", subtitle: "Em breve", button_label: "Ver", image_url: null, link_url: null },
+  { id: "f3", title: "Promoção especial", subtitle: "Brevemente", button_label: "Descobrir", image_url: null, link_url: null },
+];
+
 export default async function ClientDashboard() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
@@ -43,11 +50,12 @@ export default async function ClientDashboard() {
       .limit(4),
     supabase
       .from("purchases")
-      .select("pack_snapshot, sessions_total, sessions_remaining, created_at")
+      .select("pack_snapshot, sessions_total, sessions_remaining, created_at, expires_at")
       .eq("client_id", user.id)
       .eq("status", "confirmed")
+      .gt("sessions_remaining", 0)
       .order("created_at", { ascending: false })
-      .limit(1),
+      .limit(5),
     (supabase as any)
       .from("promo_banners")
       .select("id, title, subtitle, image_url, button_label, link_url")
@@ -61,7 +69,10 @@ export default async function ClientDashboard() {
   const noCredits = credits.total === 0;
 
   const nextSession = (upcoming ?? [])[0] as any | undefined;
-  const latestPack = (latestPackRows ?? [])[0] as any | undefined;
+  const nowMs = Date.now();
+  const latestPack = ((latestPackRows ?? []) as any[]).find(
+    (p) => !p.expires_at || new Date(p.expires_at).getTime() >= nowMs,
+  ) as any | undefined;
   const packName = latestPack ? (latestPack.pack_snapshot as any)?.name ?? "Pack" : null;
 
   // Taxa de presença (apenas do pack atual): sessões passadas desde a
@@ -89,7 +100,7 @@ export default async function ClientDashboard() {
       : 0;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div>
         <h1 className="font-display text-2xl font-bold tracking-tight">
           Olá, {profile?.full_name?.split(" ")[0] ?? "atleta"}.
@@ -100,16 +111,16 @@ export default async function ClientDashboard() {
       <PushSubscribeCard />
 
       {/* Sessões disponíveis */}
-      <div className="card p-5">
+      <div className="card p-4">
         <div className="flex items-center justify-between">
           <span className="text-xs uppercase tracking-wide text-ink-500 dark:text-bone-100/60">Sessões disponíveis</span>
           <Sparkles size={16} className="text-gold-400" />
         </div>
         <div className="mt-2 flex items-baseline gap-2">
-          <span className="font-display text-5xl font-black text-gold-500 dark:text-gold-400">{credits.total}</span>
+          <span className="font-display text-4xl font-black text-gold-500 dark:text-gold-400">{credits.total}</span>
           <span className="text-sm text-ink-500 dark:text-bone-100/60">{pluralize(credits.total, "sessão", "sessões")}</span>
         </div>
-        <div className="mt-5 flex gap-2">
+        <div className="mt-4 flex gap-2">
           <Link href="/app/agenda" className="btn-gold flex-1">
             <Calendar size={16} /> Marcar sessão
           </Link>
@@ -141,19 +152,19 @@ export default async function ClientDashboard() {
       )}
 
       {/* Banners promocionais (ex: ebooks) */}
-      <PromoCarousel banners={(banners ?? []) as any} />
+      <PromoCarousel banners={(((banners as any[]) ?? []).length ? banners : FILLER_BANNERS) as any} />
 
       {/* Próxima sessão */}
       {nextSession && (
         <Link
           href={`/app/sessao/${nextSession.id}`}
-          className="card flex items-center justify-between gap-3 p-5 hover:border-gold-400"
+          className="card flex items-center justify-between gap-3 p-4 hover:border-gold-400"
         >
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 text-xs uppercase tracking-wide text-ink-500">
               <Calendar size={13} /> Próxima sessão
             </div>
-            <div className="mt-1 font-display text-xl font-bold">{formatDateTime(nextSession.starts_at)}</div>
+            <div className="mt-1 font-display text-lg font-bold">{formatDateTime(nextSession.starts_at)}</div>
             <div className="text-sm text-ink-500 capitalize">{nextSession.session_type}</div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -207,25 +218,25 @@ export default async function ClientDashboard() {
         </div>
         <div className="card p-4">
           <div className="grid grid-cols-3 gap-2">
-            <div className="rounded-lg bg-bone-50 p-3 dark:bg-white/[0.03]">
+            <div className="rounded-lg bg-bone-50 p-2.5 dark:bg-white/[0.03]">
               <div className="text-[11px] font-semibold text-ink-600 dark:text-bone-100">O teu pack</div>
-              <div className="mt-1 font-display text-xl font-bold tabular-nums">
-                {latestPack ? `${latestPack.sessions_remaining}/${latestPack.sessions_total}` : "—"}
+              <div className="mt-1 font-display text-lg font-bold tabular-nums">
+                {latestPack ? `${latestPack.sessions_remaining}/${latestPack.sessions_total}` : "0/0"}
               </div>
               <div className="text-[11px] text-ink-500">sessões restantes</div>
             </div>
-            <div className="rounded-lg bg-bone-50 p-3 dark:bg-white/[0.03]">
+            <div className="rounded-lg bg-bone-50 p-2.5 dark:bg-white/[0.03]">
               <div className="text-[11px] font-semibold text-ink-600 dark:text-bone-100">Taxa de presença</div>
-              <div className="mt-1 font-display text-xl font-bold tabular-nums">
+              <div className="mt-1 font-display text-lg font-bold tabular-nums">
                 {presenca !== null ? `${presenca}%` : "—"}
               </div>
               <div className="text-[11px] text-ink-500">
                 {presenca === null ? "Sem dados" : faltas === 0 ? "Excelente" : `${faltas} ${pluralize(faltas, "falta", "faltas")}`}
               </div>
             </div>
-            <div className="rounded-lg bg-bone-50 p-3 dark:bg-white/[0.03]">
+            <div className="rounded-lg bg-bone-50 p-2.5 dark:bg-white/[0.03]">
               <div className="text-[11px] font-semibold text-ink-600 dark:text-bone-100">Pack atual</div>
-              <div className="mt-1 truncate text-sm font-bold">{packName ?? "—"}</div>
+              <div className="mt-1 truncate text-sm font-bold">{packName ?? "Sem pack"}</div>
               <div className="text-[11px] text-ink-500">
                 {latestPack ? `${latestPack.sessions_total} Sessões` : "Sem pack"}
               </div>
