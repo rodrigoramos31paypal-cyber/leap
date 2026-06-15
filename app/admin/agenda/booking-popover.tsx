@@ -368,13 +368,10 @@ export function BookingBlock({
       data-event-block
       className={`absolute left-0.5 right-0.5 overflow-hidden rounded border text-[10px] transition-colors ${tone} ${lastCreditRing} ${
         overlap
-          ? `booking-overlap-block !border-2 ${
-              // A partir da 2ª sessão do grupo (col > 0), tiramos a borda
-              // de cima — visualmente "encosta" no nome do bloco de trás.
-              // As bordas laterais + de baixo na cor própria chegam para
-              // identificar de quem é a sessão.
-              overlapCol > 0 ? "!border-t-0" : ""
-            } ${
+          ? `booking-overlap-block ${
+              // Sem !border-2: a borda fica na mesma espessura (1px) que
+              // sessões sem sobreposição. A cor distinta é que sinaliza
+              // o stack, não a espessura.
               [
                 "!border-amber-500",
                 "!border-violet-500",
