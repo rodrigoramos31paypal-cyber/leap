@@ -417,13 +417,13 @@ export function BookingBlock({
         <div
           className={`${overlap ? "mt-px" : "mt-0.5"} break-words font-medium leading-[1.05] [overflow-wrap:anywhere]`}
           style={{
-            // Font responsivo: 7 px mínimo (mobile estreito) → 10 px
-            // máximo (tablet+). Em 380 px mobile, 2.2vw ≈ 8.4 px →
-            // permite ~7-8 chars na primeira linha; nomes maiores
-            // partem para a 2ª via line-clamp. Em sobreposição
-            // limitamos a 1 linha para reduzir altura e não tocar na
-            // borda do bloco da frente que vem por baixo.
-            fontSize: "clamp(7px, 2.2vw, 10px)",
+            // Font responsivo: 6 px mínimo (mobile estreito) → 10 px
+            // máximo (tablet+). Em 380 px mobile, 1.95vw ≈ 7.4 px
+            // (≈1 px mais pequeno do que antes), em desktop atinge
+            // o cap de 10 px (igual). Em sobreposição limitamos a
+            // 1 linha para reduzir altura e não tocar na borda do
+            // bloco da frente que vem por baixo.
+            fontSize: "clamp(6px, 1.95vw, 10px)",
             display: "-webkit-box",
             WebkitLineClamp: overlap ? 1 : 2,
             WebkitBoxOrient: "vertical",
