@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient, getSessionUser, getCurrentProfile } from "@/lib/supabase/server";
-import { addTrainerAction, toggleTrainerActiveAction, deleteTrainerAction } from "./actions";
-import { Plus, UserCheck, UserX } from "lucide-react";
+import { addTrainerAction, toggleTrainerActiveAction, deleteTrainerAction, grantAdminByEmailAction } from "./actions";
+import { Plus, UserCheck, UserX, ShieldCheck } from "lucide-react";
 
 export default async function EquipaPage() {
   const user = await getSessionUser();
@@ -60,6 +60,27 @@ export default async function EquipaPage() {
           <div className="sm:col-span-2">
             <button className="btn-primary w-full sm:w-auto">Criar trainer</button>
           </div>
+        </form>
+      </details>
+
+      <details className="card p-5">
+        <summary className="cursor-pointer text-sm font-semibold inline-flex items-center gap-2">
+          <ShieldCheck size={16} /> Conceder admin a conta existente
+        </summary>
+        <p className="mt-3 text-xs text-ink-500">
+          A conta tem de já estar registada na app. Fica um espelho do dono:
+          os mesmos poderes, agenda e notificações (owner + trainer). Se o email
+          não estiver registado, aparece um erro.
+        </p>
+        <form
+          action={grantAdminByEmailAction as unknown as (fd: FormData) => Promise<void>}
+          className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end"
+        >
+          <div className="sm:flex-1">
+            <label className="label">Email da conta</label>
+            <input name="email" type="email" required className="input" placeholder="email@exemplo.com" />
+          </div>
+          <button className="btn-primary w-full sm:w-auto">Tornar admin</button>
         </form>
       </details>
 
