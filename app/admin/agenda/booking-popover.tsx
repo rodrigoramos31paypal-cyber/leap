@@ -61,6 +61,11 @@ export function BookingBlock({
   // refs de drag (não provocam re-render)
   const startRef = useRef<{ x: number; y: number } | null>(null);
   const draggingRef = useRef(false);
+  // refs do edge-scroll: posição do cursor (para re-compute do preview
+  // durante scroll automático), velocidade actual e handle do rAF.
+  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
+  const scrollVelRef = useRef(0);
+  const scrollAnimRef = useRef<number | null>(null);
 
   const startDate = new Date(b.starts_at);
   const durationMin = b.ends_at
@@ -128,6 +133,72 @@ export function BookingBlock({
     };
   }
 
+  // ── Edge-scroll: quando o cursor se aproxima do topo/fundo do
+  // container interno scrollable (#agenda-week-scroll), faz scroll
+  // automático para revelar horas adjacentes (ex: arrastar uma sessão
+  // do 07:30 para o 06:00, ou para depois das 21:00). Recalcula o
+  // preview a cada frame para a hora mostrada acompanhar o scroll.
+  function maybeStartEdgeScroll(clientY: number) {
+    if (typeof window === "undefined") return;
+    const container = document.getElementById("agenda-week-scroll");
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const EDGE = 70; // px da margem que activa scroll
+    const MAX_VEL = 12; // px por frame (~720 px/s a 60 fps)
+    // 50 px extra no topo cobrem o sticky day-header — se o cursor
+    // entrar nessa zona já queremos scrollar para cima.
+    const topZone = rect.top + 50 + EDGE;
+    const bottomZone = rect.bottom - EDGE;
+    let vel = 0;
+    if (clientY < topZone) {
+      const dist = topZone - clientY;
+      vel = -Math.min(MAX_VEL, (dist / EDGE) * MAX_VEL);
+    } else if (clientY > bottomZone) {
+      const dist = clientY - bottomZone;
+      vel = Math.min(MAX_VEL, (dist / EDGE) * MAX_VEL);
+    }
+    scrollVelRef.current = vel;
+    if (vel !== 0 && scrollAnimRef.current === null) {
+      const tick = () => {
+        const v = scrollVelRef.current;
+        if (v === 0) {
+          scrollAnimRef.current = null;
+          return;
+        }
+        const prev = container.scrollTop;
+        container.scrollTop = prev + v;
+        const advanced = container.scrollTop !== prev;
+        // re-compute preview com a última posição do cursor — o slot
+        // sob o dedo muda à medida que o container scrolla, queremos
+        // que o badge HH:MM acompanhe a hora real.
+        if (lastPointerRef.current) {
+          setPreview(
+            computePreview(
+              lastPointerRef.current.x,
+              lastPointerRef.current.y,
+            ),
+          );
+        }
+        if (!advanced) {
+          // chegou ao limite scrollable (já não dá para scrollar mais)
+          scrollAnimRef.current = null;
+          return;
+        }
+        scrollAnimRef.current = requestAnimationFrame(tick);
+      };
+      scrollAnimRef.current = requestAnimationFrame(tick);
+    }
+  }
+
+  function stopEdgeScroll() {
+    scrollVelRef.current = 0;
+    if (scrollAnimRef.current !== null) {
+      cancelAnimationFrame(scrollAnimRef.current);
+      scrollAnimRef.current = null;
+    }
+    lastPointerRef.current = null;
+  }
+
   function onPointerDown(e: React.PointerEvent) {
     if (!draggable) return;
     // só botão principal
@@ -144,11 +215,14 @@ export function BookingBlock({
     if (!draggingRef.current && Math.hypot(dx, dy) < 5) return; // threshold
     draggingRef.current = true;
     document.body.style.userSelect = "none";
+    lastPointerRef.current = { x: e.clientX, y: e.clientY };
     setPreview(computePreview(e.clientX, e.clientY));
+    maybeStartEdgeScroll(e.clientY);
   }
 
   function onPointerCancel() {
     if (!draggable) return;
+    stopEdgeScroll();
     startRef.current = null;
     draggingRef.current = false;
     document.body.style.userSelect = "";
@@ -157,6 +231,7 @@ export function BookingBlock({
 
   function onPointerUp(e: React.PointerEvent) {
     if (!draggable) return;
+    stopEdgeScroll();
     const wasDragging = draggingRef.current;
     startRef.current = null;
     draggingRef.current = false;
