@@ -58,8 +58,13 @@ export function BusyBlock({
 
   const isRecurring = !!b.is_recurring;
   const date = isoLocal(b.starts_at);
-  const [from, setFrom] = useState(() => hhmmLocal(b.starts_at));
-  const [to, setTo] = useState(() => hhmmLocal(b.ends_at));
+  // Horas ORIGINAIS do bloco — usadas para identificar o "grupo" de
+  // regras recorrentes (mesmo intervalo, vários dias) ao aplicar
+  // "Todas as semanas". Não mudam quando o utilizador edita os selects.
+  const origFrom = hhmmLocal(b.starts_at);
+  const origTo = hhmmLocal(b.ends_at);
+  const [from, setFrom] = useState(origFrom);
+  const [to, setTo] = useState(origTo);
   const [reason, setReason] = useState<string>(b.reason ?? "");
   // Para recorrentes: aplicar a alteração só a este dia ou a todas as semanas.
   const [scope, setScope] = useState<"single" | "all">("all");
@@ -91,6 +96,9 @@ export function BusyBlock({
         fd.set("from", from);
         fd.set("to", to);
         fd.set("reason", reason.trim());
+        // grupo: todos os dias-da-semana criados com este mesmo intervalo
+        fd.set("oldFrom", origFrom);
+        fd.set("oldTo", origTo);
         res = await updateRecurringBlockAction(fd);
       } else {
         // só este dia: limpa a recorrência nesta data e cria um bloqueio
@@ -127,6 +135,8 @@ export function BusyBlock({
       } else if (scope === "all") {
         const fd = new FormData();
         fd.set("id", b.recurring_id);
+        fd.set("oldFrom", origFrom);
+        fd.set("oldTo", origTo);
         await deleteRecurringBlockAction(fd);
       } else {
         const fd = new FormData();
@@ -148,12 +158,12 @@ export function BusyBlock({
         type="button"
         onClick={() => canEdit && setOpen(true)}
         disabled={!canEdit}
-        className={`flex h-full w-full flex-col px-1 py-0.5 text-left text-[10px] ${canEdit ? "cursor-pointer" : "cursor-default"}`}
+        className={`flex h-full w-full flex-col px-0.5 py-0.5 text-left ${canEdit ? "cursor-pointer" : "cursor-default"}`}
         title={b.reason ?? "Ocupado"}
       >
-        <div className="font-semibold leading-none">Ocupado</div>
+        <div className="text-[8px] font-semibold leading-none">Ocupado</div>
         {isRecurring && (
-          <div className="mt-0.5 text-[8px] font-medium uppercase tracking-wide text-red-700/70">
+          <div className="mt-0.5 text-[6px] font-medium uppercase leading-none tracking-tight text-red-700/70">
             recorrente
           </div>
         )}
