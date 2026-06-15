@@ -881,10 +881,12 @@ function WeekView({
 
                 {/* Bookings (com destaque de sobreposição) */}
                 {(() => {
-                  // Calcula "stacks" de sobreposição entre sessões activas:
-                  // cada sessão recebe quantas outras já estão a decorrer
-                  // (stack) p/ cascata horizontal, e marca-se overlapIds
-                  // p/ todas as envolvidas (bordo âmbar).
+                  // Sessões sobrepostas dividem a largura da coluna do dia
+                  // em "colunas verticais" lado-a-lado (estilo Google
+                  // Calendar) — assim ambos os nomes ficam legíveis. Para
+                  // cada grupo de sobreposição transitiva, atribuímos a
+                  // coluna mais baixa livre (greedy + reuso quando uma
+                  // sessão termina antes de a próxima começar).
                   const act = dayBookings
                     .filter((x: any) => x.status === "booked" || x.status === "confirmed")
                     .map((x: any) => ({
@@ -895,19 +897,27 @@ function WeekView({
                         : new Date(x.starts_at).getTime() + 3_600_000,
                     }))
                     .sort((a: { s: number }, b: { s: number }) => a.s - b.s);
-                  const stackOf = new Map<string, number>();
-                  const overlapIds = new Set<string>();
-                  const live: { id: string; e: number }[] = [];
+                  const colOf = new Map<string, number>();
+                  const groupOf = new Map<string, number>();
+                  const groupCols = new Map<number, number>();
+                  let nextGroup = 0;
+                  let curGroup = -1;
+                  const live: { id: string; e: number; col: number }[] = [];
                   for (const it of act) {
                     for (let i = live.length - 1; i >= 0; i--) {
                       if (live[i].e <= it.s) live.splice(i, 1);
                     }
-                    stackOf.set(it.id, live.length);
-                    if (live.length > 0) {
-                      overlapIds.add(it.id);
-                      for (const l of live) overlapIds.add(l.id);
-                    }
-                    live.push({ id: it.id, e: it.e });
+                    if (live.length === 0) curGroup = nextGroup++;
+                    const used = new Set(live.map((l) => l.col));
+                    let col = 0;
+                    while (used.has(col)) col++;
+                    colOf.set(it.id, col);
+                    groupOf.set(it.id, curGroup);
+                    groupCols.set(
+                      curGroup,
+                      Math.max(groupCols.get(curGroup) ?? 1, col + 1),
+                    );
+                    live.push({ id: it.id, e: it.e, col });
                   }
 
                   return dayBookings.map((b) => {
@@ -921,12 +931,20 @@ function WeekView({
                       canBook &&
                       (b.status === "booked" || b.status === "confirmed") &&
                       s.getTime() > Date.now();
-                    const isOverlap = overlapIds.has(b.id);
-                    const stack = stackOf.get(b.id) ?? 0;
-                    // Cascata: cada sessão sobreposta desloca-se ~16px à
-                    // direita e fica por cima, deixando a anterior à vista.
+                    const g = groupOf.get(b.id);
+                    const cols = g !== undefined ? groupCols.get(g) ?? 1 : 1;
+                    const col = colOf.get(b.id) ?? 0;
+                    const isOverlap = cols > 1;
+                    // Cada sessão sobreposta ocupa 1/cols da largura da
+                    // coluna, com pequena margem entre blocos para se
+                    // distinguirem visualmente.
                     const overlapStyle = isOverlap
-                      ? { left: `${2 + stack * 16}px`, zIndex: 20 + stack }
+                      ? {
+                          left: `calc(${(col / cols) * 100}% + 2px)`,
+                          width: `calc(${100 / cols}% - 4px)`,
+                          right: "auto" as const,
+                          zIndex: 20 + col,
+                        }
                       : {};
                     return (
                       <BookingBlock
