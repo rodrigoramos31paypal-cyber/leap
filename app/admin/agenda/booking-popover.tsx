@@ -53,6 +53,7 @@ export function BookingBlock({
   rowHeights,
   snapMin = 15,
   sessionsLeft,
+  isLastCredit = false,
 }: {
   b: any;
   note?: { body: string } | null;
@@ -67,6 +68,10 @@ export function BookingBlock({
   // Saldo de sessões do cliente (soma de purchases confirmed/não-expiradas).
   // `undefined` quando não foi pré-carregado; `0` significa zero a sério.
   sessionsLeft?: number;
+  // `true` quando esta é a "sessão do último crédito" do cliente (saldo
+  // de packs == 0). Sinalizada a vermelho na agenda para alertar o
+  // treinador de que o cliente fica sem sessões.
+  isLastCredit?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -311,15 +316,29 @@ export function BookingBlock({
           ? "bg-ink-900/5 border-ink-900/15 text-ink-500 line-through hover:bg-ink-900/10"
           : "bg-gold-50 border-gold-300 text-ink-900 hover:bg-gold-100";
 
+  // Marcador "último crédito": anel vermelho por cima da cor do estado
+  // (mantém verde/dourado mas avisa que o cliente fica sem sessões).
+  // Distinto da falta (no_show), que é preenchida a vermelho (estado).
+  const lastCreditRing =
+    isLastCredit && b.status !== "cancelled"
+      ? "ring-2 ring-inset ring-red-500"
+      : "";
+
   return (
     <div
       ref={ref}
       data-event-block
-      className={`absolute left-0.5 right-0.5 overflow-hidden rounded border text-[10px] transition-colors ${tone} ${
+      className={`absolute left-0.5 right-0.5 overflow-hidden rounded border text-[10px] transition-colors ${tone} ${lastCreditRing} ${
         draggable ? "cursor-grab active:cursor-grabbing" : ""
       }`}
       style={{ ...style, touchAction: draggable ? "none" : undefined }}
     >
+      {isLastCredit && b.status !== "cancelled" && (
+        <span
+          title="Último crédito — cliente sem sessões"
+          className="pointer-events-none absolute right-0.5 top-0.5 z-10 h-2 w-2 rounded-full bg-red-500 ring-1 ring-white"
+        />
+      )}
       <button
         type="button"
         onPointerDown={onPointerDown}
@@ -428,6 +447,16 @@ export function BookingBlock({
             <p className="mb-3 rounded bg-bone-100 px-2.5 py-1.5 text-[11px] text-ink-500">
               Arrasta o bloco para reagendar.
             </p>
+          )}
+
+          {isLastCredit && b.status !== "cancelled" && (
+            <div className="mb-3 flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">
+              <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-red-500" />
+              <span>
+                <span className="font-semibold">Último crédito.</span> O cliente
+                fica sem sessões após esta — avisa-o durante o treino.
+              </span>
+            </div>
           )}
 
           {/* Saldo de sessões + link para o perfil. O saldo é o que
