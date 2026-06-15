@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { formatTime, BOOKING_STATUS } from "@/lib/utils";
 import { confirmAttendanceAction, markNoShowAction, cancelAdminAction, addBlockQuickAction, deleteBlockAction } from "./actions";
-import { ChevronLeft, ChevronRight, Ban, NotebookPen } from "lucide-react";
+import { Ban, NotebookPen } from "lucide-react";
 import { NoteEditor } from "@/components/note-editor";
 import { getMyNotesMapForBookings } from "@/lib/notes";
 import { getCurrentTrainerId, getAccessibleTrainerIds } from "@/lib/trainer";
@@ -80,59 +80,33 @@ export default async function AdminAgendaPage({
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight">Agenda</h1>
-          <p className="text-sm text-ink-500">{rangeLabel(view, day, rangeStart, rangeEnd)}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {canBook && (
-            <BookingDialog
-              trainerId={trainerId}
-              durations={durations}
-              defaultDuration={defaultDuration}
-              viewedDate={isoDate(day)}
-              packs={packs}
-            />
-          )}
-          <div className="flex overflow-hidden rounded-lg border border-ink-900/10 dark:border-white/10">
-            {(["day", "week", "month"] as View[]).map((v) => (
-              <Link
-                key={v}
-                href={`/admin/agenda?view=${v}&d=${isoDate(day)}`}
-                className={`px-3 py-1.5 text-xs font-medium ${
-                  view === v
-                    ? "bg-ink-900 text-bone-50 dark:bg-bone-50 dark:text-ink-900"
-                    : "bg-white text-ink-600 hover:bg-ink-900/5 dark:bg-ink-800 dark:text-bone-100 dark:hover:bg-white/10"
-                }`}
-              >
-                {v === "day" ? "Dia" : v === "week" ? "Semana" : "Mês"}
-              </Link>
-            ))}
-          </div>
-          <div className="flex gap-1">
-            <Link href={`/admin/agenda?view=${view}&d=${isoDate(stepBack(view, day))}`} className="btn-outline px-2">
-              <ChevronLeft size={16} />
-            </Link>
-            <Link href={`/admin/agenda?view=${view}&d=${isoDate(new Date())}`} className="btn-outline">
-              Hoje
-            </Link>
-            <Link href={`/admin/agenda?view=${view}&d=${isoDate(stepForward(view, day))}`} className="btn-outline px-2">
-              <ChevronRight size={16} />
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      <BlockTimeForm trainerId={trainerId} defaultDate={isoDate(day)} />
-
+    <div className="space-y-3">
+      {/* O calendário é o único conteúdo. Controlos foram movidos:
+          • Nova marcação → clique num slot vazio da grelha (dispara
+            agenda:newbooking → BookingDialog em modo headless).
+          • Navegação entre semanas → swipe esquerda/direita.
+          • Vista (Dia/Semana/Mês) → long-press no item "Agenda" do
+            bottom-nav (popover com 3 opções).
+          Default = vista de semana (cf. lógica acima). */}
       <Suspense
         key={`${view}-${isoDate(day)}`}
         fallback={<CardSkeleton className="h-96" />}
       >
         <CalendarView view={view} day={day} rangeStart={rangeStart} rangeEnd={rangeEnd} canBook={canBook} />
       </Suspense>
+
+      {/* BookingDialog "headless": invisível até o utilizador clicar num
+          slot da grelha. Mantém-se montado para apanhar o evento. */}
+      {canBook && (
+        <BookingDialog
+          trainerId={trainerId}
+          durations={durations}
+          defaultDuration={defaultDuration}
+          viewedDate={isoDate(day)}
+          packs={packs}
+          hideTrigger
+        />
+      )}
 
       {canBook && <RescheduleDialog />}
     </div>

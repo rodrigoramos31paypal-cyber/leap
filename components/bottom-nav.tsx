@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   Home,
@@ -55,21 +55,59 @@ export function BottomNav({ variant }: { variant: "client" | "admin" }) {
   const path = usePathname();
   const items = variant === "client" ? clientItems : adminItems;
   const [moreOpen, setMoreOpen] = useState(false);
+  // Long-press na nav "Agenda" → popover com Dia / Semana / Mês.
+  const [viewMenuOpen, setViewMenuOpen] = useState(false);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFiredRef = useRef(false);
 
-  // Fecha o overflow ao mudar de pagina.
+  function startLongPress() {
+    longPressFiredRef.current = false;
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = setTimeout(() => {
+      longPressFiredRef.current = true;
+      setViewMenuOpen(true);
+      // pequeno haptic em mobile (se suportado)
+      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+        try {
+          (navigator as Navigator).vibrate?.(10);
+        } catch {}
+      }
+    }, 500);
+  }
+  function cancelLongPress() {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }
+  function onAgendaClickCapture(e: React.MouseEvent) {
+    if (longPressFiredRef.current) {
+      // O Link normalmente navegaria — long-press já abriu o popover,
+      // não queremos navegar.
+      e.preventDefault();
+      e.stopPropagation();
+      longPressFiredRef.current = false;
+    }
+  }
+
+  // Fecha o overflow / view-menu ao mudar de pagina.
   useEffect(() => {
     setMoreOpen(false);
+    setViewMenuOpen(false);
   }, [path]);
 
   // Permite fechar com ESC.
   useEffect(() => {
-    if (!moreOpen) return;
+    if (!moreOpen && !viewMenuOpen) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setMoreOpen(false);
+      if (e.key === "Escape") {
+        setMoreOpen(false);
+        setViewMenuOpen(false);
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [moreOpen]);
+  }, [moreOpen, viewMenuOpen]);
 
   const moreActive =
     variant === "admin" && adminOverflow.some((it) => path?.startsWith(it.href));
@@ -143,17 +181,43 @@ export function BottomNav({ variant }: { variant: "client" | "admin" }) {
           {items.map((it) => {
             const active = path?.startsWith(it.href);
             const Icon = it.icon;
+            const isAdminAgenda =
+              variant === "admin" && it.href === "/admin/agenda";
             return (
               <li key={it.href}>
                 <Link
                   href={it.href}
                   aria-current={active ? "page" : undefined}
+                  // Long-press SÓ no item "Agenda" do admin nav: abre
+                  // popover com Dia/Semana/Mês. Tap normal continua a
+                  // navegar para /admin/agenda (vista por defeito).
+                  onPointerDown={isAdminAgenda ? startLongPress : undefined}
+                  onPointerUp={isAdminAgenda ? cancelLongPress : undefined}
+                  onPointerLeave={isAdminAgenda ? cancelLongPress : undefined}
+                  onPointerCancel={isAdminAgenda ? cancelLongPress : undefined}
+                  onContextMenu={
+                    isAdminAgenda
+                      ? (e) => {
+                          // Evita o context menu do browser em mobile
+                          // (que apareceria a competir com o popover).
+                          e.preventDefault();
+                        }
+                      : undefined
+                  }
+                  onClickCapture={
+                    isAdminAgenda ? onAgendaClickCapture : undefined
+                  }
                   className={cn(
                     "flex flex-col items-center gap-0.5 rounded-md px-3 py-1.5 text-[10px] font-medium transition",
                     active
                       ? "bg-ink-900/10 text-ink-900 dark:bg-white/10 dark:text-bone-50"
                       : "text-ink-500 hover:bg-ink-900/5 hover:text-ink-900 dark:text-bone-100/70 dark:hover:bg-white/5 dark:hover:text-bone-50",
                   )}
+                  style={
+                    isAdminAgenda
+                      ? { touchAction: "manipulation", userSelect: "none" }
+                      : undefined
+                  }
                 >
                   <Icon size={20} />
                   <span>{it.label}</span>
@@ -182,6 +246,37 @@ export function BottomNav({ variant }: { variant: "client" | "admin" }) {
           )}
         </ul>
       </nav>
+
+      {/* View-switcher popover (Agenda · long-press) — só admin, mobile. */}
+      {variant === "admin" && viewMenuOpen && (
+        <>
+          <button
+            type="button"
+            aria-label="Fechar"
+            onClick={() => setViewMenuOpen(false)}
+            className="fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-sm md:hidden"
+          />
+          <div
+            role="menu"
+            aria-label="Vista da Agenda"
+            className="safe-bottom fixed bottom-[68px] left-1/2 z-50 w-[200px] -translate-x-1/2 overflow-hidden rounded-xl border border-ink-900/10 bg-white shadow-2xl dark:border-white/10 dark:bg-ink-800 md:hidden"
+          >
+            <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+              Vista da Agenda
+            </div>
+            {(["day", "week", "month"] as const).map((v) => (
+              <Link
+                key={v}
+                href={`/admin/agenda?view=${v}`}
+                onClick={() => setViewMenuOpen(false)}
+                className="block px-3 py-2.5 text-sm font-medium text-ink-700 hover:bg-ink-900/5 dark:text-bone-100 dark:hover:bg-white/5"
+              >
+                {v === "day" ? "Dia" : v === "week" ? "Semana" : "Mês"}
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
     </>
   );
 }
