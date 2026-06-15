@@ -86,6 +86,127 @@ export async function addTrainerAction(formData: FormData): Promise<{ error?: st
   }
 }
 
+// Gera um slug único para o trainer a partir do nome/email (auto).
+async function uniqueTrainerSlug(
+  admin: ReturnType<typeof createAdminClient>,
+  email: string,
+  fullName?: string | null,
+): Promise<string> {
+  const base =
+    (fullName || email.split("@")[0] || "trainer")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "") // remove acentos
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40) || "trainer";
+  let slug = base;
+  let n = 1;
+  // tenta base, base-2, base-3… até encontrar livre
+  // (limite defensivo para nunca ciclar para sempre)
+  while (n < 100) {
+    const { data } = await admin
+      .from("trainers")
+      .select("id")
+      .eq("slug", slug)
+      .maybeSingle();
+    if (!data) return slug;
+    n += 1;
+    slug = `${base}-${n}`;
+  }
+  return `${base}-${Date.now()}`;
+}
+
+/**
+ * Concede acesso de ADMIN a uma conta JÁ REGISTADA, pelo email.
+ * A conta passa a ser um espelho do dono: role 'owner' (todas as
+ * notificações + gestão total) + registo de trainer (agenda própria,
+ * marcável pelos clientes, sem "Sem trainer configurado").
+ * Equivalente in-app ao script supabase/scripts/grant_owner_trainer.sql.
+ */
+export async function grantAdminByEmailAction(
+  formData: FormData,
+): Promise<{ error?: string; ok?: true }> {
+  try {
+    await requireOwner();
+    const email = String(formData.get("email") ?? "").trim().toLowerCase();
+    if (!email) {
+      setFlash("Indica um email.", "error");
+      return { error: "Indica um email." };
+    }
+
+    const admin = createAdminClient();
+
+    // 1. A conta tem de estar registada (linha em profiles criada no signup).
+    const { data: prof, error: findErr } = await admin
+      .from("profiles")
+      .select("id, full_name, role")
+      .eq("email", email)
+      .maybeSingle();
+    if (findErr) {
+      logError("grantAdminByEmailAction:find", findErr);
+      setFlash("Não foi possível procurar a conta.", "error");
+      return { error: "Não foi possível procurar a conta." };
+    }
+    if (!prof) {
+      setFlash("Não existe nenhuma conta registada com esse email.", "error");
+      return { error: "Conta não registada." };
+    }
+    const target = prof as { id: string; full_name: string | null; role: string };
+
+    // 2. Promove a owner (se ainda não for).
+    if (target.role !== "owner") {
+      const { error: roleErr } = await admin
+        .from("profiles")
+        .update({ role: "owner" })
+        .eq("id", target.id);
+      if (roleErr) {
+        logError("grantAdminByEmailAction:promote", roleErr);
+        setFlash("Não foi possível promover a conta.", "error");
+        return { error: "Não foi possível promover a conta." };
+      }
+    }
+
+    // 3. Garante registo de trainer (espelho da agenda do dono).
+    const { data: existingT } = await admin
+      .from("trainers")
+      .select("id")
+      .eq("profile_id", target.id)
+      .maybeSingle();
+    if (!existingT) {
+      const slug = await uniqueTrainerSlug(admin, email, target.full_name);
+      const { data: tRow, error: tErr } = await admin
+        .from("trainers")
+        .insert({ profile_id: target.id, slug, bio: "Personal Trainer", active: true })
+        .select("id")
+        .single();
+      if (tErr || !tRow) {
+        logError("grantAdminByEmailAction:createTrainer", tErr);
+        // role já foi promovido — a conta tem acesso admin, só falta a agenda.
+        setFlash("Conta promovida a admin, mas falhou criar a agenda de trainer.", "error");
+        return { error: "Falhou criar o registo de trainer." };
+      }
+      await admin.from("trainer_settings").insert({ trainer_id: tRow.id });
+      await admin.from("trainer_availability").insert([
+        { trainer_id: tRow.id, day_of_week: 1, start_time: "07:00", end_time: "21:00" },
+        { trainer_id: tRow.id, day_of_week: 2, start_time: "07:00", end_time: "21:00" },
+        { trainer_id: tRow.id, day_of_week: 3, start_time: "07:00", end_time: "21:00" },
+        { trainer_id: tRow.id, day_of_week: 4, start_time: "07:00", end_time: "21:00" },
+        { trainer_id: tRow.id, day_of_week: 5, start_time: "07:00", end_time: "21:00" },
+        { trainer_id: tRow.id, day_of_week: 6, start_time: "08:00", end_time: "13:00" },
+      ]);
+    }
+
+    revalidateTeamViews();
+    setFlash(`${target.full_name || email} é agora admin.`);
+    return { ok: true };
+  } catch (e) {
+    logError("grantAdminByEmailAction", e);
+    setFlash("Não foi possível conceder admin.", "error");
+    return { error: "Não foi possível conceder admin." };
+  }
+}
+
 export async function toggleTrainerActiveAction(formData: FormData) {
   await requireOwner();
   const id = String(formData.get("id") ?? "");
