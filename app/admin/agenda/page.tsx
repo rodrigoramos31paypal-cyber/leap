@@ -935,16 +935,17 @@ function WeekView({
                     const cols = g !== undefined ? groupCols.get(g) ?? 1 : 1;
                     const col = colOf.get(b.id) ?? 0;
                     const isOverlap = cols > 1;
-                    // Cada sessão sobreposta ocupa 1/cols da largura da
-                    // coluna, com pequena margem entre blocos para se
-                    // distinguirem visualmente.
-                    const overlapStyle = isOverlap
-                      ? {
-                          left: `calc(${(col / cols) * 100}% + 2px)`,
-                          width: `calc(${100 / cols}% - 4px)`,
-                          right: "auto" as const,
+                    // O posicionamento responsivo (cascata em mobile,
+                    // colunas lado-a-lado em ≥640px) é feito por CSS em
+                    // `.booking-overlap-block` (globals.css), consumindo
+                    // estas CSS vars. zIndex inline garante a ordem
+                    // independentemente do breakpoint.
+                    const overlapStyle: React.CSSProperties = isOverlap
+                      ? ({
+                          "--ov-col": col,
+                          "--ov-cols": cols,
                           zIndex: 20 + col,
-                        }
+                        } as any)
                       : {};
                     return (
                       <BookingBlock
