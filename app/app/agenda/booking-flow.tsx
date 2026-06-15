@@ -9,6 +9,9 @@ import type { SessionType } from "@/types/database";
 
 type CreditSummary = { individual: number; dupla: number; total: number };
 
+type Conflict = { week: number; starts_at: string; reason: string };
+type PartialResult = { booked_count: number; requested_count: number; conflicts: Conflict[] };
+
 export function BookingFlow({
   trainerId,
   slotDurations,
@@ -33,9 +36,8 @@ export function BookingFlow({
   const [picked, setPicked] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [conflicts, setConflicts] = useState<
-    Array<{ week: number; starts_at: string; reason: string }>
-  >([]);
+  const [partial, setPartial] = useState<PartialResult | null>(null);
+  const [resolved, setResolved] = useState<Set<string>>(new Set());
   const [recurring, setRecurring] = useState(false);
   const [pending, start] = useTransition();
 
@@ -91,7 +93,8 @@ export function BookingFlow({
   function confirm() {
     if (!picked) return;
     setError(null);
-    setConflicts([]);
+    setPartial(null);
+    setResolved(new Set());
     start(async () => {
       if (rescheduleBookingId) {
         const res = await rescheduleAction({
@@ -114,8 +117,15 @@ export function BookingFlow({
           sessionType,
           sessionsCount: availableCredits,
         });
-        if (res.result?.conflicts?.length) {
-          setConflicts(res.result.conflicts);
+        // Parcial: marcou as semanas livres; mostra as que falharam com
+        // sugestões de horário (mesmo que não tenha marcado nenhuma).
+        if (res.result && res.result.conflicts.length > 0) {
+          setPartial({
+            booked_count: res.result.booked_count,
+            requested_count: res.result.requested_count,
+            conflicts: res.result.conflicts,
+          });
+          setResolved(new Set());
           return;
         }
         if (res.error) {
@@ -221,22 +231,59 @@ export function BookingFlow({
 
       {error && <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
 
-      {conflicts.length > 0 && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
-          <div className="font-semibold">Não foi possível marcar todas as semanas:</div>
-          <ul className="mt-1 list-disc pl-5">
-            {conflicts.map((c) => (
-              <li key={c.starts_at}>
-                Semana {c.week} ({formatDateTime(c.starts_at)}) — {reasonLabel(c.reason)}
-              </li>
-            ))}
-          </ul>
-          <p className="mt-2 text-xs">
-            Escolhe outro horário/dia para a série, ou desactiva "recorrente" e marca as
-            semanas individualmente.
-          </p>
-        </div>
-      )}
+      {partial && (() => {
+        const remaining = partial.conflicts.filter((c) => !resolved.has(c.starts_at));
+        const booked = partial.booked_count + resolved.size;
+        return (
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
+            <div className="font-semibold">
+              {booked > 0
+                ? `Marcadas ${booked} de ${partial.requested_count} sessões.`
+                : "Não foi possível marcar nenhuma semana."}
+            </div>
+            {remaining.length > 0 ? (
+              <>
+                <p className="mt-1 text-xs">
+                  Estas semanas já estavam ocupadas. Escolhe outro horário (ou marca-as
+                  mais tarde, quando quiseres):
+                </p>
+                <ul className="mt-2 space-y-3">
+                  {remaining.map((c) => (
+                    <li key={c.starts_at}>
+                      <div className="text-xs font-medium">
+                        Semana {c.week} · {formatDateTime(c.starts_at)} — {reasonLabel(c.reason)}
+                      </div>
+                      <ConflictSuggestions
+                        trainerId={trainerId}
+                        durationMin={duration}
+                        sessionType={sessionType}
+                        conflictStartsAt={c.starts_at}
+                        pickedIso={picked!}
+                        onBooked={() =>
+                          setResolved((prev) => {
+                            const next = new Set(prev);
+                            next.add(c.starts_at);
+                            return next;
+                          })
+                        }
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className="mt-1 text-xs">Tudo marcado. 🎉</p>
+            )}
+            <button
+              type="button"
+              onClick={() => router.push("/app/historico?ok=recurring")}
+              className="btn-outline mt-3 w-full text-xs"
+            >
+              Concluir
+            </button>
+          </div>
+        );
+      })()}
 
       {picked && (
         <div className="card sticky bottom-24 z-20 p-4 md:bottom-4">
@@ -283,6 +330,153 @@ export function BookingFlow({
       )}
     </div>
   );
+}
+
+// Sugestões de horário para uma semana que ficou por marcar. Procura
+// primeiro slots livres no MESMO dia da semana (mais perto da hora
+// escolhida); se esse dia estiver cheio, alarga aos outros dias da
+// mesma semana. Cada sugestão marca essa semana com um clique.
+function ConflictSuggestions({
+  trainerId,
+  durationMin,
+  sessionType,
+  conflictStartsAt,
+  pickedIso,
+  onBooked,
+}: {
+  trainerId: string;
+  durationMin: number;
+  sessionType: SessionType;
+  conflictStartsAt: string;
+  pickedIso: string;
+  onBooked: () => void;
+}) {
+  const [slots, setSlots] = useState<{ startsAt: string; sameDay: boolean }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [booking, setBooking] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const pickedMin = minutesOfDay(new Date(pickedIso));
+      const conflictDay = new Date(conflictStartsAt);
+
+      // 1) mesmo dia da semana
+      const same = await fetchSlots(trainerId, conflictDay, durationMin);
+      let list = same.map((s) => ({ startsAt: s.startsAt, sameDay: true }));
+
+      // 2) fallback: outros dias da mesma semana
+      if (list.length === 0) {
+        const monday = mondayOf(conflictDay);
+        for (let k = 0; k < 7; k++) {
+          const d = new Date(monday);
+          d.setDate(d.getDate() + k);
+          if (isSameDay(d, conflictDay)) continue;
+          const ss = await fetchSlots(trainerId, d, durationMin);
+          for (const s of ss) list.push({ startsAt: s.startsAt, sameDay: false });
+        }
+      }
+
+      const now = Date.now();
+      list = list
+        .filter((s) => new Date(s.startsAt).getTime() > now)
+        .sort(
+          (a, b) =>
+            Math.abs(minutesOfDay(new Date(a.startsAt)) - pickedMin) -
+            Math.abs(minutesOfDay(new Date(b.startsAt)) - pickedMin),
+        )
+        .slice(0, 4);
+
+      if (!cancelled) {
+        setSlots(list);
+        setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [trainerId, durationMin, conflictStartsAt, pickedIso]);
+
+  async function book(startsAt: string) {
+    setBooking(startsAt);
+    setErr(null);
+    const res = await bookAction({ trainerId, startsAtIso: startsAt, durationMin, sessionType });
+    setBooking(null);
+    if (res.error) {
+      setErr(res.error);
+      return;
+    }
+    setDone(startsAt);
+    onBooked();
+  }
+
+  if (done) {
+    return (
+      <div className="mt-1 text-xs font-semibold text-emerald-700">
+        ✓ Marcada às {formatTime(done)}.
+      </div>
+    );
+  }
+  if (loading) return <div className="mt-1 text-xs text-amber-700/70">A procurar horários…</div>;
+  if (slots.length === 0)
+    return <div className="mt-1 text-xs text-amber-700/70">Sem horários livres nessa semana.</div>;
+
+  return (
+    <div className="mt-1.5">
+      <div className="flex flex-wrap gap-1.5">
+        {slots.map((s) => (
+          <button
+            key={s.startsAt}
+            type="button"
+            disabled={booking !== null}
+            onClick={() => book(s.startsAt)}
+            className="rounded-md border border-amber-300 bg-white px-2 py-1 text-xs font-medium tabular-nums text-ink-900 hover:bg-amber-100 disabled:opacity-50"
+          >
+            {booking === s.startsAt
+              ? "A marcar…"
+              : s.sameDay
+                ? formatTime(s.startsAt)
+                : `${WEEKDAYS_PT_SHORT[new Date(s.startsAt).getDay()]} ${formatTime(s.startsAt)}`}
+          </button>
+        ))}
+      </div>
+      {err && <div className="mt-1 text-xs text-red-700">{err}</div>}
+    </div>
+  );
+}
+
+async function fetchSlots(
+  trainerId: string,
+  day: Date,
+  durationMin: number,
+): Promise<{ startsAt: string; endsAt: string }[]> {
+  const params = new URLSearchParams({
+    trainer: trainerId,
+    date: ymd(day),
+    duration: String(durationMin),
+  });
+  try {
+    const res = await fetch(`/api/slots?${params.toString()}`, { credentials: "same-origin" });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.slots ?? [];
+  } catch {
+    return [];
+  }
+}
+
+function minutesOfDay(d: Date) {
+  return d.getHours() * 60 + d.getMinutes();
+}
+
+function mondayOf(d: Date) {
+  const x = startOfDay(d);
+  const dow = (x.getDay() + 6) % 7; // 0 = segunda
+  x.setDate(x.getDate() - dow);
+  return x;
 }
 
 function reasonLabel(reason: string) {

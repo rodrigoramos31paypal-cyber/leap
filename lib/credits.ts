@@ -225,9 +225,17 @@ export type RecurringBookingResult = {
   series_id: string | null;
   booking_ids: string[];
   conflicts: Array<{ week: number; starts_at: string; reason: "booking" | "blocked" | "reserved" }>;
+  /** Nº de semanas efectivamente marcadas (pode ser < requested_count). */
+  booked_count: number;
+  /** Nº de semanas pedidas originalmente. */
+  requested_count: number;
 };
 
-/** Marca várias semanas consecutivas de uma só vez. Atómico: ou cria tudo, ou nada. */
+/**
+ * Marca várias semanas consecutivas. PARCIAL: marca as semanas livres e
+ * devolve em `conflicts` as que ficaram por marcar (já havia marcação,
+ * bloqueio, etc.). `booked_count`/`requested_count` para a mensagem da UI.
+ */
 export async function createRecurringBooking(args: {
   trainerId: string;
   startsAt: Date;

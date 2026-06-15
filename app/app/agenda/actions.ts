@@ -128,22 +128,32 @@ export async function bookRecurringAction({
       sessionsCount,
       sessionType,
     });
-    if (!result.ok) {
-      setFlash("Conflitos detectados na série", "error");
-      return { error: "Conflitos detectados.", result };
+
+    // PARCIAL: a RPC marca as semanas livres e devolve as restantes em
+    // `conflicts`. Disparamos side-effects (email/calendário) só para as
+    // marcações criadas — em PARALELO (um único batch).
+    if (result.booking_ids.length > 0) {
+      await Promise.allSettled(
+        result.booking_ids.flatMap((id) => [
+          dispatchBookingCreated(id),
+          pushBookingToCalendars(id),
+        ]),
+      );
+      revalidateBookingViews();
     }
-    // PERF (C2): dispara TODAS as notificações/calendários da série em
-    // PARALELO. Antes era um loop sequencial: para N sessões, N×2 chamadas
-    // externas em série (uma série de 8 semanas = 16 round-trips antes de
-    // responder ao utilizador). Agora é um único batch paralelo.
-    await Promise.allSettled(
-      result.booking_ids.flatMap((id) => [
-        dispatchBookingCreated(id),
-        pushBookingToCalendars(id),
-      ]),
+
+    // Nenhuma semana disponível → nada marcado (devolvemos os conflitos
+    // na mesma para a UI poder sugerir alternativas).
+    if (result.booked_count === 0) {
+      setFlash("Nenhuma semana disponível para a série", "error");
+      return { error: "Nenhuma semana disponível.", result };
+    }
+
+    setFlash(
+      result.conflicts.length > 0
+        ? `Marcadas ${result.booked_count} de ${result.requested_count} sessões`
+        : `Criadas ${result.booked_count} marcações`,
     );
-    setFlash(`Criadas ${result.booking_ids.length} marcações`);
-    revalidateBookingViews();
     return { ok: true, result };
   } catch (err) {
     logError("bookRecurringAction", err);
