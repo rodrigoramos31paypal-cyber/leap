@@ -86,43 +86,14 @@ export async function addTrainerAction(formData: FormData): Promise<{ error?: st
   }
 }
 
-// Gera um slug único para o trainer a partir do nome/email (auto).
-async function uniqueTrainerSlug(
-  admin: ReturnType<typeof createAdminClient>,
-  email: string,
-  fullName?: string | null,
-): Promise<string> {
-  const base =
-    (fullName || email.split("@")[0] || "trainer")
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "") // remove acentos
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 40) || "trainer";
-  let slug = base;
-  let n = 1;
-  // tenta base, base-2, base-3… até encontrar livre
-  // (limite defensivo para nunca ciclar para sempre)
-  while (n < 100) {
-    const { data } = await admin
-      .from("trainers")
-      .select("id")
-      .eq("slug", slug)
-      .maybeSingle();
-    if (!data) return slug;
-    n += 1;
-    slug = `${base}-${n}`;
-  }
-  return `${base}-${Date.now()}`;
-}
-
 /**
  * Concede acesso de ADMIN a uma conta JÁ REGISTADA, pelo email.
- * A conta passa a ser um espelho do dono: role 'owner' (todas as
- * notificações + gestão total) + registo de trainer (agenda própria,
- * marcável pelos clientes, sem "Sem trainer configurado").
- * Equivalente in-app ao script supabase/scripts/grant_owner_trainer.sql.
+ *
+ * A conta passa a OWNER (gestão total + todas as notificações) e
+ * PARTILHA o calendário do estúdio — NÃO cria um trainer separado, por
+ * isso os clientes NÃO passam a ter de "escolher treinador". Para um
+ * calendário próprio (estúdio com vários treinadores) usa antes
+ * "Adicionar trainer".
  */
 export async function grantAdminByEmailAction(
   formData: FormData,
@@ -154,47 +125,21 @@ export async function grantAdminByEmailAction(
     }
     const target = prof as { id: string; full_name: string | null; role: string };
 
-    // 2. Promove a owner (se ainda não for).
-    if (target.role !== "owner") {
-      const { error: roleErr } = await admin
-        .from("profiles")
-        .update({ role: "owner" })
-        .eq("id", target.id);
-      if (roleErr) {
-        logError("grantAdminByEmailAction:promote", roleErr);
-        setFlash("Não foi possível promover a conta.", "error");
-        return { error: "Não foi possível promover a conta." };
-      }
+    if (target.role === "owner") {
+      setFlash(`${target.full_name || email} já é admin.`);
+      return { ok: true };
     }
 
-    // 3. Garante registo de trainer (espelho da agenda do dono).
-    const { data: existingT } = await admin
-      .from("trainers")
-      .select("id")
-      .eq("profile_id", target.id)
-      .maybeSingle();
-    if (!existingT) {
-      const slug = await uniqueTrainerSlug(admin, email, target.full_name);
-      const { data: tRow, error: tErr } = await admin
-        .from("trainers")
-        .insert({ profile_id: target.id, slug, bio: "Personal Trainer", active: true })
-        .select("id")
-        .single();
-      if (tErr || !tRow) {
-        logError("grantAdminByEmailAction:createTrainer", tErr);
-        // role já foi promovido — a conta tem acesso admin, só falta a agenda.
-        setFlash("Conta promovida a admin, mas falhou criar a agenda de trainer.", "error");
-        return { error: "Falhou criar o registo de trainer." };
-      }
-      await admin.from("trainer_settings").insert({ trainer_id: tRow.id });
-      await admin.from("trainer_availability").insert([
-        { trainer_id: tRow.id, day_of_week: 1, start_time: "07:00", end_time: "21:00" },
-        { trainer_id: tRow.id, day_of_week: 2, start_time: "07:00", end_time: "21:00" },
-        { trainer_id: tRow.id, day_of_week: 3, start_time: "07:00", end_time: "21:00" },
-        { trainer_id: tRow.id, day_of_week: 4, start_time: "07:00", end_time: "21:00" },
-        { trainer_id: tRow.id, day_of_week: 5, start_time: "07:00", end_time: "21:00" },
-        { trainer_id: tRow.id, day_of_week: 6, start_time: "08:00", end_time: "13:00" },
-      ]);
+    // Promove a OWNER. SEM criar trainer — partilha o calendário do
+    // estúdio (não introduz a escolha de treinador para os clientes).
+    const { error: roleErr } = await admin
+      .from("profiles")
+      .update({ role: "owner" })
+      .eq("id", target.id);
+    if (roleErr) {
+      logError("grantAdminByEmailAction:promote", roleErr);
+      setFlash("Não foi possível promover a conta.", "error");
+      return { error: "Não foi possível promover a conta." };
     }
 
     revalidateTeamViews();
@@ -204,6 +149,136 @@ export async function grantAdminByEmailAction(
     logError("grantAdminByEmailAction", e);
     setFlash("Não foi possível conceder admin.", "error");
     return { error: "Não foi possível conceder admin." };
+  }
+}
+
+/**
+ * "Tornar só admin": remove o registo de trainer de uma conta mas mantém
+ * o acesso de owner. Deixa de ser treinador marcável e passa a partilhar
+ * o calendário do estúdio. Usado para consolidar vários admins num único
+ * calendário (deixa de haver escolha de treinador para os clientes).
+ *
+ * Não remove o ÚLTIMO trainer, nem um trainer com histórico
+ * (marcações/compras/séries) — nesse caso há que transferir primeiro.
+ */
+export async function makeOwnerOnlyAction(formData: FormData) {
+  try {
+    await requireOwner();
+    const id = String(formData.get("id") ?? "");
+    if (!id) { setFlash("Trainer inválido.", "error"); return; }
+
+    const admin = createAdminClient();
+
+    const { count: total } = await admin
+      .from("trainers")
+      .select("id", { count: "exact", head: true });
+    if ((total ?? 0) <= 1) {
+      setFlash("É o único trainer do estúdio — não pode ficar sem calendário.", "error");
+      return;
+    }
+
+    const { data: tr } = await admin
+      .from("trainers")
+      .select("id, profile_id, profiles:profile_id(full_name)")
+      .eq("id", id)
+      .maybeSingle();
+    const t = tr as { id: string; profile_id: string; profiles: { full_name: string | null } | null } | null;
+    if (!t) { setFlash("Trainer não encontrado.", "error"); return; }
+
+    const [{ count: bk }, { count: pu }, { count: se }] = await Promise.all([
+      admin.from("bookings").select("id", { count: "exact", head: true }).eq("trainer_id", id),
+      admin.from("purchases").select("id", { count: "exact", head: true }).eq("trainer_id", id),
+      admin.from("booking_series").select("id", { count: "exact", head: true }).eq("trainer_id", id),
+    ]);
+    if ((bk ?? 0) > 0 || (pu ?? 0) > 0 || (se ?? 0) > 0) {
+      setFlash("Este trainer tem histórico. Transfere o calendário para outra conta primeiro.", "error");
+      return;
+    }
+
+    await admin.from("profiles").update({ role: "owner" }).eq("id", t.profile_id);
+    const { error: delErr } = await admin.from("trainers").delete().eq("id", id);
+    if (delErr) {
+      logError("makeOwnerOnlyAction:del", delErr);
+      setFlash("Não foi possível remover o calendário.", "error");
+      return;
+    }
+
+    revalidateTeamViews();
+    setFlash(`${t.profiles?.full_name || "Conta"} é agora só admin (partilha o calendário do estúdio).`);
+  } catch (e) {
+    logError("makeOwnerOnlyAction", e);
+    setFlash("Não foi possível tornar só admin.", "error");
+  }
+}
+
+/** Revoga admin de uma conta SEM trainer próprio (secção Admins): volta a cliente. */
+export async function revokeAdminByProfileAction(formData: FormData) {
+  try {
+    const ownerId = await requireOwner();
+    const profileId = String(formData.get("profileId") ?? "");
+    if (!profileId) { setFlash("Conta inválida.", "error"); return; }
+    if (profileId === ownerId) {
+      setFlash("Não podes revogar a tua própria conta.", "error");
+      return;
+    }
+    const admin = createAdminClient();
+    const { error } = await admin.from("profiles").update({ role: "client" }).eq("id", profileId);
+    if (error) {
+      logError("revokeAdminByProfileAction", error);
+      setFlash("Não foi possível revogar.", "error");
+      return;
+    }
+    revalidateTeamViews();
+    setFlash("Admin revogado — a conta passou a cliente.");
+  } catch (e) {
+    logError("revokeAdminByProfileAction", e);
+    setFlash("Não foi possível revogar.", "error");
+  }
+}
+
+/**
+ * "Tornar treinador": move o calendário do estúdio (o único trainer)
+ * para esta conta. Passa a ser o treinador marcável; quem o era antes
+ * fica como admin (owner) sem calendário. Mantém marcações/histórico —
+ * só muda quem controla o registo de trainer. Move "full powers".
+ *
+ * Só com EXACTAMENTE um trainer (modelo de estúdio único).
+ */
+export async function makeStudioTrainerAction(formData: FormData) {
+  try {
+    await requireOwner();
+    const profileId = String(formData.get("profileId") ?? "");
+    if (!profileId) { setFlash("Conta inválida.", "error"); return; }
+
+    const admin = createAdminClient();
+
+    const { data: trainers } = await admin.from("trainers").select("id, profile_id");
+    const list = (trainers ?? []) as { id: string; profile_id: string }[];
+    if (list.length !== 1) {
+      setFlash("Só é possível com um único trainer no estúdio.", "error");
+      return;
+    }
+    if (list[0].profile_id === profileId) {
+      setFlash("Esta conta já é o treinador.", "error");
+      return;
+    }
+
+    await admin.from("profiles").update({ role: "owner" }).eq("id", profileId);
+    const { error: movErr } = await admin
+      .from("trainers")
+      .update({ profile_id: profileId })
+      .eq("id", list[0].id);
+    if (movErr) {
+      logError("makeStudioTrainerAction:move", movErr);
+      setFlash("Não foi possível transferir o calendário.", "error");
+      return;
+    }
+
+    revalidateTeamViews();
+    setFlash("Calendário transferido — esta conta é agora o treinador.");
+  } catch (e) {
+    logError("makeStudioTrainerAction", e);
+    setFlash("Não foi possível transferir.", "error");
   }
 }
 
