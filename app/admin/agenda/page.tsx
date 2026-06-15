@@ -371,7 +371,12 @@ function BlockItem({ b }: { b: any }) {
 const HOUR_START = 7;
 const HOUR_END = 22;
 const TOTAL_HOURS = HOUR_END - HOUR_START; // 15
-const HOUR_HEIGHT = 56; // px per hour
+// HOUR_HEIGHT subido de 56→88 (Jun 2026) para que cada slot de 15 min
+// passe a ter ~22 px em vez de 14 px — sessões a :15/:30/:45 ficam
+// visualmente distintas dentro do rectângulo da hora. Combinado com
+// as gridlines a cada 15 min mais abaixo, o utilizador consegue
+// "ler" a posição vertical de uma sessão sem ambiguidade.
+const HOUR_HEIGHT = 88; // px per hour
 
 function timeOffset(d: Date) {
   const minutesFromStart = (d.getHours() - HOUR_START) * 60 + d.getMinutes();
@@ -488,12 +493,30 @@ function WeekView({
                     style={{ top: i * HOUR_HEIGHT }}
                   />
                 ))}
-                {/* Half-hour lighter lines */}
+                {/* Half-hour lighter lines + quarter-hour ticks.
+                    A linha pontilhada cheia continua a marcar a meia-
+                    hora (mais forte) e duas linhas mais ténues marcam
+                    :15 e :45 — o utilizador vê de relance em que
+                    quarto da hora uma sessão começa. */}
                 {Array.from({ length: TOTAL_HOURS }, (_, i) => (
                   <div
                     key={`half-${i}`}
-                    className="absolute left-0 right-0 border-t border-dashed border-ink-900/5"
+                    className="absolute left-0 right-0 border-t border-dashed border-ink-900/10"
                     style={{ top: i * HOUR_HEIGHT + HOUR_HEIGHT / 2 }}
+                  />
+                ))}
+                {Array.from({ length: TOTAL_HOURS }, (_, i) => (
+                  <div
+                    key={`q1-${i}`}
+                    className="absolute left-0 right-0 border-t border-dotted border-ink-900/5"
+                    style={{ top: i * HOUR_HEIGHT + HOUR_HEIGHT / 4 }}
+                  />
+                ))}
+                {Array.from({ length: TOTAL_HOURS }, (_, i) => (
+                  <div
+                    key={`q3-${i}`}
+                    className="absolute left-0 right-0 border-t border-dotted border-ink-900/5"
+                    style={{ top: i * HOUR_HEIGHT + (HOUR_HEIGHT * 3) / 4 }}
                   />
                 ))}
 
@@ -642,7 +665,7 @@ function MonthView({ gridStart, anchor, bookings, blocks, reserved }: { gridStar
                     <span>{formatTime(b.starts_at)}</span>
                     <span className="hidden sm:inline">
                       {" "}
-                      {b.profiles?.full_name?.split(" ")[0] ?? ""}
+                      {shortName(b.profiles?.full_name)}
                     </span>
                   </div>
                 ))}
@@ -870,5 +893,13 @@ function weekday(d: Date) {
 }
 function fmt(d: Date) {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+// Primeiro nome do cliente, truncado a 7 chars para caber dentro do
+// bloco da sessão (especialmente na vista de mês, com células muito
+// estreitas).
+function shortName(full?: string | null) {
+  const first = (full ?? "").trim().split(/\s+/)[0] ?? "";
+  return first.slice(0, 7);
 }
 

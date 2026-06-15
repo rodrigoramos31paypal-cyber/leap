@@ -18,6 +18,12 @@ function hhmm(totalMin: number) {
   const m = totalMin % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
+// Primeiro nome do cliente, truncado a 7 chars para caber dentro do
+// bloco da sessão em qualquer largura de coluna (mobile ~47 px).
+function shortName(full?: string | null) {
+  const first = (full ?? "").trim().split(/\s+/)[0] ?? "";
+  return first.slice(0, 7);
+}
 
 type Preview = {
   dateIso: string;
@@ -213,7 +219,7 @@ export function BookingBlock({
         className="block w-full [cursor:inherit] p-1 text-left"
       >
         <div className="font-semibold tabular-nums">{formatTime(b.starts_at)}</div>
-        <div className="truncate font-medium">{b.profiles?.full_name ?? "—"}</div>
+        <div className="truncate font-medium">{shortName(b.profiles?.full_name) || "—"}</div>
       </button>
 
       {/* Pré-visualização durante o arrasto */}
@@ -237,7 +243,7 @@ export function BookingBlock({
             }}
           >
             <div className="font-semibold tabular-nums">{preview.time}</div>
-            <div className="truncate font-medium">{b.profiles?.full_name ?? "—"}</div>
+            <div className="truncate font-medium">{shortName(b.profiles?.full_name) || "—"}</div>
           </div>
         </>
       )}
