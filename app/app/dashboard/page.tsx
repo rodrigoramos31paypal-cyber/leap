@@ -117,7 +117,7 @@ export default async function ClientDashboard() {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <div className="-mb-1.5">
         <h1 className="font-display text-2xl font-bold tracking-tight">
           Olá, {profile?.full_name?.split(" ")[0] ?? "atleta"}.
@@ -229,7 +229,7 @@ export default async function ClientDashboard() {
 
       {/* O teu progresso */}
       <section>
-        <div className="mb-2 flex items-center justify-between">
+        <div className="mb-1.5 flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">O teu progresso</h2>
           <Link href="/app/historico" className="text-xs font-medium text-gold-600 hover:text-gold-700">Ver mais</Link>
         </div>
@@ -269,7 +269,7 @@ export default async function ClientDashboard() {
 
       {/* Histórico recente */}
       <section>
-        <div className="mb-2 flex items-center justify-between">
+        <div className="mb-1.5 flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Histórico recente</h2>
           <Link href="/app/historico" className="text-xs font-medium text-gold-600 hover:text-gold-700">Ver tudo</Link>
         </div>
