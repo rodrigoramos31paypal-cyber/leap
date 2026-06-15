@@ -396,7 +396,7 @@ export function BookingBlock({
         WebkitUserSelect: "none",
         WebkitTouchCallout: "none",
         userSelect: "none",
-      } as React.CSSProperties}
+      }}
     >
       {isLastCredit && b.status !== "cancelled" && (
         <span
@@ -567,14 +567,10 @@ export function BookingBlock({
                   </button>
                 </form>
               )}
-              {b.status === "confirmed" && (
-                <form action={confirmAttendanceAction}>
-                  <input type="hidden" name="bookingId" value={b.id} />
-                  <button className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
-                    ✓ Presente
-                  </button>
-                </form>
-              )}
+              {/* "Presente" removido: presença é implícita para sessões
+                  confirmadas (só se marca a exceção via "Falta"). "Aceitar"
+                  mantém-se para aceitar marcações pendentes quando o
+                  auto-confirm está desligado. */}
               <form action={markNoShowAction}>
                 <input type="hidden" name="bookingId" value={b.id} />
                 <button className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300">

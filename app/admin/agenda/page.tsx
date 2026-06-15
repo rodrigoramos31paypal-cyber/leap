@@ -293,7 +293,12 @@ async function CalendarView({
   return (
     <>
       {view === "day" && (
-        <DayView day={day} bookings={bookings ?? []} blocks={allBlocks} reserved={reserved ?? []} notesMap={notesMap} lastCreditIds={lastCreditIds} />
+        <WeekSwipeNav
+          prevHref={`/admin/agenda?view=day&d=${isoDate(stepBack("day", day))}`}
+          nextHref={`/admin/agenda?view=day&d=${isoDate(stepForward("day", day))}`}
+        >
+          <DayView day={day} bookings={bookings ?? []} blocks={allBlocks} reserved={reserved ?? []} notesMap={notesMap} lastCreditIds={lastCreditIds} />
+        </WeekSwipeNav>
       )}
       {view === "week" && (
         <WeekView
@@ -1285,7 +1290,6 @@ function weekday(d: Date) {
 function fmt(d: Date) {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
-
 // Primeiro nome do cliente, truncado a 7 chars para caber dentro do
 // bloco da sessão (especialmente na vista de mês, com células muito
 // estreitas).
@@ -1293,4 +1297,3 @@ function shortName(full?: string | null) {
   const first = (full ?? "").trim().split(/\s+/)[0] ?? "";
   return first.slice(0, 7);
 }
-
