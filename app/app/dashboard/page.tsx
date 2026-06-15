@@ -2,45 +2,91 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient, getSessionUser, getCurrentProfile } from "@/lib/supabase/server";
 import { getClientCredits, getClientCreditsByTrainer } from "@/lib/credits";
-import { formatDateTime, pluralize } from "@/lib/utils";
-import { Calendar, ShoppingBag, Sparkles, AlertCircle, NotebookPen, ChevronRight, MousePointerClick, Flame } from "lucide-react";
+import { formatDateTime, pluralize, BOOKING_STATUS } from "@/lib/utils";
+import { Calendar, ShoppingBag, Sparkles, AlertCircle, ChevronRight } from "lucide-react";
 import { PushSubscribeCard } from "@/components/push-subscribe-card";
-import { getCurrentStreak } from "@/lib/streak";
+import { PromoCarousel } from "@/components/promo-carousel";
 
 export default async function ClientDashboard() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
   const supabase = createClient();
+  const nowIso = new Date().toISOString();
 
-  // PERF: tudo em paralelo. Antes eram 4 round-trips sequenciais.
-  // getClientCredits e getClientCreditsByTrainer partilham agora a mesma
-  // query (em lib/credits.ts via cache()). getCurrentProfile() ja foi
-  // executado pelo layout — aqui devolve do React.cache() sem nova query.
   const [
     profile,
     credits,
     creditsByTrainer,
     { data: upcoming },
-    streak,
+    { data: recentPast },
+    { data: latestPackRows },
+    { data: banners },
   ] = await Promise.all([
     getCurrentProfile(),
     getClientCredits(user.id),
     getClientCreditsByTrainer(user.id),
     supabase
       .from("bookings")
-      .select("id, starts_at, ends_at, session_type, status")
+      .select("id, starts_at, session_type, status")
       .eq("client_id", user.id)
       .in("status", ["booked", "confirmed"])
-      .gte("starts_at", new Date().toISOString())
+      .gte("starts_at", nowIso)
       .order("starts_at", { ascending: true })
-      .limit(3),
-    getCurrentStreak(user.id),
+      .limit(1),
+    supabase
+      .from("bookings")
+      .select("id, starts_at, session_type, status")
+      .eq("client_id", user.id)
+      .lt("starts_at", nowIso)
+      .order("starts_at", { ascending: false })
+      .limit(4),
+    supabase
+      .from("purchases")
+      .select("pack_snapshot, sessions_total, sessions_remaining, created_at")
+      .eq("client_id", user.id)
+      .eq("status", "confirmed")
+      .order("created_at", { ascending: false })
+      .limit(1),
+    (supabase as any)
+      .from("promo_banners")
+      .select("id, title, subtitle, image_url, button_label, link_url")
+      .eq("active", true)
+      .order("sort_order", { ascending: true })
+      .limit(10),
   ]);
-  const multiTrainer = creditsByTrainer.length > 1;
 
+  const multiTrainer = creditsByTrainer.length > 1;
   const lowCredits = credits.total > 0 && credits.total <= 2;
   const noCredits = credits.total === 0;
+
+  const nextSession = (upcoming ?? [])[0] as any | undefined;
+  const latestPack = (latestPackRows ?? [])[0] as any | undefined;
+  const packName = latestPack ? (latestPack.pack_snapshot as any)?.name ?? "Pack" : null;
+
+  // Taxa de presença (apenas do pack atual): sessões passadas desde a
+  // compra do pack, presentes (confirmed) vs faltas (no_show).
+  let presenca: number | null = null;
+  let faltas = 0;
+  if (latestPack) {
+    const { data: since } = await supabase
+      .from("bookings")
+      .select("status")
+      .eq("client_id", user.id)
+      .gte("starts_at", latestPack.created_at)
+      .lt("starts_at", nowIso)
+      .in("status", ["confirmed", "no_show"]);
+    const rows = (since ?? []) as any[];
+    const attended = rows.filter((r) => r.status === "confirmed").length;
+    faltas = rows.filter((r) => r.status === "no_show").length;
+    const tot = attended + faltas;
+    presenca = tot > 0 ? Math.round((attended / tot) * 100) : null;
+  }
+
+  const packPct =
+    latestPack && latestPack.sessions_total > 0
+      ? Math.round((latestPack.sessions_remaining / latestPack.sessions_total) * 100)
+      : 0;
 
   return (
     <div className="space-y-5">
@@ -53,25 +99,7 @@ export default async function ClientDashboard() {
 
       <PushSubscribeCard />
 
-      {streak.weeks >= 1 && (
-        <div className="card flex items-center gap-3 border-gold-300 bg-gradient-to-br from-gold-50 to-bone-50 p-4">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-ink-900 text-gold-400">
-            <Flame size={18} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-semibold">
-              {streak.weeks} {streak.weeks === 1 ? "semana" : "semanas"} consecutivas
-            </div>
-            <div className="text-xs text-ink-600">
-              {streak.weeks === 1
-                ? "Boa! Continua para começar uma série."
-                : "Mantém o ritmo — não quebres a série."}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Cartão sessões — adapta-se ao tema. */}
+      {/* Sessões disponíveis */}
       <div className="card p-5">
         <div className="flex items-center justify-between">
           <span className="text-xs uppercase tracking-wide text-ink-500 dark:text-bone-100/60">Sessões disponíveis</span>
@@ -81,8 +109,6 @@ export default async function ClientDashboard() {
           <span className="font-display text-5xl font-black text-gold-500 dark:text-gold-400">{credits.total}</span>
           <span className="text-sm text-ink-500 dark:text-bone-100/60">{pluralize(credits.total, "sessão", "sessões")}</span>
         </div>
-        {/* Dupla escondida — apenas mostramos a contagem total. Reactiva
-            quando a Dupla voltar à UI. */}
         <div className="mt-5 flex gap-2">
           <Link href="/app/agenda" className="btn-gold flex-1">
             <Calendar size={16} /> Marcar sessão
@@ -93,46 +119,7 @@ export default async function ClientDashboard() {
         </div>
       </div>
 
-      {/* Bolsas por trainer */}
-      {multiTrainer && (
-        <section>
-          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
-            Sessões por treinador
-          </h2>
-          <ul className="grid gap-2 sm:grid-cols-2">
-            {creditsByTrainer.map((t) => (
-              <li key={t.trainerId} className="card p-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-ink-900/10 bg-bone-100 dark:border-white/10 dark:bg-white/[0.06]">
-                    {t.avatarUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={t.avatarUrl} alt={t.trainerName} className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center font-display text-sm font-bold text-ink-500">
-                        {(t.trainerName.trim()[0] ?? "T").toUpperCase()}
-                      </div>
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold">{t.trainerName}</div>
-                    <div className="mt-0.5 flex flex-wrap gap-1.5 text-xs text-ink-500">
-                      <span className="rounded-full bg-bone-100 px-2 py-0.5"><strong>{t.individual + t.dupla}</strong> sessões</span>
-                    </div>
-                  </div>
-                </div>
-                <Link
-                  href={`/app/agenda?trainer=${t.trainerId}`}
-                  className="mt-2 inline-block text-xs font-medium text-gold-600"
-                >
-                  Marcar com {t.trainerName.split(" ")[0]} →
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* Avisos */}
+      {/* Avisos de saldo */}
       {noCredits && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
           <div className="flex items-center gap-2 font-semibold">
@@ -153,57 +140,124 @@ export default async function ClientDashboard() {
         </div>
       )}
 
-      {/* Atalho notas */}
-      <Link
-        href="/app/notas"
-        className="card flex items-center justify-between p-4 hover:border-gold-400"
-      >
-        <div className="flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded-lg bg-bone-100 text-ink-700">
-            <NotebookPen size={18} />
-          </div>
-          <div>
-            <div className="text-sm font-semibold">As minhas notas</div>
-            <div className="text-xs text-ink-500">Diário das tuas sessões. Privado.</div>
-          </div>
-        </div>
-        <span className="text-xs font-medium text-gold-600">Abrir →</span>
-      </Link>
+      {/* Banners promocionais (ex: ebooks) */}
+      <PromoCarousel banners={(banners ?? []) as any} />
 
-      {/* Próximas sessões */}
+      {/* Próxima sessão */}
+      {nextSession && (
+        <Link
+          href={`/app/sessao/${nextSession.id}`}
+          className="card flex items-center justify-between gap-3 p-5 hover:border-gold-400"
+        >
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 text-xs uppercase tracking-wide text-ink-500">
+              <Calendar size={13} /> Próxima sessão
+            </div>
+            <div className="mt-1 font-display text-xl font-bold">{formatDateTime(nextSession.starts_at)}</div>
+            <div className="text-sm text-ink-500 capitalize">{nextSession.session_type}</div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className={nextSession.status === "confirmed" ? "chip-ok" : "chip-gold"}>
+              {nextSession.status === "confirmed" ? "Confirmada" : "Marcada"}
+            </span>
+            <ChevronRight size={16} className="text-ink-500" />
+          </div>
+        </Link>
+      )}
+
+      {/* Bolsas por trainer (multi-trainer) */}
+      {multiTrainer && (
+        <section>
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-ink-500">Sessões por treinador</h2>
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {creditsByTrainer.map((t) => (
+              <li key={t.trainerId} className="card p-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-ink-900/10 bg-bone-100 dark:border-white/10 dark:bg-white/[0.06]">
+                    {t.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={t.avatarUrl} alt={t.trainerName} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center font-display text-sm font-bold text-ink-500">
+                        {(t.trainerName.trim()[0] ?? "T").toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold">{t.trainerName}</div>
+                    <div className="mt-0.5 text-xs text-ink-500">
+                      <span className="rounded-full bg-bone-100 px-2 py-0.5 dark:bg-white/5"><strong>{t.individual + t.dupla}</strong> sessões</span>
+                    </div>
+                  </div>
+                </div>
+                <Link href={`/app/agenda?trainer=${t.trainerId}`} className="mt-2 inline-block text-xs font-medium text-gold-600">
+                  Marcar com {t.trainerName.split(" ")[0]} →
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* O teu progresso */}
       <section>
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Próximas sessões</h2>
-          <Link href="/app/historico" className="text-xs text-gold-600 hover:text-gold-700">
-            Ver tudo
-          </Link>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">O teu progresso</h2>
+          <Link href="/app/historico" className="text-xs font-medium text-gold-600 hover:text-gold-700">Ver mais</Link>
         </div>
-        {(!upcoming || upcoming.length === 0) ? (
-          <div className="card p-5 text-center text-sm text-ink-500">
-            Sem sessões marcadas.{" "}
-            <Link href="/app/agenda" className="font-medium text-gold-600">
-              Marcar agora →
-            </Link>
+        <div className="card p-4">
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-lg bg-bone-50 p-3 dark:bg-white/[0.03]">
+              <div className="text-[11px] font-semibold text-ink-600 dark:text-bone-100">O teu pack</div>
+              <div className="mt-1 font-display text-xl font-bold tabular-nums">
+                {latestPack ? `${latestPack.sessions_remaining}/${latestPack.sessions_total}` : "—"}
+              </div>
+              <div className="text-[11px] text-ink-500">sessões restantes</div>
+            </div>
+            <div className="rounded-lg bg-bone-50 p-3 dark:bg-white/[0.03]">
+              <div className="text-[11px] font-semibold text-ink-600 dark:text-bone-100">Taxa de presença</div>
+              <div className="mt-1 font-display text-xl font-bold tabular-nums">
+                {presenca !== null ? `${presenca}%` : "—"}
+              </div>
+              <div className="text-[11px] text-ink-500">
+                {presenca === null ? "Sem dados" : faltas === 0 ? "Excelente" : `${faltas} ${pluralize(faltas, "falta", "faltas")}`}
+              </div>
+            </div>
+            <div className="rounded-lg bg-bone-50 p-3 dark:bg-white/[0.03]">
+              <div className="text-[11px] font-semibold text-ink-600 dark:text-bone-100">Pack atual</div>
+              <div className="mt-1 truncate text-sm font-bold">{packName ?? "—"}</div>
+              <div className="text-[11px] text-ink-500">
+                {latestPack ? `${latestPack.sessions_total} Sessões` : "Sem pack"}
+              </div>
+            </div>
           </div>
+          {latestPack && (
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-ink-900/10 dark:bg-white/10">
+              <div className="h-full rounded-full bg-gold-400" style={{ width: `${packPct}%` }} />
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Histórico recente */}
+      <section>
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Histórico recente</h2>
+          <Link href="/app/historico" className="text-xs font-medium text-gold-600 hover:text-gold-700">Ver tudo</Link>
+        </div>
+        {(!recentPast || recentPast.length === 0) ? (
+          <div className="card p-5 text-center text-sm text-ink-500">Ainda sem sessões passadas.</div>
         ) : (
           <ul className="space-y-2">
-            {upcoming.map((b) => (
+            {(recentPast as any[]).map((b) => (
               <li key={b.id}>
-                <Link
-                  href={`/app/sessao/${b.id}`}
-                  className="card flex items-center justify-between gap-3 p-4 hover:border-gold-400"
-                >
+                <Link href={`/app/sessao/${b.id}`} className="card flex items-center justify-between gap-3 p-4 hover:border-gold-400">
                   <div className="min-w-0">
                     <div className="text-sm font-semibold">{formatDateTime(b.starts_at)}</div>
                     <div className="text-xs text-ink-500 capitalize">{b.session_type}</div>
-                    <div className="mt-1 inline-flex items-center gap-1 text-[11px] text-gold-600">
-                      <MousePointerClick size={12} /> Toca para mais opções
-                    </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <span className={b.status === "confirmed" ? "chip-ok" : "chip-gold"}>
-                      {b.status === "confirmed" ? "Confirmada" : "Marcada"}
-                    </span>
+                    <StatusChip status={b.status} />
                     <ChevronRight size={16} className="text-ink-500" />
                   </div>
                 </Link>
@@ -214,4 +268,14 @@ export default async function ClientDashboard() {
       </section>
     </div>
   );
+}
+
+function StatusChip({ status }: { status: string }) {
+  const map: Record<string, string> = {
+    booked: "chip-gold",
+    confirmed: "chip-ok",
+    cancelled: "chip-mute",
+    no_show: "chip-danger",
+  };
+  return <span className={map[status] ?? "chip-mute"}>{(BOOKING_STATUS as any)[status] ?? status}</span>;
 }

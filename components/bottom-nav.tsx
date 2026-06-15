@@ -18,6 +18,7 @@ import {
   BarChart3,
   UserCog,
   MoreHorizontal,
+  Megaphone,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -48,6 +49,7 @@ const adminOverflow: Item[] = [
   { href: "/admin/packs", label: "Packs", icon: Package },
   { href: "/admin/notas", label: "Notas", icon: NotebookPen },
   { href: "/admin/relatorios", label: "Relatórios", icon: BarChart3 },
+  { href: "/admin/promocoes", label: "Promoções", icon: Megaphone },
   { href: "/admin/equipa", label: "Equipa", icon: UserCog },
 ];
 
