@@ -536,9 +536,13 @@ export async function createBusyAction(
   return { ok: true };
 }
 
-// Remove uma regra recorrente inteira (todas as semanas).
+// Remove uma regra recorrente. Com `oldFrom`/`oldTo` remove TODO o grupo
+// (todos os dias-da-semana criados juntos com esse intervalo); sem eles,
+// remove só a regra `id` (esse dia-da-semana).
 export async function deleteRecurringBlockAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
+  const oldFrom = String(formData.get("oldFrom") ?? "");
+  const oldTo = String(formData.get("oldTo") ?? "");
   if (!id) return;
   const supabase = createClient();
   const { data: rb } = await (supabase as any)
@@ -555,7 +559,15 @@ export async function deleteRecurringBlockAction(formData: FormData) {
     setFlash("Sem permissão para remover esta recorrência", "error");
     return;
   }
-  await (supabase as any).from("trainer_recurring_blocks").delete().eq("id", id);
+  const groupMode = /^\d{2}:\d{2}$/.test(oldFrom) && /^\d{2}:\d{2}$/.test(oldTo);
+  let q = (supabase as any).from("trainer_recurring_blocks").delete();
+  q = groupMode
+    ? q
+        .eq("trainer_id", (rb as any).trainer_id)
+        .eq("start_time", oldFrom)
+        .eq("end_time", oldTo)
+    : q.eq("id", id);
+  await q;
   setFlash("Recorrência removida");
   revalidateAvailabilityViews();
 }
@@ -599,13 +611,22 @@ export async function updateBlockAction(
   return { ok: true };
 }
 
-// Atualiza as horas de uma regra recorrente (todas as semanas).
+// Atualiza as horas de uma regra recorrente.
+//
+// Uma "ocupação recorrente" em vários dias da semana é guardada como
+// uma regra por dia (ver createBusyAction). Quando o trainer escolhe
+// "Todas as semanas", queremos alterar TODOS os dias criados juntos —
+// por isso, se vierem `oldFrom`/`oldTo`, atualizamos todas as regras do
+// mesmo trainer com esse mesmo intervalo (o "grupo"). Sem eles, altera
+// só a regra `id` (esse dia-da-semana).
 export async function updateRecurringBlockAction(
   formData: FormData,
 ): Promise<{ ok?: true; error?: string }> {
   const id = String(formData.get("id") ?? "");
   const from = String(formData.get("from") ?? "");
   const to = String(formData.get("to") ?? "");
+  const oldFrom = String(formData.get("oldFrom") ?? "");
+  const oldTo = String(formData.get("oldTo") ?? "");
   const reasonRaw = String(formData.get("reason") ?? "").trim().slice(0, 200);
   const reason = reasonRaw.length > 0 ? reasonRaw : null;
   if (!id || !/^\d{2}:\d{2}$/.test(from) || !/^\d{2}:\d{2}$/.test(to)) {
@@ -621,10 +642,18 @@ export async function updateRecurringBlockAction(
   if (!rb) return { error: "Recorrência não encontrada." };
   const accessible = await getAccessibleTrainerIds();
   if (!accessible.includes((rb as any).trainer_id)) return { error: "Sem permissão." };
-  const { error } = await (supabase as any)
+
+  const groupMode = /^\d{2}:\d{2}$/.test(oldFrom) && /^\d{2}:\d{2}$/.test(oldTo);
+  let q = (supabase as any)
     .from("trainer_recurring_blocks")
-    .update({ start_time: from, end_time: to, reason })
-    .eq("id", id);
+    .update({ start_time: from, end_time: to, reason });
+  q = groupMode
+    ? q
+        .eq("trainer_id", (rb as any).trainer_id)
+        .eq("start_time", oldFrom)
+        .eq("end_time", oldTo)
+    : q.eq("id", id);
+  const { error } = await q;
   if (error) {
     logError("updateRecurringBlockAction", error);
     return { error: "Não foi possível atualizar." };
