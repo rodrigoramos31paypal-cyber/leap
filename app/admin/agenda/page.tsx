@@ -953,7 +953,12 @@ function WeekView({
                       ? ({
                           "--ov-col": col,
                           "--ov-cols": cols,
-                          zIndex: 20 + col,
+                          // Faltas (no_show) ficam SEMPRE atras das sessoes
+                          // activas: base 10 vs 20. Assim uma sessao viva
+                          // sobreposta a uma falta nunca fica escondida por
+                          // baixo dela (e a falta continua visivel onde
+                          // sobra). +col mantem a ordem dentro de cada nivel.
+                          zIndex: (b.status === "no_show" ? 10 : 20) + col,
                         } as any)
                       : {};
                     return (

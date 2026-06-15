@@ -100,31 +100,6 @@ export function BookingBlock({
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  // Insets do backdrop: medimos o fundo da top-bar e o topo da
-  // bottom-nav para o escurecido cobrir so o espaco entre as barras.
-  const [modalInset, setModalInset] = useState<{ top: number; bottom: number }>({
-    top: 0,
-    bottom: 0,
-  });
-  useEffect(() => {
-    if (!open) return;
-    const measure = () => {
-      const header = document.getElementById("app-top-bar");
-      const nav = document.getElementById("app-bottom-nav");
-      const top =
-        header && header.getClientRects().length
-          ? Math.max(0, header.getBoundingClientRect().bottom)
-          : 0;
-      const bottom =
-        nav && nav.getClientRects().length
-          ? Math.max(0, window.innerHeight - nav.getBoundingClientRect().top)
-          : 0;
-      setModalInset({ top, bottom });
-    };
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [open]);
 
   // refs de drag (não provocam re-render)
   const startRef = useRef<{ x: number; y: number } | null>(null);
@@ -504,13 +479,10 @@ export function BookingBlock({
       {open && mounted && createPortal(
         // Modal renderizado via portal no <body> para escapar ao
         // containing-block do scroll da agenda (#agenda-week-scroll,
-        // max-h:75vh): sem o portal o backdrop "fixed" ficava preso a
-        // area do calendario e terminava acima da bottom-nav. Com
-        // top/bottom medidos, o escurecido cobre exactamente o espaco
-        // entre a top-bar e os botoes da bottom-nav.
+        // max-h:75vh) e cobrir o ecra INTEIRO (inset-0) — incluindo a
+        // top-bar e a bottom-nav, igual ao popover de "Ocupado".
         <div
-          className="fixed left-0 right-0 z-[70] flex items-center justify-center bg-ink-900/40 p-4"
-          style={{ top: modalInset.top, bottom: modalInset.bottom }}
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-ink-900/40 p-4"
           onClick={(e) => {
             // Fecha no CLIQUE no backdrop; o clique e consumido aqui.
             if (e.target === e.currentTarget) setOpen(false);
