@@ -43,7 +43,7 @@ export function PromoCarousel({ banners }: { banners: PromoBanner[] }) {
                   className="absolute inset-0 h-full w-full object-cover"
                 />
               )}
-              <div className="absolute inset-0 bg-gradient-to-r from-ink-900/90 via-ink-900/55 to-ink-900/10" />
+              <div className="absolute inset-0 bg-gradient-to-l from-ink-900/65 via-ink-900/20 to-transparent" />
               <div className="relative z-10 flex max-w-[70%] flex-col justify-center gap-1 p-4">
                 {b.subtitle && (
                   <div className="text-[10px] font-bold uppercase tracking-wide text-gold-400">
