@@ -560,6 +560,80 @@ export async function deleteRecurringBlockAction(formData: FormData) {
   revalidateAvailabilityViews();
 }
 
+// Atualiza as horas de um bloqueio pontual (um dia).
+export async function updateBlockAction(
+  formData: FormData,
+): Promise<{ ok?: true; error?: string }> {
+  const id = String(formData.get("id") ?? "");
+  const date = String(formData.get("date") ?? "");
+  const from = String(formData.get("from") ?? "");
+  const to = String(formData.get("to") ?? "");
+  const reasonRaw = String(formData.get("reason") ?? "").trim().slice(0, 200);
+  const reason = reasonRaw.length > 0 ? reasonRaw : null;
+  if (!id || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(from) || !/^\d{2}:\d{2}$/.test(to)) {
+    return { error: "Dados inválidos." };
+  }
+  if (to <= from) return { error: "A hora de fim tem de ser depois do início." };
+  const supabase = createClient();
+  const { data: blk } = await supabase
+    .from("trainer_blocked_times")
+    .select("trainer_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!blk) return { error: "Bloqueio não encontrado." };
+  const accessible = await getAccessibleTrainerIds();
+  if (!accessible.includes((blk as any).trainer_id)) return { error: "Sem permissão." };
+  const start = lisbonWallClockToUTC(date, from);
+  const end = lisbonWallClockToUTC(date, to);
+  if (!start || !end || end <= start) return { error: "Horas inválidas." };
+  const { error } = await supabase
+    .from("trainer_blocked_times")
+    .update({ starts_at: start.toISOString(), ends_at: end.toISOString(), reason })
+    .eq("id", id);
+  if (error) {
+    logError("updateBlockAction", error);
+    return { error: "Não foi possível atualizar." };
+  }
+  setFlash("Horário ocupado atualizado");
+  revalidateAvailabilityViews();
+  return { ok: true };
+}
+
+// Atualiza as horas de uma regra recorrente (todas as semanas).
+export async function updateRecurringBlockAction(
+  formData: FormData,
+): Promise<{ ok?: true; error?: string }> {
+  const id = String(formData.get("id") ?? "");
+  const from = String(formData.get("from") ?? "");
+  const to = String(formData.get("to") ?? "");
+  const reasonRaw = String(formData.get("reason") ?? "").trim().slice(0, 200);
+  const reason = reasonRaw.length > 0 ? reasonRaw : null;
+  if (!id || !/^\d{2}:\d{2}$/.test(from) || !/^\d{2}:\d{2}$/.test(to)) {
+    return { error: "Dados inválidos." };
+  }
+  if (to <= from) return { error: "A hora de fim tem de ser depois do início." };
+  const supabase = createClient();
+  const { data: rb } = await (supabase as any)
+    .from("trainer_recurring_blocks")
+    .select("trainer_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!rb) return { error: "Recorrência não encontrada." };
+  const accessible = await getAccessibleTrainerIds();
+  if (!accessible.includes((rb as any).trainer_id)) return { error: "Sem permissão." };
+  const { error } = await (supabase as any)
+    .from("trainer_recurring_blocks")
+    .update({ start_time: from, end_time: to, reason })
+    .eq("id", id);
+  if (error) {
+    logError("updateRecurringBlockAction", error);
+    return { error: "Não foi possível atualizar." };
+  }
+  setFlash("Recorrência atualizada");
+  revalidateAvailabilityViews();
+  return { ok: true };
+}
+
 // Limpa a recorrência só num dia concreto (cria um "skip" para a data).
 export async function skipRecurringDateAction(formData: FormData) {
   const trainerId = String(formData.get("trainerId") ?? "");

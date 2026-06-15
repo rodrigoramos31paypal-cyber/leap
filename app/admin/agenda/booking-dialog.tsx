@@ -309,7 +309,7 @@ export function BookingDialog({
       {open && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 p-4"
-          onPointerDown={(e) => {
+          onClick={(e) => {
             if (e.target === e.currentTarget) setOpen(false);
           }}
         >

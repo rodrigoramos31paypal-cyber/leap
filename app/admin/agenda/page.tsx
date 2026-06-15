@@ -9,6 +9,7 @@ import { getMyNotesMapForBookings } from "@/lib/notes";
 import { getCurrentTrainerId, getAccessibleTrainerIds } from "@/lib/trainer";
 import { BlockPresets } from "@/components/block-presets";
 import { BookingBlock } from "./booking-popover";
+import { BusyBlock } from "./busy-block";
 import { BookingDialog } from "./booking-dialog";
 import { RescheduleDialog } from "./reschedule-dialog";
 import { SlotClickLayer } from "./slot-click-layer";
@@ -746,10 +747,19 @@ function WeekView({
                   return (
                     <div key={`row-${h}`}>
                       {isCollapsed && (
+                        // Linha "comprimida" (hora sem marcações possíveis):
+                        // faixa fina com uma linha tracejada ao centro, para
+                        // se ler como tempo encolhido — e não como um traço
+                        // cinzento solto.
                         <div
-                          className="pointer-events-none absolute left-0 right-0 bg-ink-900/[0.05]"
+                          className="pointer-events-none absolute left-0 right-0 bg-ink-900/[0.03]"
                           style={{ top, height: ht }}
-                        />
+                        >
+                          <div
+                            className="absolute left-0 right-0 border-t border-dashed border-ink-900/15"
+                            style={{ top: ht / 2 }}
+                          />
+                        </div>
                       )}
                       <div
                         className="pointer-events-none absolute left-0 right-0 border-t border-ink-900/10"
@@ -814,24 +824,17 @@ function WeekView({
                   );
                 })}
 
-                {/* Blocks (indisponível) */}
+                {/* Blocks (ocupado) — clicáveis para editar/remover. */}
                 {dayBlocks.map((blk) => {
-                  const s = new Date(blk.starts_at);
-                  const e = new Date(blk.ends_at);
-                  const pos = clampPosition(layout, s, e);
+                  const pos = clampPosition(layout, new Date(blk.starts_at), new Date(blk.ends_at));
                   if (!pos) return null;
                   return (
-                    <div
+                    <BusyBlock
                       key={`x-${blk.id}`}
-                      className="absolute left-0.5 right-0.5 overflow-hidden rounded border border-red-200 bg-red-50 p-1 text-[10px] text-red-800"
+                      b={blk}
+                      canEdit={canBook}
                       style={{ top: pos.top, height: pos.height }}
-                      title={blk.reason ?? "Indisponível"}
-                    >
-                      <div className="truncate font-semibold">Indisponível</div>
-                      {blk.reason && (
-                        <div className="truncate text-red-700/80">{blk.reason}</div>
-                      )}
-                    </div>
+                    />
                   );
                 })}
 

@@ -107,23 +107,17 @@ export function BookingBlock({
     return h * 60 + frac * 60;
   }
 
+  // Fecho com Esc. O clique-fora é tratado pelo backdrop full-screen do
+  // modal (onClick), NÃO por um listener global de pointerdown — esse
+  // fechava o popover no pointerdown e o clique seguinte caía na grelha,
+  // abrindo o diálogo de nova marcação por engano.
   useEffect(() => {
     if (!open) return;
-    function onPointerDown(e: PointerEvent) {
-      if (!ref.current) return;
-      if (e.target instanceof Node && !ref.current.contains(e.target)) {
-        setOpen(false);
-      }
-    }
     function onEsc(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
     }
-    document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onEsc);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onEsc);
-    };
+    return () => document.removeEventListener("keydown", onEsc);
   }, [open]);
 
   function computePreview(clientX: number, clientY: number): Preview | null {
@@ -337,7 +331,9 @@ export function BookingBlock({
           // fallback para teclado/acessibilidade quando não há drag.
           if (!draggable) setOpen((o) => !o);
         }}
-        className="block w-full [cursor:inherit] px-0.5 py-0.5 text-left"
+        // h-full: a área de clique/arrasto cobre TODO o bloco (antes só
+        // cobria o texto, e clicar na parte vazia não abria o popover).
+        className="flex h-full w-full flex-col [cursor:inherit] px-0.5 py-0.5 text-left"
       >
         <div className="font-semibold tabular-nums leading-none text-[9px]">{formatTime(b.starts_at)}</div>
         <div
@@ -392,15 +388,16 @@ export function BookingBlock({
         // ancorado a um dia da direita e estendia para fora do ecrã.
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 p-4"
-          onPointerDown={(e) => {
-            // Backdrop click fecha; cliques no card interno param aqui
-            // via stopPropagation.
+          onClick={(e) => {
+            // Fecha no CLIQUE no backdrop (não no pointerdown). Como o
+            // backdrop é full-screen e está por cima, o clique é
+            // consumido aqui e nunca chega à grelha por baixo.
             if (e.target === e.currentTarget) setOpen(false);
           }}
         >
           <div
             className="max-h-[92vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-4 text-sm text-ink-900 shadow-xl dark:bg-ink-800"
-            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
           <div className="mb-3 flex items-center justify-between gap-2">
             <div>
