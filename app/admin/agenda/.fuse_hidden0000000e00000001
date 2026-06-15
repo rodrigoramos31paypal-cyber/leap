@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { createPortal } from "react-dom";
 import Link from "next/link";
 import { NotebookPen, ExternalLink, Coins, Clock } from "lucide-react";
 import { formatTime, BOOKING_STATUS } from "@/lib/utils";
@@ -91,36 +90,6 @@ export function BookingBlock({
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState<Preview | null>(null);
   const ref = useRef<HTMLDivElement>(null);
-
-  // Portal so no cliente (document indisponivel no SSR).
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
-  // Insets do backdrop: medimos o fundo da top-bar e o topo da
-  // bottom-nav para o escurecido cobrir so o espaco entre as barras.
-  const [modalInset, setModalInset] = useState<{ top: number; bottom: number }>({
-    top: 0,
-    bottom: 0,
-  });
-  useEffect(() => {
-    if (!open) return;
-    const measure = () => {
-      const header = document.getElementById("app-top-bar");
-      const nav = document.getElementById("app-bottom-nav");
-      const top =
-        header && header.getClientRects().length
-          ? Math.max(0, header.getBoundingClientRect().bottom)
-          : 0;
-      const bottom =
-        nav && nav.getClientRects().length
-          ? Math.max(0, window.innerHeight - nav.getBoundingClientRect().top)
-          : 0;
-      setModalInset({ top, bottom });
-    };
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [open]);
 
   // refs de drag (não provocam re-render)
   const startRef = useRef<{ x: number; y: number } | null>(null);
@@ -497,18 +466,18 @@ export function BookingBlock({
         </>
       )}
 
-      {open && mounted && createPortal(
-        // Modal renderizado via portal no <body> para escapar ao
-        // containing-block do scroll da agenda (#agenda-week-scroll,
-        // max-h:75vh): sem o portal o backdrop "fixed" ficava preso a
-        // area do calendario e terminava acima da bottom-nav. Com
-        // top/bottom medidos, o escurecido cobre exactamente o espaco
-        // entre a top-bar e os botoes da bottom-nav.
+      {open && (
+        // Modal centrado no ecrã (mobile e desktop). Antes era um
+        // bottom-sheet (items-end) em mobile; o cliente preferia o
+        // painel a aparecer ao centro. Resolve também o overflow
+        // horizontal que acontecia quando o popover absoluto era
+        // ancorado a um dia da direita e estendia para fora do ecrã.
         <div
-          className="fixed left-0 right-0 z-[70] flex items-center justify-center bg-ink-900/40 p-4"
-          style={{ top: modalInset.top, bottom: modalInset.bottom }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 p-4"
           onClick={(e) => {
-            // Fecha no CLIQUE no backdrop; o clique e consumido aqui.
+            // Fecha no CLIQUE no backdrop (não no pointerdown). Como o
+            // backdrop é full-screen e está por cima, o clique é
+            // consumido aqui e nunca chega à grelha por baixo.
             if (e.target === e.currentTarget) setOpen(false);
           }}
         >
@@ -708,14 +677,12 @@ export function BookingBlock({
           <details className="border-t border-ink-900/10 pt-3">
             <summary className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-ink-600 hover:text-ink-900">
               <NotebookPen size={12} /> Minhas notas{note ? " · ✓" : ""}
-            </summary>
             <div className="mt-2">
               <NoteEditor bookingId={b.id} initialBody={note?.body} compact />
             </div>
           </details>
           </div>
-        </div>,
-        document.body,
+        </div>
       )}
     </div>
   );

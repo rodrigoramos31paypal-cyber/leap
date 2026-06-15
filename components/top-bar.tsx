@@ -29,7 +29,7 @@ export function TopBar({
   wide?: boolean;
 }) {
   return (
-    <header className="safe-top sticky top-0 z-30 border-b border-ink-900/5 bg-bone-50/80 backdrop-blur dark:border-white/5 dark:bg-ink-900/80">
+    <header id="app-top-bar" className="safe-top sticky top-0 z-30 border-b border-ink-900/5 bg-bone-50/80 backdrop-blur dark:border-white/5 dark:bg-ink-900/80">
       <div className={`mx-auto flex items-center justify-between gap-3 px-4 py-3 ${wide ? "max-w-7xl" : "max-w-6xl"}`}>
         <div className="flex items-center gap-2">
           {back ? (
