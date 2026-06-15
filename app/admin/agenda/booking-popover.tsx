@@ -89,6 +89,7 @@ export function BookingBlock({
   overlapCol?: number;
 }) {
   const [open, setOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [preview, setPreview] = useState<Preview | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -589,30 +590,41 @@ export function BookingBlock({
           </div>
 
           {(b.status === "booked" || b.status === "confirmed") && (
-            <div className="mb-3 flex flex-wrap gap-1.5">
-              {b.status === "booked" && (
-                <form action={confirmAttendanceAction}>
+            <div className="mb-3 space-y-2">
+              <div className="flex flex-wrap gap-1.5">
+                {b.status === "booked" && (
+                  <form action={confirmAttendanceAction}>
+                    <input type="hidden" name="bookingId" value={b.id} />
+                    <button className="rounded-md bg-ink-900 px-3 py-1.5 text-xs font-semibold text-bone-50 hover:bg-ink-700">
+                      ✓ Aceitar
+                    </button>
+                  </form>
+                )}
+                {/* "Presente" removido: presença é implícita para sessões
+                    confirmadas (só se marca a exceção via "Falta"). "Aceitar"
+                    mantém-se para aceitar marcações pendentes quando o
+                    auto-confirm está desligado. */}
+                <form action={markNoShowAction}>
                   <input type="hidden" name="bookingId" value={b.id} />
-                  <button className="rounded-md bg-ink-900 px-3 py-1.5 text-xs font-semibold text-bone-50 hover:bg-ink-700">
-                    ✓ Aceitar
+                  <button className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300">
+                    Falta
                   </button>
                 </form>
-              )}
-              {/* "Presente" removido: presença é implícita para sessões
-                  confirmadas (só se marca a exceção via "Falta"). "Aceitar"
-                  mantém-se para aceitar marcações pendentes quando o
-                  auto-confirm está desligado. */}
-              <form action={markNoShowAction}>
-                <input type="hidden" name="bookingId" value={b.id} />
-                <button className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300">
-                  Falta
-                </button>
-              </form>
-              <details className="relative w-full">
-                <summary className="cursor-pointer list-none rounded-md border border-ink-900/10 px-3 py-1.5 text-xs font-semibold text-ink-600 hover:bg-ink-900/5 dark:border-white/15 dark:text-bone-50 dark:hover:bg-white/5 sm:inline-block sm:w-auto">
+                {/* Cancelar ao lado de "Falta"; o formulário do motivo abre
+                    em largura total por baixo (toggle por estado, em vez de
+                    <details w-full> que empurrava o botão para a linha
+                    seguinte). */}
+                <button
+                  type="button"
+                  onClick={() => setCancelOpen((o) => !o)}
+                  aria-expanded={cancelOpen}
+                  className="rounded-md border border-ink-900/10 px-3 py-1.5 text-xs font-semibold text-ink-600 hover:bg-ink-900/5 dark:border-white/15 dark:text-bone-50 dark:hover:bg-white/5"
+                >
                   Cancelar
-                </summary>
-                <form action={cancelAdminAction} className="mt-2 space-y-2">
+                </button>
+              </div>
+              {cancelOpen && (
+                <form action={cancelAdminAction} className="space-y-2">
                   <input type="hidden" name="bookingId" value={b.id} />
                   <label className="block text-xs font-medium text-ink-600">
                     Motivo (opcional)
@@ -628,7 +640,7 @@ export function BookingBlock({
                     Confirmar cancelamento
                   </button>
                 </form>
-              </details>
+              )}
             </div>
           )}
 
