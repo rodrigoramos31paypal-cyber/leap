@@ -5,15 +5,14 @@ import { updateProfileAction } from "./actions";
 import { BackLink } from "@/components/back-link";
 import { NotificationPrefToggle } from "@/components/notification-pref-toggle";
 import { DeleteAccountSection } from "@/components/delete-account-section";
-import { Download, ShieldCheck, ChevronRight, User, Bell, Database } from "lucide-react";
+import { ShieldCheck, ChevronRight, User, Bell } from "lucide-react";
 
-type TabId = "perfil" | "notificacoes" | "seguranca" | "dados";
+type TabId = "perfil" | "notificacoes" | "seguranca";
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: "perfil",       label: "Perfil",       icon: <User size={14} /> },
   { id: "notificacoes", label: "Notificações", icon: <Bell size={14} /> },
   { id: "seguranca",    label: "Segurança",    icon: <ShieldCheck size={14} /> },
-  { id: "dados",        label: "Dados",        icon: <Database size={14} /> },
 ];
 
 export default async function PerfilPage({
@@ -28,7 +27,7 @@ export default async function PerfilPage({
 
   const activeTab: TabId = ((): TabId => {
     const t = searchParams.tab;
-    if (t === "notificacoes" || t === "seguranca" || t === "dados") return t;
+    if (t === "notificacoes" || t === "seguranca") return t;
     return "perfil";
   })();
 
@@ -39,7 +38,7 @@ export default async function PerfilPage({
       <BackLink />
       <div>
         <h1 className="font-display text-2xl font-bold tracking-tight">Perfil</h1>
-        <p className="text-sm text-ink-500">Os teus dados, notificações, segurança e privacidade.</p>
+        <p className="text-sm text-ink-500">Os teus dados, notificações e segurança.</p>
       </div>
 
       {searchParams.ok && (
@@ -53,7 +52,6 @@ export default async function PerfilPage({
         <NotificacoesTab reminderOn={tabData.reminderOn} creditAlertOn={tabData.creditAlertOn} />
       )}
       {activeTab === "seguranca" && <SegurancaTab />}
-      {activeTab === "dados" && <DadosTab />}
     </div>
   );
 }
@@ -114,21 +112,29 @@ async function loadTabData(
 
 function PerfilTab({ profile }: { profile: any }) {
   return (
-    <form action={updateProfileAction} className="card space-y-4 p-5">
-      <div>
-        <label className="label">Nome completo</label>
-        <input name="full_name" defaultValue={profile?.full_name ?? ""} required className="input" />
+    <div className="space-y-4">
+      <form action={updateProfileAction} className="card space-y-4 p-5">
+        <div>
+          <label className="label">Nome completo</label>
+          <input name="full_name" defaultValue={profile?.full_name ?? ""} required className="input" />
+        </div>
+        <div>
+          <label className="label">Email</label>
+          <input value={profile?.email ?? ""} disabled className="input bg-bone-100 text-ink-500" />
+        </div>
+        <div>
+          <label className="label">Telemóvel</label>
+          <input name="phone" defaultValue={profile?.phone ?? ""} className="input" />
+        </div>
+        <button type="submit" className="btn-primary w-full">Guardar</button>
+      </form>
+
+      {/* Apagar conta — movido da antiga tab "Dados". */}
+      <div className="card p-5">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-500">Apagar conta</h2>
+        <DeleteAccountSection />
       </div>
-      <div>
-        <label className="label">Email</label>
-        <input value={profile?.email ?? ""} disabled className="input bg-bone-100 text-ink-500" />
-      </div>
-      <div>
-        <label className="label">Telemóvel</label>
-        <input name="phone" defaultValue={profile?.phone ?? ""} className="input" />
-      </div>
-      <button type="submit" className="btn-primary w-full">Guardar</button>
-    </form>
+    </div>
   );
 }
 
@@ -179,23 +185,3 @@ function SegurancaTab() {
   );
 }
 
-function DadosTab() {
-  return (
-    <div className="card space-y-3 p-5">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Dados e privacidade</h2>
-      <a
-        href="/api/me/export"
-        className="flex items-center gap-3 rounded-lg border border-ink-900/10 p-3 hover:border-gold-400"
-      >
-        <Download size={18} className="shrink-0 text-ink-700" />
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold">Descarregar os meus dados</div>
-          <div className="text-xs text-ink-500">Perfil, sessões, compras e notas (Excel).</div>
-        </div>
-      </a>
-      <div className="border-t border-ink-900/5 pt-3">
-        <DeleteAccountSection />
-      </div>
-    </div>
-  );
-}
