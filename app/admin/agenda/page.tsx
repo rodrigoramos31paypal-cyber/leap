@@ -13,6 +13,8 @@ import { BookingDialog } from "./booking-dialog";
 import { RescheduleDialog } from "./reschedule-dialog";
 import { SlotClickLayer } from "./slot-click-layer";
 import { CardSkeleton } from "@/components/skeleton";
+import { AgendaScrollTo7am } from "./agenda-scroll-to-7am";
+import { WeekSwipeNav } from "./week-swipe-nav";
 
 type View = "day" | "week" | "month";
 
@@ -201,7 +203,16 @@ async function CalendarView({
         <DayView day={day} bookings={bookings ?? []} blocks={blocks ?? []} reserved={reserved ?? []} notesMap={notesMap} />
       )}
       {view === "week" && (
-        <WeekView start={rangeStart} bookings={bookings ?? []} blocks={blocks ?? []} reserved={reserved ?? []} notesMap={notesMap} canBook={canBook} />
+        <WeekView
+          start={rangeStart}
+          bookings={bookings ?? []}
+          blocks={blocks ?? []}
+          reserved={reserved ?? []}
+          notesMap={notesMap}
+          canBook={canBook}
+          prevHref={`/admin/agenda?view=week&d=${isoDate(stepBack("week", day))}`}
+          nextHref={`/admin/agenda?view=week&d=${isoDate(stepForward("week", day))}`}
+        />
       )}
       {view === "month" && (
         <MonthView gridStart={rangeStart} anchor={day} bookings={bookings ?? []} blocks={blocks ?? []} reserved={reserved ?? []} />
@@ -368,9 +379,18 @@ function BlockItem({ b }: { b: any }) {
 }
 
 // ─── WeekView: hour grid (Google-Calendar style) ────────────────────
-const HOUR_START = 7;
-const HOUR_END = 22;
-const TOTAL_HOURS = HOUR_END - HOUR_START; // 15
+// HOUR_START/END expandido para 00–24 (Jun 2026) para permitir mover
+// sessões para horários fora das horas-tipo (ex: cliente excepcional
+// das 06:30). A grelha é scrollável internamente — ao abrir a Agenda
+// o `AgendaScrollTo7am` posiciona o scroll nas 07:00 por defeito.
+// PRIME_START/END marcam o intervalo "normal" do trainer; as faixas
+// fora deste intervalo ficam visualmente mais escuras como pista de
+// que são horas off (ainda interactivas).
+const HOUR_START = 0;
+const HOUR_END = 24;
+const TOTAL_HOURS = HOUR_END - HOUR_START; // 24
+const PRIME_START = 7;
+const PRIME_END = 21;
 // HOUR_HEIGHT subido de 56→88 (Jun 2026) para que cada slot de 15 min
 // passe a ter ~22 px em vez de 14 px — sessões a :15/:30/:45 ficam
 // visualmente distintas dentro do rectângulo da hora. Combinado com
@@ -430,6 +450,8 @@ function WeekView({
   reserved,
   notesMap,
   canBook,
+  prevHref,
+  nextHref,
 }: {
   start: Date;
   bookings: any[];
@@ -437,6 +459,8 @@ function WeekView({
   reserved: any[];
   notesMap: Map<string, any>;
   canBook: boolean;
+  prevHref: string;
+  nextHref: string;
 }) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const byDay = bucketByDay(bookings, blocks, reserved); // PERF (#5): 1 passagem
@@ -454,13 +478,29 @@ function WeekView({
   // ~47px/dia). Eixo de horas reduzido a 34px para dar mais espaço aos dias.
   const GRID_COLS = "34px repeat(7, minmax(0, 1fr))";
 
+  // Off-hours overlay: faixas mais escuras antes de PRIME_START e
+  // depois de PRIME_END, dentro de cada coluna (eixo + dias). Sinaliza
+  // ao trainer que aquelas horas estão fora do horário-tipo, mas
+  // continuam totalmente interactivas para reagendamentos pontuais.
+  const offTopHeight = PRIME_START * HOUR_HEIGHT;
+  const offBottomTop = PRIME_END * HOUR_HEIGHT;
+  const offBottomHeight = (HOUR_END - PRIME_END) * HOUR_HEIGHT;
+
   return (
+    <WeekSwipeNav prevHref={prevHref} nextHref={nextHref}>
     <div className="card overflow-hidden">
       <div className="overflow-x-hidden">
-        <div className="w-full">
-          {/* Day headers */}
+        {/* Container scrollável vertical: a grelha é alta (24×88 px =
+            2112 px) então corta a 75 vh e os day-headers (sticky)
+            ficam visíveis enquanto o trainer scrolla pelas horas. */}
+        <div
+          id="agenda-week-scroll"
+          className="w-full overflow-y-auto"
+          style={{ maxHeight: "75vh" }}
+        >
+          {/* Day headers — sticky no topo do scroll interno. */}
           <div
-            className="grid border-b border-ink-900/10 bg-bone-50"
+            className="sticky top-0 z-30 grid border-b border-ink-900/10 bg-bone-50"
             style={{ gridTemplateColumns: GRID_COLS }}
           >
             <div className="border-r border-ink-900/10" />
@@ -491,15 +531,30 @@ function WeekView({
           >
           {/* Hour labels column */}
           <div data-timeaxis className="relative border-r border-ink-900/10 bg-bone-50">
-            {Array.from({ length: TOTAL_HOURS }, (_, i) => (
-              <div
-                key={i}
-                className="absolute right-1 text-[9px] font-medium text-ink-500 tabular-nums"
-                style={{ top: i * HOUR_HEIGHT + 4 }}
-              >
-                {`${String(HOUR_START + i).padStart(2, "0")}:00`}
-              </div>
-            ))}
+            {/* Off-hours overlay (eixo). */}
+            <div
+              className="pointer-events-none absolute left-0 right-0 bg-ink-900/[0.05]"
+              style={{ top: 0, height: offTopHeight }}
+            />
+            <div
+              className="pointer-events-none absolute left-0 right-0 bg-ink-900/[0.05]"
+              style={{ top: offBottomTop, height: offBottomHeight }}
+            />
+            {Array.from({ length: TOTAL_HOURS }, (_, i) => {
+              const hourOfDay = HOUR_START + i;
+              const isOff = hourOfDay < PRIME_START || hourOfDay >= PRIME_END;
+              return (
+                <div
+                  key={i}
+                  className={`absolute right-1 text-[9px] font-medium tabular-nums ${
+                    isOff ? "text-ink-400/80" : "text-ink-500"
+                  }`}
+                  style={{ top: i * HOUR_HEIGHT + 4 }}
+                >
+                  {`${String(hourOfDay).padStart(2, "0")}:00`}
+                </div>
+              );
+            })}
           </div>
 
           {/* Day columns */}
@@ -514,6 +569,17 @@ function WeekView({
                 data-daycol={isoDate(d)}
                 className="relative border-r border-ink-900/10 last:border-r-0"
               >
+                {/* Off-hours overlay (coluna dia) — pointer-events-none
+                    para deixar o SlotClickLayer continuar a receber
+                    cliques nas horas off (caso excepcional do trainer). */}
+                <div
+                  className="pointer-events-none absolute left-0 right-0 bg-ink-900/[0.05]"
+                  style={{ top: 0, height: offTopHeight }}
+                />
+                <div
+                  className="pointer-events-none absolute left-0 right-0 bg-ink-900/[0.05]"
+                  style={{ top: offBottomTop, height: offBottomHeight }}
+                />
                 {/* Hour grid lines */}
                 {Array.from({ length: TOTAL_HOURS }, (_, i) => (
                   <div
@@ -643,6 +709,9 @@ function WeekView({
         </div>
       </div>
     </div>
+    {/* Posiciona o scroll interno em 07:00 ao montar a vista. */}
+    <AgendaScrollTo7am />
+    </WeekSwipeNav>
   );
 }
 

@@ -200,6 +200,7 @@ export function BookingBlock({
   return (
     <div
       ref={ref}
+      data-event-block
       className={`absolute left-0.5 right-0.5 rounded border text-[10px] transition-colors ${tone} ${
         open ? "z-30 overflow-visible" : "overflow-hidden"
       } ${draggable ? "cursor-grab active:cursor-grabbing" : ""}`}
