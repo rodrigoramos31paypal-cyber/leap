@@ -4,12 +4,9 @@ import { useState, useTransition } from "react";
 import { Shield, Copy, Check } from "lucide-react";
 import { startEnrollAction, confirmEnrollAction } from "./actions";
 
-// Card de enrollment 2FA. Estados:
-//   1) idle  — botão "Activar 2FA"
-//   2) qr    — mostra QR + secret + input de código
 type Enrolling = { factorId: string; qrCode: string; secret: string } | null;
 
-export function EnrollCard() {
+export function EnrollCard({ returnTo }: { returnTo?: string }) {
   const [enrolling, setEnrolling] = useState<Enrolling>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -57,6 +54,7 @@ export function EnrollCard() {
   return (
     <form action={confirmEnrollAction} className="card space-y-4 p-5">
       <input type="hidden" name="factorId" value={enrolling.factorId} />
+      {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
       <div>
         <div className="text-sm font-semibold">Configurar 2FA</div>
         <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs text-ink-600">
@@ -69,7 +67,6 @@ export function EnrollCard() {
       <div className="rounded-lg border border-ink-900/10 bg-white p-3">
         <div
           className="mx-auto h-48 w-48"
-          // O QR vem como SVG dataurl directo do Supabase.
           dangerouslySetInnerHTML={{ __html: extractSvg(enrolling.qrCode) }}
         />
       </div>
@@ -127,8 +124,6 @@ export function EnrollCard() {
   );
 }
 
-// Supabase devolve o QR como um data:image/svg+xml;utf8,<svg>... ou
-// como o próprio SVG. Esta função extrai o conteúdo SVG injectável.
 function extractSvg(src: string): string {
   if (src.startsWith("<svg")) return src;
   if (src.startsWith("data:image/svg+xml")) {
@@ -142,6 +137,5 @@ function extractSvg(src: string): string {
       }
     }
   }
-  // Fallback: img tag (cobre data:image/png, etc.)
   return `<img src="${src}" alt="QR code 2FA" class="h-48 w-48" />`;
 }

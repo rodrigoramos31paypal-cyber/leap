@@ -7,7 +7,10 @@ import { Pagination } from "@/components/pagination";
 import { ClientSearch } from "@/components/client-search";
 import { ListSkeleton } from "@/components/skeleton";
 
-type Tab = "todos" | "upcoming" | "past" | "new" | "esgotar";
+// "new" foi removido (decisão de produto). "todos" passou a "Todos clientes"
+// no label e a incluir clientes que se registaram com o trainer mas ainda
+// não compraram/marcaram (ver lib/trainer.ts getClientIdsInScope).
+type Tab = "todos" | "upcoming" | "past" | "esgotar";
 
 type ClientRow = {
   id: string;
@@ -19,9 +22,11 @@ type ClientRow = {
 const PAGE_SIZE = 10;
 
 function resolveTab(raw?: string): Tab {
-  return raw === "todos" || raw === "past" || raw === "new" || raw === "esgotar"
-    ? (raw as Tab)
-    : "upcoming";
+  if (raw === "todos" || raw === "past" || raw === "esgotar") return raw as Tab;
+  // "new" foi removido — qualquer link antigo cai em "todos" (que agora
+  // inclui também os recém-registados).
+  if (raw === "new") return "todos";
+  return "upcoming";
 }
 
 function labelFor(tab: Tab, q: string): string {
@@ -29,7 +34,6 @@ function labelFor(tab: Tab, q: string): string {
   if (tab === "todos") return "Todos os clientes";
   if (tab === "upcoming") return "Clientes com próximas sessões";
   if (tab === "past") return "Clientes com sessões passadas";
-  if (tab === "new") return "Clientes registados recentemente";
   return "Clientes a esgotar sessões (≤ 2)";
 }
 
@@ -62,10 +66,9 @@ export default function ClientesPage({
 
       {!q && (
         <div className="flex flex-wrap gap-1 rounded-lg border border-ink-900/10 bg-white p-1 text-sm dark:border-white/10 dark:bg-ink-800">
-          <TabLink current={tab} value="todos" label="Todos" />
+          <TabLink current={tab} value="todos" label="Todos clientes" />
           <TabLink current={tab} value="upcoming" label="Próximas sessões" />
           <TabLink current={tab} value="past" label="Sessões passadas" />
-          <TabLink current={tab} value="new" label="Novos clientes" />
           <TabLink current={tab} value="esgotar" label="Esgotar sessões" />
         </div>
       )}
@@ -103,15 +106,6 @@ async function ClientList({ q, tab, page }: { q: string; tab: Tab; page: number 
     ({ clients, total } = await loadAllClientsPage(trainerIds, from));
   } else if (tab === "upcoming" || tab === "past") {
     ({ clients, total } = await loadScopedClientPage(tab, trainerIds, trainerScope, from));
-  } else if (tab === "new") {
-    const { data, count } = await supabase
-      .from("profiles")
-      .select("id, full_name, email, phone, created_at", { count: "exact" })
-      .eq("role", "client")
-      .order("created_at", { ascending: false })
-      .range(from, to);
-    clients = (data ?? []) as ClientRow[];
-    total = count ?? clients.length;
   } else {
     // tab === "esgotar"
     ({ clients, total } = await loadScopedClientPage("esgotar", trainerIds, trainerScope, from));

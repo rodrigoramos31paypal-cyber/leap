@@ -1,10 +1,6 @@
 // ════════════════════════════════════════════════════════════════
 // Helpers para descobrir o trainer associado ao user logado, e
 // outras queries comuns ao schema multi-trainer.
-//
-// PERF: usamos React `cache()` para deduplicar chamadas dentro do
-// mesmo request — várias páginas (layout + page) e helpers chamam
-// estes métodos várias vezes; sem cache fazíamos N round-trips.
 // ════════════════════════════════════════════════════════════════
 import { cache } from "react";
 import { createClient, getSessionUser, getCurrentProfile } from "@/lib/supabase/server";
@@ -19,7 +15,6 @@ export type TrainerLite = {
   avatar_url?: string | null;
 };
 
-/** Devolve o trainer do user logado (admin). null se o user não for trainer/owner. */
 export const getCurrentTrainer = cache(async (): Promise<TrainerLite | null> => {
   const user = await getSessionUser();
   if (!user) return null;
@@ -33,17 +28,8 @@ export const getCurrentTrainer = cache(async (): Promise<TrainerLite | null> => 
 
   if (data) return toTrainerLite(data);
 
-  // ── FALLBACK: owner-gestor sem trainer próprio ────────────────────
-  // Um OWNER que não tem o seu próprio registo de trainer gere a agenda
-  // do estúdio. Se existir EXACTAMENTE um trainer, "o trainer actual"
-  // passa a ser esse — assim as Definições e a marcação por clique na
-  // Agenda funcionam para ele tal como funcionam para o trainer. Com
-  // vários trainers fica ambíguo → mantém null (sem regressão).
   const profile = await getCurrentProfile();
   if (profile?.role === "owner") {
-    // Conta apenas trainers ACTIVOS — um registo inactivo (ex: "Teste")
-    // não é a agenda do estúdio. Com exactamente um trainer activo,
-    // o owner-gestor opera sobre esse.
     const { data: actives } = await supabase
       .from("trainers")
       .select("id, profile_id, slug, active, bio, avatar_url, profiles:profile_id(full_name)")
@@ -70,7 +56,6 @@ export const getCurrentTrainerId = cache(async (): Promise<string | null> => {
   return t?.id ?? null;
 });
 
-/** Para owner: devolve todos os trainers; para trainer: só ele próprio. */
 export const getAccessibleTrainerIds = cache(async (): Promise<string[]> => {
   const profile = await getCurrentProfile();
   if (!profile) return [];
@@ -84,7 +69,6 @@ export const getAccessibleTrainerIds = cache(async (): Promise<string[]> => {
   return t ? [t.id] : [];
 });
 
-/** Para clientes: lista de trainers activos para escolher quando há mais que 1. */
 export const getActiveTrainersPublic = cache(async (): Promise<TrainerLite[]> => {
   const supabase = createClient();
   const { data } = await supabase
@@ -104,35 +88,45 @@ export const getActiveTrainersPublic = cache(async (): Promise<TrainerLite[]> =>
   }));
 });
 
-/** IDs de clientes que têm compras ou marcações dentro de um scope de trainers. */
+/**
+ * IDs de clientes dentro do scope de um trainer. Inclui:
+ *  • clientes com compras ou marcações com algum dos trainers do scope;
+ *  • clientes que se REGISTARAM associados ao trainer (profiles.trainer_id)
+ *    mesmo antes de comprarem/marcarem.
+ * Exclui contas anonimizadas (`@removido.invalid`).
+ */
 export const getClientIdsInScope = cache(async (trainerIds: string[]): Promise<string[]> => {
   if (trainerIds.length === 0) return [];
   const supabase = createClient();
-  const [{ data: purs }, { data: books }] = await Promise.all([
+  const [{ data: purs }, { data: books }, { data: profs }] = await Promise.all([
     supabase.from("purchases").select("client_id").in("trainer_id", trainerIds),
     supabase.from("bookings").select("client_id").in("trainer_id", trainerIds),
+    (supabase as any)
+      .from("profiles")
+      .select("id")
+      .eq("role", "client")
+      .in("trainer_id", trainerIds),
   ]);
   const set = new Set<string>();
   for (const r of (purs ?? []) as any[]) set.add(r.client_id);
   for (const r of (books ?? []) as any[]) set.add(r.client_id);
-  return Array.from(set);
+  for (const r of (profs ?? []) as any[]) set.add(r.id);
+  if (set.size === 0) return [];
+
+  const ids = Array.from(set);
+  const { data: active } = await supabase
+    .from("profiles")
+    .select("id, email")
+    .in("id", ids);
+  return (active ?? [])
+    .filter((p: any) => !((p.email ?? "") as string).endsWith("@removido.invalid"))
+    .map((p: any) => p.id);
 });
 
-/** Nº de clientes distintos no scope — só a contagem, sem trazer linhas.
- *
- *  PERF: usa a RPC `count_clients_in_scope` (COUNT(DISTINCT) no Postgres)
- *  em vez de puxar todas as linhas de purchases+bookings para o Node e
- *  deduplicar em JS, como faz getClientIdsInScope(). Usar isto quando só
- *  precisamos do número (ex: KPI do dashboard) — não da lista de IDs.
- *
- *  ROBUSTEZ: se a RPC ainda não existir (migration 0033 não aplicada) ou
- *  falhar, cai para getClientIdsInScope().length — comportamento idêntico
- *  ao anterior. Zero breakage no deploy. */
 export const getClientCountInScope = cache(async (trainerIds: string[]): Promise<number> => {
   if (trainerIds.length === 0) return 0;
   const supabase = createClient();
   try {
-    // `as any`: a RPC ainda não está nos tipos gerados do Supabase.
     const { data, error } = await (supabase as any).rpc("count_clients_in_scope", {
       p_trainer_ids: trainerIds,
     });
@@ -144,7 +138,6 @@ export const getClientCountInScope = cache(async (trainerIds: string[]): Promise
   }
 });
 
-/** Para clientes: trainer a usar — preferred = profile.trainer_id, fallback = único activo. */
 export const getTrainerForClient = cache(async (clientUserId: string): Promise<string | null> => {
   const supabase = createClient();
   const { data: profile } = await supabase
@@ -160,5 +153,5 @@ export const getTrainerForClient = cache(async (clientUserId: string): Promise<s
     .eq("active", true)
     .limit(2);
   if (actives && actives.length === 1) return (actives[0] as any).id;
-  return null; // ambíguo → UI tem de pedir escolha
+  return null;
 });

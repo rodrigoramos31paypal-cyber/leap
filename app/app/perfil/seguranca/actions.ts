@@ -8,13 +8,6 @@ import { logError } from "@/lib/errors";
 
 // ════════════════════════════════════════════════════════════════
 // 2FA · server actions de enrollment/desactivação.
-//
-// Fluxo de enrollment:
-//   1. UI chama `startEnrollAction` → enroll() devolve QR + factorId.
-//      Mostramos o QR e o secret ao utilizador.
-//   2. UI submete o código de 6 dígitos → `confirmEnrollAction` chama
-//      challengeAndVerify(). Se ok, o factor passa a 'verified' e está
-//      activo. Senão, fica em 'unverified' e tem de ser removido.
 // ════════════════════════════════════════════════════════════════
 
 export async function startEnrollAction() {
@@ -32,7 +25,7 @@ export async function startEnrollAction() {
   }
   return {
     factorId: data.id,
-    qrCode: data.totp.qr_code, // svg dataurl
+    qrCode: data.totp.qr_code,
     secret: data.totp.secret,
   };
 }
@@ -45,7 +38,7 @@ export async function confirmEnrollAction(formData: FormData) {
   const code = String(formData.get("code") ?? "").trim();
   if (!factorId || !/^\d{6}$/.test(code)) {
     setFlash("Código inválido.", "error");
-    redirect("/app/perfil/seguranca");
+    redirect(safeReturn(formData) ?? "/app/perfil?tab=perfil");
   }
 
   const supabase = createClient();
@@ -55,15 +48,15 @@ export async function confirmEnrollAction(formData: FormData) {
   });
   if (error) {
     logError("confirmEnrollAction", error);
-    // Apaga o factor unverified para não ficar lixo
     await supabase.auth.mfa.unenroll({ factorId }).catch(() => {});
     setFlash("Código inválido. Tenta de novo.", "error");
-    redirect("/app/perfil/seguranca");
+    redirect(safeReturn(formData) ?? "/app/perfil?tab=perfil");
   }
 
   setFlash("2FA activada com sucesso");
-  revalidatePath("/app/perfil/seguranca");
-  redirect("/app/perfil/seguranca");
+  revalidatePath("/app/perfil");
+  revalidatePath("/admin/seguranca");
+  redirect(safeReturn(formData) ?? "/app/perfil?tab=perfil");
 }
 
 export async function unenrollAction(formData: FormData) {
@@ -73,7 +66,7 @@ export async function unenrollAction(formData: FormData) {
   const factorId = String(formData.get("factorId") ?? "");
   if (!factorId) {
     setFlash("Factor não encontrado.", "error");
-    redirect("/app/perfil/seguranca");
+    redirect(safeReturn(formData) ?? "/app/perfil?tab=perfil");
   }
 
   const supabase = createClient();
@@ -84,6 +77,22 @@ export async function unenrollAction(formData: FormData) {
   } else {
     setFlash("2FA desactivada");
   }
-  revalidatePath("/app/perfil/seguranca");
-  redirect("/app/perfil/seguranca");
+  revalidatePath("/app/perfil");
+  revalidatePath("/admin/seguranca");
+  redirect(safeReturn(formData) ?? "/app/perfil?tab=perfil");
+}
+
+// Whitelist do caminho de retorno após acção 2FA. Permite à UI embutida
+// em /app/perfil voltar à tab "Perfil" e ao admin (/admin/seguranca)
+// voltar ao seu próprio ecrã, sem expor um open-redirect.
+function safeReturn(formData: FormData): string | null {
+  const r = String(formData.get("returnTo") ?? "").trim();
+  if (
+    r === "/app/perfil" ||
+    r === "/app/perfil?tab=perfil" ||
+    r === "/admin/seguranca"
+  ) {
+    return r;
+  }
+  return null;
 }
