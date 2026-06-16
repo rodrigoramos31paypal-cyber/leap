@@ -185,9 +185,7 @@ export default async function ClientDashboard() {
             <div className="text-xs text-ink-500 capitalize">{nextSession.session_type}</div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <span className={nextSession.status === "confirmed" ? "chip-ok" : "chip-gold"}>
-              {nextSession.status === "confirmed" ? "Confirmada" : "Marcada"}
-            </span>
+            <span className="chip-ok">Confirmada</span>
             <ChevronRight size={16} className="text-ink-500" />
           </div>
         </Link>

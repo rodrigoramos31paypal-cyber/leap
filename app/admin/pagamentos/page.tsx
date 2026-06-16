@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { eur, formatDateTime, PURCHASE_STATUS } from "@/lib/utils";
-import { confirmPurchaseAction, rejectPurchaseAction } from "./actions";
+import { confirmPurchaseAction, rejectPurchaseAction, cancelConfirmedPurchaseAction } from "./actions";
 import { getAccessibleTrainerIds } from "@/lib/trainer";
 import { Pagination } from "@/components/pagination";
 import { ClientSearch } from "@/components/client-search";
@@ -264,6 +264,27 @@ function renderPurchase(p: any) {
             placeholder="Motivo de rejeição (opcional)"
             className="input w-full"
           />
+        </div>
+      )}
+
+      {p.status === "confirmed" && (
+        <div className="mt-3 space-y-2">
+          <form action={cancelConfirmedPurchaseAction} id={`cancel-${p.id}`} className="flex">
+            <input type="hidden" name="purchaseId" value={p.id} />
+            <button className="btn-outline w-full border-red-200 text-red-700 hover:bg-red-50">
+              Cancelar pagamento
+            </button>
+          </form>
+          <input
+            form={`cancel-${p.id}`}
+            name="reason"
+            placeholder="Motivo de cancelamento (opcional)"
+            className="input w-full"
+          />
+          <p className="text-[11px] text-ink-500">
+            Cancelar reverte o pagamento, retira as sessões restantes do
+            saldo do cliente e move o registo para "Rejeitados".
+          </p>
         </div>
       )}
     </li>

@@ -78,8 +78,11 @@ export const PURCHASE_STATUS = {
   cancelled: "Cancelado",
 } as const;
 
+// Nota: o estado `booked` ("Marcada") foi removido do produto — toda a
+// criação de marcações passa directamente a `confirmed`. Mantemos a
+// label "Confirmada" para registos legados que ainda estejam em `booked`.
 export const BOOKING_STATUS = {
-  booked: "Marcada",
+  booked: "Confirmada",
   confirmed: "Confirmada",
   cancelled: "Cancelada",
   no_show: "Faltou",
