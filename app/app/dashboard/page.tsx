@@ -229,7 +229,7 @@ export default async function ClientDashboard() {
 
       {/* O teu progresso */}
       <section>
-        <div className="mb-1 flex items-center justify-between">
+        <div className="mb-0.5 flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">O teu progresso</h2>
           <Link href="/app/historico" className="text-xs font-medium text-gold-600 hover:text-gold-700">Ver mais</Link>
         </div>
