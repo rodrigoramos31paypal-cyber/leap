@@ -7,7 +7,8 @@ import { cn } from "@/lib/utils";
 import {
   Home,
   Calendar,
-  ShoppingBag,
+  History,
+  Store,
   User,
   LayoutDashboard,
   Users,
@@ -31,7 +32,8 @@ type Item = { href: string; label: string; icon: LucideIcon };
 const clientItems: Item[] = [
   { href: "/app/dashboard", label: "Início", icon: Home },
   { href: "/app/agenda", label: "Agenda", icon: Calendar },
-  { href: "/app/comprar", label: "Packs", icon: ShoppingBag },
+  { href: "/app/historico", label: "Histórico", icon: History },
+  { href: "/app/comprar", label: "Loja", icon: Store },
   { href: "/app/perfil", label: "Perfil", icon: User },
 ];
 
