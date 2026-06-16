@@ -12,6 +12,16 @@ export type PromoBanner = {
   link_url?: string | null;
 };
 
+// SEC (C-B audit jun/2026): defesa em profundidade contra
+// `javascript:`/`data:` URIs em link_url. O server action valida
+// antes de gravar, mas dados antigos podem existir e React não
+// bloqueia esquemas perigosos em `<a href={...}>`. Só renderizamos
+// `<a>` quando a string começa por http(s):.
+function safeHref(url: string | null | undefined): string | undefined {
+  if (!url) return undefined;
+  return /^https?:\/\//i.test(url) ? url : undefined;
+}
+
 // ── Auto-advance ───────────────────────────────────────────────────────
 // Roda automaticamente para o próximo slide a cada 5 s, com loop ao
 // chegar ao fim. Pausa quando o utilizador interage (touch / pointer /
@@ -62,17 +72,20 @@ export function PromoCarousel({ banners }: { banners: PromoBanner[] }) {
         onWheel={markInteract}
         className="flex snap-x snap-mandatory gap-3 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {banners.map((b) => (
-          <div key={b.id} className="shrink-0 basis-full snap-center">
-            {b.link_url ? (
-              <a href={b.link_url} target="_blank" rel="noopener noreferrer" className="block h-full cursor-pointer">
+        {banners.map((b) => {
+          const href = safeHref(b.link_url);
+          return (
+            <div key={b.id} className="shrink-0 basis-full snap-center">
+              {href ? (
+                <a href={href} target="_blank" rel="noopener noreferrer" className="block h-full cursor-pointer">
+                  <PromoCard b={b} />
+                </a>
+              ) : (
                 <PromoCard b={b} />
-              </a>
-            ) : (
-              <PromoCard b={b} />
-            )}
-          </div>
-        ))}
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {banners.length > 1 && (

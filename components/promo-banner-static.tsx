@@ -16,6 +16,13 @@ export type PromoBanner = {
   link_url?: string | null;
 };
 
+// SEC (C-B audit jun/2026): defesa em profundidade — só renderiza `<a>`
+// quando link_url começa por http(s):. Idêntico ao guard em promo-carousel.tsx.
+function safeHref(url: string | null | undefined): string | undefined {
+  if (!url) return undefined;
+  return /^https?:\/\//i.test(url) ? url : undefined;
+}
+
 export function PromoBannerStatic({ banner }: { banner: PromoBanner | null }) {
   if (!banner) return null;
   const content = (
@@ -53,8 +60,9 @@ export function PromoBannerStatic({ banner }: { banner: PromoBanner | null }) {
     </div>
   );
 
-  return banner.link_url ? (
-    <a href={banner.link_url} target="_blank" rel="noopener noreferrer" className="block">
+  const href = safeHref(banner.link_url);
+  return href ? (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="block">
       {content}
     </a>
   ) : (

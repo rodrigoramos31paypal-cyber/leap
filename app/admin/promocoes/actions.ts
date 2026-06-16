@@ -26,6 +26,29 @@ function validateFile(file: File | null): string | null {
   return null;
 }
 
+// SEC (C-B audit jun/2026): valida que um URL externo é mesmo http(s)
+// antes de o gravar. React renderiza `<a href={...}>` sem bloquear
+// schemes perigosos (`javascript:`, `data:`, `vbscript:`). Sem este
+// gate, um staff podia injectar `link_url=javascript:fetch(...)` num
+// banner; o banner aparece no /app/dashboard de qualquer cliente do
+// estúdio → XSS cross-trainer ao clique.
+//
+// Devolve URL normalizado (`new URL(...).toString()`) ou null se for
+// vazio/inválido. Verifica também os componentes (URL parser apanha
+// "https://" sem host como erro).
+function safeHttpUrl(raw: string): string | null {
+  const s = raw.trim();
+  if (!s) return null;
+  try {
+    const u = new URL(s);
+    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+    if (!u.hostname) return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
 // Faz upload da imagem para o bucket "slideshow" e devolve a URL pública
 // (com cache-busting) ou null em caso de erro.
 async function uploadSlideImage(trainerId: string, file: File): Promise<string | null> {
@@ -59,8 +82,15 @@ export async function createBannerAction(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const subtitle = String(formData.get("subtitle") ?? "").trim();
   const buttonLabel = String(formData.get("button_label") ?? "").trim();
-  const linkUrl = String(formData.get("link_url") ?? "").trim();
+  const linkUrlRaw = String(formData.get("link_url") ?? "").trim();
   const file = formData.get("file") as File | null;
+
+  // C-B: rejeita URLs não http(s). null se vazio.
+  const linkUrl = linkUrlRaw ? safeHttpUrl(linkUrlRaw) : null;
+  if (linkUrlRaw && !linkUrl) {
+    setFlash("Link inválido — usa um URL https://… ou deixa em branco.", "error");
+    return;
+  }
 
   const fileErr = validateFile(file);
   if (fileErr) {
@@ -101,7 +131,7 @@ export async function createBannerAction(formData: FormData) {
     subtitle: subtitle || null,
     image_url: imageUrl,
     button_label: buttonLabel || null,
-    link_url: linkUrl || null,
+    link_url: linkUrl,
   });
   if (error) {
     logError("createBannerAction", error);
@@ -118,10 +148,18 @@ export async function updateBannerAction(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const subtitle = String(formData.get("subtitle") ?? "").trim();
   const buttonLabel = String(formData.get("button_label") ?? "").trim();
-  const linkUrl = String(formData.get("link_url") ?? "").trim();
+  const linkUrlRaw = String(formData.get("link_url") ?? "").trim();
   const file = formData.get("file") as File | null;
 
   if (!id) return;
+
+  // C-B: rejeita URLs não http(s). null se vazio.
+  const linkUrl = linkUrlRaw ? safeHttpUrl(linkUrlRaw) : null;
+  if (linkUrlRaw && !linkUrl) {
+    setFlash("Link inválido — usa um URL https://… ou deixa em branco.", "error");
+    return;
+  }
+
   const fileErr = validateFile(file);
   if (fileErr) {
     setFlash(fileErr, "error");
@@ -132,7 +170,7 @@ export async function updateBannerAction(formData: FormData) {
     title,
     subtitle: subtitle || null,
     button_label: buttonLabel || null,
-    link_url: linkUrl || null,
+    link_url: linkUrl,
     updated_at: new Date().toISOString(),
   };
 
