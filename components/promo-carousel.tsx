@@ -74,11 +74,17 @@ export function PromoCarousel({ banners }: { banners: PromoBanner[] }) {
             // — a sensação de "zoom in" desaparece sem mexer no mobile.
             <div className="relative flex h-28 overflow-hidden rounded-2xl bg-ink-900 text-bone-50 transition active:scale-[0.99] md:h-44 lg:h-52">
               {b.image_url && (
+                // Mobile: `object-cover` (full-bleed, pode cortar — é o que
+                // estava bem). Desktop (md+): `object-contain` para mostrar
+                // a imagem INTEIRA sem cortes. As barras laterais ficam
+                // sobre o `bg-ink-900` do container e somem-se na maioria
+                // dos banners (que já têm fundo escuro). object-center
+                // centra o contido.
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={b.image_url}
                   alt={b.title || "slide"}
-                  className="absolute inset-0 h-full w-full object-cover object-center"
+                  className="absolute inset-0 h-full w-full object-cover object-center md:object-contain"
                 />
               )}
               <div className="absolute inset-0 bg-gradient-to-l from-ink-900/65 via-ink-900/20 to-transparent" />
