@@ -66,9 +66,16 @@ export async function saveSettingsAction(formData: FormData) {
 }
 
 export async function addAvailabilityAction(formData: FormData) {
-  await requireStaff();
+  const profile = await requireStaff();
   const supabase = createClient();
   const trainerId = String(formData.get("trainerId") ?? "");
+  // H-4 (audit jun/2026): defesa em profundidade. RLS já filtra por
+  // _trainer_is_accessible(trainer_id), mas espelhamos o cheque ao
+  // nível da app para não dependermos de a policy continuar perfeita.
+  if (profile.role !== "owner" && trainerId !== (await getCurrentTrainerId())) {
+    setFlash("Sem permissão.", "error");
+    return;
+  }
   const dayOfWeek = Number(formData.get("day_of_week") ?? 1);
   const startTime = String(formData.get("start_time") ?? "07:00");
   const endTime = String(formData.get("end_time") ?? "21:00");
@@ -113,12 +120,23 @@ export async function addAvailabilityAction(formData: FormData) {
 }
 
 export async function updateAvailabilityAction(formData: FormData) {
-  await requireStaff();
+  const profile = await requireStaff();
   const supabase = createClient();
   const id = String(formData.get("id") ?? "");
   const startTime = String(formData.get("start_time") ?? "07:00");
   const endTime = String(formData.get("end_time") ?? "21:00");
   if (!id) return;
+  // H-4: variante por `id` — vai buscar o trainer_id da linha e valida.
+  const { data: row } = await supabase
+    .from("trainer_availability")
+    .select("trainer_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!row) { setFlash("Horário não encontrado", "error"); return; }
+  if (profile.role !== "owner" && row.trainer_id !== (await getCurrentTrainerId())) {
+    setFlash("Sem permissão.", "error");
+    return;
+  }
   if (startTime >= endTime) {
     setFlash("A hora de início tem de ser anterior à hora de fim", "error");
     revalidatePath("/admin/definicoes");
@@ -134,19 +152,43 @@ export async function updateAvailabilityAction(formData: FormData) {
 }
 
 export async function deleteAvailabilityAction(formData: FormData) {
-  await requireStaff();
+  const profile = await requireStaff();
   const supabase = createClient();
-  const { error } = await supabase.from("trainer_availability").delete().eq("id", String(formData.get("id") ?? ""));
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  // H-4: variante por `id`.
+  const { data: row } = await supabase
+    .from("trainer_availability")
+    .select("trainer_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!row) { setFlash("Horário não encontrado", "error"); return; }
+  if (profile.role !== "owner" && row.trainer_id !== (await getCurrentTrainerId())) {
+    setFlash("Sem permissão.", "error");
+    return;
+  }
+  const { error } = await supabase.from("trainer_availability").delete().eq("id", id);
   if (error) { logError("deleteAvailabilityAction", error); setFlash("Não foi possível remover", "error"); }
   else setFlash("Disponibilidade removida");
   revalidateAvailabilityViews();
 }
 
 export async function deleteBlockAction(formData: FormData) {
-  await requireStaff();
+  const profile = await requireStaff();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   const supabase = createClient();
+  // H-4: variante por `id`.
+  const { data: row } = await supabase
+    .from("trainer_blocked_times")
+    .select("trainer_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!row) { setFlash("Bloqueio não encontrado", "error"); return; }
+  if (profile.role !== "owner" && row.trainer_id !== (await getCurrentTrainerId())) {
+    setFlash("Sem permissão.", "error");
+    return;
+  }
   const { error } = await supabase.from("trainer_blocked_times").delete().eq("id", id);
   if (error) { logError("deleteBlockAction", error); setFlash("Não foi possível remover bloqueio", "error"); }
   else setFlash("Bloqueio removido");
@@ -154,10 +196,16 @@ export async function deleteBlockAction(formData: FormData) {
 }
 
 export async function addBlockAction(formData: FormData) {
-  await requireStaff();
+  const profile = await requireStaff();
   const supabase = createClient();
+  const trainerId = String(formData.get("trainerId") ?? "");
+  // H-4: ownership check explícito ao nível da app.
+  if (profile.role !== "owner" && trainerId !== (await getCurrentTrainerId())) {
+    setFlash("Sem permissão.", "error");
+    return;
+  }
   const { error } = await supabase.from("trainer_blocked_times").insert({
-    trainer_id: String(formData.get("trainerId") ?? ""),
+    trainer_id: trainerId,
     starts_at: new Date(String(formData.get("starts_at"))).toISOString(),
     ends_at: new Date(String(formData.get("ends_at"))).toISOString(),
     reason: String(formData.get("reason") ?? "") || null,
