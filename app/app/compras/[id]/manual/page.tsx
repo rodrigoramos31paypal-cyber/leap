@@ -49,13 +49,15 @@ export default async function ManualPaymentPage({ params }: { params: { id: stri
   const isRejected = purchase.status === "rejected";
 
   const reference = `LEAP-${purchase.id.slice(0, 6).toUpperCase()}`;
+  const method: "mbway" | "revolut" =
+    (purchase as any).payment_method === "manual_revolut" ? "revolut" : "mbway";
 
   return (
     <div className="space-y-5">
       <BackLink href="/app/historico?tab=compras" />
       <div>
         <h1 className="font-display text-2xl font-bold tracking-tight">Concluir pagamento</h1>
-        <p className="text-sm text-ink-500">Pagamento manual por MB Way ou Revolut.</p>
+        <p className="text-sm text-ink-500">Pagamento manual por {method === "revolut" ? "Revolut" : "MB WAY"}.</p>
       </div>
 
       <div className="card p-5">
@@ -74,6 +76,7 @@ export default async function ManualPaymentPage({ params }: { params: { id: stri
             reference={reference}
             ptPhone={ptPhone}
             trainerName={trainerName}
+            method={method}
           />
 
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">

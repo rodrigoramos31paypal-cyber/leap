@@ -7,11 +7,9 @@ import { cn, eur } from "@/lib/utils";
 import { startPurchaseAction } from "./actions";
 import type { Pack, PaymentMethod } from "@/types/database";
 
-const METHODS: { id: PaymentMethod; label: string; helper: string; gateway: "manual" | "ifthenpay" }[] = [
-  { id: "mbway", label: "MB Way (automático)", helper: "Aprovação imediata via IfthenPay", gateway: "ifthenpay" },
-  { id: "multibanco", label: "Multibanco", helper: "Referência multibanco automática", gateway: "ifthenpay" },
-  { id: "card", label: "Cartão Bancário", helper: "Visa / Mastercard via IfthenPay", gateway: "ifthenpay" },
-  { id: "manual_mbway", label: "MB Way (manual) ou Revolut", helper: "Pagas diretamente ao João — confirmação em minutos", gateway: "manual" },
+const METHODS: { id: PaymentMethod; label: string; helper: string }[] = [
+  { id: "manual_mbway", label: "MB WAY", helper: "Pagas por MB WAY — confirmação manual em minutos" },
+  { id: "manual_revolut", label: "Revolut", helper: "Pagas por Revolut — confirmação manual em minutos" },
 ];
 
 export function PackList({ packs }: { packs: Pack[] }) {

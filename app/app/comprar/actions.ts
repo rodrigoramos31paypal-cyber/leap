@@ -2,12 +2,14 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createPurchase } from "@/lib/credits";
-import { ifthenpayEnabled, createIfthenpayPayment } from "@/lib/ifthenpay";
 import { dispatchPurchasePending } from "@/lib/email-dispatch";
 import { logError, userFacingRpcError } from "@/lib/errors";
 import { revalidateCreditsViews } from "@/lib/revalidate";
 import type { PaymentMethod } from "@/types/database";
 
+// Apenas pagamentos manuais (MB WAY / Revolut). Ambos exigem confirmação
+// manual do admin — o cliente é levado à página de instruções do método
+// escolhido (/app/compras/<id>/manual).
 export async function startPurchaseAction({
   packId,
   method,
@@ -19,30 +21,13 @@ export async function startPurchaseAction({
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Sessão expirada." };
 
-  const isGateway = !method.startsWith("manual_");
-  if (isGateway && !ifthenpayEnabled()) {
-    return {
-      error:
-        "Os pagamentos automáticos ainda não estão ativos. Escolhe MB Way manual por agora.",
-    };
-  }
-
   try {
     const purchaseId = await createPurchase(packId, method);
     await dispatchPurchasePending(purchaseId).catch(() => {});
     revalidateCreditsViews();
-
-    if (!isGateway) {
-      // manual: redireciona para página de instruções
-      return { redirect: `/app/compras/${purchaseId}/manual` };
-    }
-
-    // gateway IfthenPay
-    const { redirectUrl } = await createIfthenpayPayment({ purchaseId, method });
-    return { redirect: redirectUrl };
+    return { redirect: `/app/compras/${purchaseId}/manual` };
   } catch (err) {
     logError("startPurchaseAction", err);
-    // Mensagem de negócio (ex.: conta suspensa) é segura de mostrar.
     const friendly = userFacingRpcError(err);
     return { error: friendly ?? "Não foi possível iniciar a compra. Tenta novamente." };
   }
