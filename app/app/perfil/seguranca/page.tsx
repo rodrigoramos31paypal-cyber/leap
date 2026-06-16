@@ -50,7 +50,7 @@ export default async function SegurancaPage() {
             </div>
           </div>
           {factors.map((f) => (
-            <form key={f.id} action={unenrollAction} className="flex items-center justify-between gap-3 rounded-lg border border-ink-900/10 bg-bone-50 px-3 py-2">
+            <form key={f.id} action={unenrollAction} className="space-y-2 rounded-lg border border-ink-900/10 bg-bone-50 px-3 py-2">
               <input type="hidden" name="factorId" value={f.id} />
               <div className="text-xs">
                 <div className="font-semibold">{f.friendly_name || "Authenticator app"}</div>
@@ -58,9 +58,22 @@ export default async function SegurancaPage() {
                   Configurado em {new Date(f.created_at).toLocaleDateString("pt-PT")}
                 </div>
               </div>
-              <button className="btn-outline text-xs text-red-700 hover:bg-red-50 border-red-200">
-                Desactivar
-              </button>
+              <div className="flex items-center gap-2">
+                <input
+                  name="code"
+                  inputMode="numeric"
+                  pattern="[0-9]{6}"
+                  maxLength={6}
+                  required
+                  autoComplete="one-time-code"
+                  className="input flex-1 text-center font-mono tracking-[0.3em]"
+                  placeholder="Código 2FA"
+                  aria-label="Código 2FA actual"
+                />
+                <button className="btn-outline shrink-0 text-xs text-red-700 hover:bg-red-50 border-red-200">
+                  Desactivar
+                </button>
+              </div>
             </form>
           ))}
         </div>

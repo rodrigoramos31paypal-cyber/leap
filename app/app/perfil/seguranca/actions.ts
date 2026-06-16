@@ -2,17 +2,55 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient, getSessionUser } from "@/lib/supabase/server";
+import { createClient, getSessionUser, getAuthUser } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
 
 // ════════════════════════════════════════════════════════════════
 // 2FA · server actions de enrollment/desactivação.
+//
+// SEC (H-A, audit jun/2026): qualquer MUDANÇA de 2FA tem de exigir
+// re-autenticação no próprio pedido — não basta o cookie de sessão.
+// Caso contrário, um cookie roubado (XSS, MITM em wifi, cookie sync)
+// permite account takeover:
+//   • sem 2FA → atacante AAL1 enrola um factor com a secret DELE e
+//     tranca a vítima fora da conta no próximo login;
+//   • com 2FA → atacante desliga a 2FA sem provar posse do 2º factor.
+//
+// Estratégia:
+//   • enroll do PRIMEIRO factor: não há AAL2 possível (ainda não há
+//     factor), por isso exigimos a PASSWORD no mesmo form ("sudo") e
+//     confirmamo-la com signInWithPassword ANTES de mfa.enroll.
+//   • unenroll: exigimos um challenge TOTP ACTUAL (código fresco) e
+//     validamo-lo com challengeAndVerify antes de desactivar. NB: não
+//     redirecionamos para /login/2fa porque essa página é satisfeita
+//     por um "trusted device" (cookie) sem elevar o AAL — o que
+//     deixaria a porta aberta. O challenge inline é à prova disso.
 // ════════════════════════════════════════════════════════════════
 
-export async function startEnrollAction() {
+/** Confirma a password do user autenticado ("sudo"). Usado para gate do
+ *  primeiro enrollment, onde AAL2 ainda não é possível. */
+async function verifyPasswordSudo(password: string): Promise<boolean> {
+  if (!password) return false;
+  const user = await getAuthUser();
+  if (!user?.email) return false;
+  const supabase = createClient();
+  const { error } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password,
+  });
+  return !error;
+}
+
+export async function startEnrollAction(formData: FormData) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
+
+  // H-A: re-auth por password antes de criar o factor.
+  const password = String(formData.get("password") ?? "");
+  if (!(await verifyPasswordSudo(password))) {
+    return { error: "Password incorrecta. Confirma a tua password para activar a 2FA." };
+  }
 
   const supabase = createClient();
   const { data, error } = await supabase.auth.mfa.enroll({
@@ -70,6 +108,26 @@ export async function unenrollAction(formData: FormData) {
   }
 
   const supabase = createClient();
+
+  // H-A: exige challenge MFA ACTUAL — um código TOTP fresco — antes de
+  // desactivar. challengeAndVerify valida o código contra o factor (e
+  // eleva o AAL), garantindo que quem desliga a 2FA tem mesmo o 2º factor,
+  // mesmo que a sessão venha de um cookie roubado ou de um device confiado.
+  const code = String(formData.get("code") ?? "").trim();
+  if (!/^\d{6}$/.test(code)) {
+    setFlash("Introduz o código 2FA actual para desactivar.", "error");
+    redirect(safeReturn(formData) ?? "/app/perfil?tab=perfil");
+  }
+  const { error: verifyError } = await (supabase.auth.mfa as any).challengeAndVerify({
+    factorId,
+    code,
+  });
+  if (verifyError) {
+    logError("unenrollAction:verify", verifyError);
+    setFlash("Código inválido. A 2FA não foi desactivada.", "error");
+    redirect(safeReturn(formData) ?? "/app/perfil?tab=perfil");
+  }
+
   const { error } = await supabase.auth.mfa.unenroll({ factorId });
   if (error) {
     logError("unenrollAction", error);

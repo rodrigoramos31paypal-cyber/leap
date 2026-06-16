@@ -8,18 +8,26 @@ type Enrolling = { factorId: string; qrCode: string; secret: string } | null;
 
 export function EnrollCard({ returnTo }: { returnTo?: string }) {
   const [enrolling, setEnrolling] = useState<Enrolling>(null);
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [pending, start] = useTransition();
 
   function startSetup() {
     setError(null);
+    if (!password) {
+      setError("Confirma a tua password para activar a 2FA.");
+      return;
+    }
+    const fd = new FormData();
+    fd.set("password", password);
     start(async () => {
-      const res = await startEnrollAction();
+      const res = await startEnrollAction(fd);
       if ("error" in res) {
         setError(res.error!);
         return;
       }
+      setPassword("");
       setEnrolling({
         factorId: res.factorId!,
         qrCode: res.qrCode!,
@@ -43,8 +51,25 @@ export function EnrollCard({ returnTo }: { returnTo?: string }) {
             </div>
           </div>
         </div>
+        <div>
+          <label htmlFor="enroll-password" className="label">
+            Confirma a tua password
+          </label>
+          <input
+            id="enroll-password"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="input"
+            placeholder="Password da conta"
+          />
+          <p className="mt-1 text-xs text-ink-500">
+            Por segurança, confirmamos a tua password antes de activar a 2FA.
+          </p>
+        </div>
         {error && <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
-        <button onClick={startSetup} disabled={pending} className="btn-gold w-full">
+        <button onClick={startSetup} disabled={pending || !password} className="btn-gold w-full">
           {pending ? "A configurar…" : "Activar 2FA"}
         </button>
       </div>
