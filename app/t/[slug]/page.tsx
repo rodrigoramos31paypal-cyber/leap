@@ -37,6 +37,19 @@ export async function generateMetadata({
   };
 }
 
+// SECURITY (C1): JSON.stringify NAO escapa <, >, & nem U+2028/U+2029.
+// Sem isto, um campo controlado pelo trainer (bio/nome) contendo
+// "</script>..." faria breakout do bloco <script type="application/ld+json">
+// e injectaria markup na pagina publica/indexavel. Escapamos esses chars
+// para a forma unicode (uXXXX) — continua JSON valido e o browser nunca ve
+// um </script> literal nem separadores de linha que partam o parsing.
+function jsonLdSafe(obj: unknown): string {
+  return JSON.stringify(obj).replace(
+    /[<>&\u2028\u2029]/g,
+    (c) => String.fromCharCode(92) + "u" + c.charCodeAt(0).toString(16).padStart(4, "0"),
+  );
+}
+
 export default async function PublicTrainerPage({
   params,
 }: {
@@ -86,12 +99,12 @@ export default async function PublicTrainerPage({
       <script
         type="application/ld+json"
         nonce={nonce}
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(personLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLdSafe(personLd) }}
       />
       <script
         type="application/ld+json"
         nonce={nonce}
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(profileLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLdSafe(profileLd) }}
       />
       {/* Header com identidade visual */}
       <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-ink-600">
