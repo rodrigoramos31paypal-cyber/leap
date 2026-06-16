@@ -2,12 +2,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getAccessibleTrainerIds } from "@/lib/trainer";
 import { eur } from "@/lib/utils";
 import {
-  createProductAction,
   updateProductAction,
   toggleProductAction,
   deleteProductAction,
 } from "./actions";
 import { ShoppingBag, Plus, Pencil, Upload } from "lucide-react";
+import { NewProductForm } from "./new-product-form";
 
 const CATS: { value: string; label: string }[] = [
   { value: "ebooks", label: "Ebooks" },
@@ -43,54 +43,15 @@ export default async function AdminLojaPage() {
         </p>
       </div>
 
-      {/* Novo produto · fechado por defeito (decisão de produto). */}
+      {/* Novo produto · fechado por defeito (decisão de produto). O form
+          é client-side para podermos limpar os campos após criar com
+          sucesso — sem isto, o admin via o produto anterior pré-preenchido
+          ao criar o próximo. */}
       <details className="card p-5">
         <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
           <Plus size={16} /> Novo produto
         </summary>
-        <form action={createProductAction} className="mt-4 space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className="label">Categoria</label>
-              <select name="category" className="input" defaultValue="ebooks">
-                {CATS.map((c) => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="label">Nome</label>
-              <input name="name" required className="input" placeholder="Ex: Guia de receitas" />
-            </div>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className="label">Preço € (opcional)</label>
-              <input name="price" inputMode="decimal" className="input" placeholder="Ex: 19.99" />
-            </div>
-            <div>
-              <label className="label">Link de compra (opcional)</label>
-              <input name="link_url" type="url" className="input" placeholder="https://..." />
-            </div>
-          </div>
-          <div>
-            <label className="label">Descrição (opcional)</label>
-            <input name="description" className="input" placeholder="Breve descrição do produto" />
-          </div>
-          <div>
-            <label className="label flex items-center gap-1.5">
-              <Upload size={14} /> Imagem (carrega do telemóvel)
-            </label>
-            <input
-              name="file"
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              className="input file:mr-3 file:rounded-md file:border-0 file:bg-ink-900/10 file:px-3 file:py-1.5 file:text-sm file:font-semibold dark:file:bg-white/10"
-            />
-            <p className="mt-1 text-[11px] text-ink-400">JPG, PNG ou WEBP · máx. 5 MB</p>
-          </div>
-          <button className="btn-primary w-full sm:w-auto">Criar produto</button>
-        </form>
+        <NewProductForm categories={CATS} />
       </details>
 
       {/* Lista por categoria */}
