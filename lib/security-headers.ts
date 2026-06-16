@@ -11,7 +11,7 @@
 //   • Apenas scripts com o nonce certo correm.
 //   • Scripts carregados POR esses scripts (chunks do Next.js)
 //     herdam confiança via `'strict-dynamic'`.
-//   • Domínios na allowlist (Supabase, Upstash REST, IfthenPay)
+//   • Domínios na allowlist (Supabase, Upstash REST)
 //     vão na directiva `connect-src`, não na `script-src`.
 //
 // Sem nonce, a única alternativa era `'unsafe-inline'` em
@@ -68,8 +68,6 @@ export function buildCsp(nonce: string): string {
       // Supabase REST + Realtime (WebSocket)
       "https://*.supabase.co",
       "wss://*.supabase.co",
-      // IfthenPay (caso evoluamos para chamadas client-side)
-      "https://ifthenpay.com",
     ],
     "frame-ancestors": ["'none'"],
     "frame-src": ["'self'"],

@@ -107,7 +107,7 @@ export default async function BuyPackPage({ searchParams }: { searchParams: { tr
         <p className="font-semibold text-ink-900">Como funciona</p>
         <ol className="mt-2 list-decimal space-y-1 pl-5">
           <li>Escolhe um pack e o método de pagamento.</li>
-          <li>Faz o pagamento (MB Way, Multibanco ou cartão).</li>
+          <li>Faz o pagamento por MB WAY ou Revolut.</li>
           <li>Assim que o pagamento for confirmado, as sessões ficam disponíveis e podes marcar.</li>
         </ol>
       </div>

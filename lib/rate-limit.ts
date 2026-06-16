@@ -13,7 +13,7 @@
 // Buckets (req / minuto):
 //   • auth     5    (login)
 //   • register 3    (signup, password reset)
-//   • webhook  60   (IfthenPay callbacks; retries em rajada)
+//   • webhook  60   (callbacks de webhooks; retries em rajada)
 //   • export   5    (exportações CSV/XLSX — caras em CPU/memória)
 //   • generic  30   (fallback)
 // ════════════════════════════════════════════════════════════════

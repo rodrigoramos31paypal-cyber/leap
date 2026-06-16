@@ -5,10 +5,19 @@ import { revalidateAvailabilityViews } from "@/lib/revalidate";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
+import { getCurrentTrainerId } from "@/lib/trainer";
+import { requireStaff } from "@/lib/authz";
 
 export async function saveTrainerBioAction(formData: FormData) {
+  const profile = await requireStaff();
   const supabase = createClient();
   const trainerId = String(formData.get("trainerId") ?? "");
+  // H1: nunca confiar no trainerId do form. Owner edita qualquer trainer;
+  // um trainer só a si próprio.
+  if (profile.role !== "owner" && trainerId !== (await getCurrentTrainerId())) {
+    setFlash("Sem permissão.", "error");
+    return;
+  }
   // SECURITY (C1): defesa em profundidade — remove <,> a entrada para que
   // o conteudo do trainer nunca contenha markup. O output JSON-LD em
   // /t/[slug] ja e escapado; isto e a 2a camada.
@@ -21,8 +30,14 @@ export async function saveTrainerBioAction(formData: FormData) {
 }
 
 export async function saveSettingsAction(formData: FormData) {
+  const profile = await requireStaff();
   const supabase = createClient();
   const trainerId = String(formData.get("trainerId") ?? "");
+  // H1: ownership — owner edita qualquer trainer; trainer só a si próprio.
+  if (profile.role !== "owner" && trainerId !== (await getCurrentTrainerId())) {
+    setFlash("Sem permissão.", "error");
+    return;
+  }
   const durations = String(formData.get("slot_durations") ?? "")
     .split(",")
     .map((s) => Number(s.trim()))
@@ -51,6 +66,7 @@ export async function saveSettingsAction(formData: FormData) {
 }
 
 export async function addAvailabilityAction(formData: FormData) {
+  await requireStaff();
   const supabase = createClient();
   const trainerId = String(formData.get("trainerId") ?? "");
   const dayOfWeek = Number(formData.get("day_of_week") ?? 1);
@@ -97,6 +113,7 @@ export async function addAvailabilityAction(formData: FormData) {
 }
 
 export async function updateAvailabilityAction(formData: FormData) {
+  await requireStaff();
   const supabase = createClient();
   const id = String(formData.get("id") ?? "");
   const startTime = String(formData.get("start_time") ?? "07:00");
@@ -117,6 +134,7 @@ export async function updateAvailabilityAction(formData: FormData) {
 }
 
 export async function deleteAvailabilityAction(formData: FormData) {
+  await requireStaff();
   const supabase = createClient();
   const { error } = await supabase.from("trainer_availability").delete().eq("id", String(formData.get("id") ?? ""));
   if (error) { logError("deleteAvailabilityAction", error); setFlash("Não foi possível remover", "error"); }
@@ -125,6 +143,7 @@ export async function deleteAvailabilityAction(formData: FormData) {
 }
 
 export async function deleteBlockAction(formData: FormData) {
+  await requireStaff();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   const supabase = createClient();
@@ -135,6 +154,7 @@ export async function deleteBlockAction(formData: FormData) {
 }
 
 export async function addBlockAction(formData: FormData) {
+  await requireStaff();
   const supabase = createClient();
   const { error } = await supabase.from("trainer_blocked_times").insert({
     trainer_id: String(formData.get("trainerId") ?? ""),
@@ -156,6 +176,7 @@ export async function addBlockAction(formData: FormData) {
 // `trainerId`.
 // ════════════════════════════════════════════════════════════════
 export async function saveTrainerAvatarAction(formData: FormData) {
+  await requireStaff();
   const trainerId = String(formData.get("trainerId") ?? "");
   const file = formData.get("file") as File | null;
   if (!trainerId || !file || file.size === 0) {
@@ -233,6 +254,7 @@ export async function saveTrainerAvatarAction(formData: FormData) {
 }
 
 export async function removeTrainerAvatarAction(formData: FormData) {
+  await requireStaff();
   const trainerId = String(formData.get("trainerId") ?? "");
   if (!trainerId) return;
 

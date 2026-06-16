@@ -13,8 +13,8 @@ import { generateNonce, applyCsp } from "@/lib/security-headers";
 // contássemos GETs, qualquer navegação esgotava o bucket e a
 // página de login deixava de carregar.
 //
-// Webhooks são limitados em qualquer método porque a IfthenPay
-// chama tanto em GET como em POST com payload idêntico.
+// Webhooks (se existirem) são limitados em qualquer método — alguns
+// providers chamam tanto em GET como em POST com payload idêntico.
 // ────────────────────────────────────────────────────────────────
 type RateRule = {
   test: (path: string, method: string) => boolean;
