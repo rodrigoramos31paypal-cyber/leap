@@ -62,6 +62,21 @@ export const getCurrentProfile = cache(async () => {
   return data ?? null;
 });
 
+/** Cliente anon SEM cookies — para dados PÚBLICOS (sem sessão). Seguro
+ *  dentro de unstable_cache / geração estática: não chama cookies(). */
+export function createPublicClient() {
+  return createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => [],
+        setAll: () => {},
+      },
+    },
+  );
+}
+
 /** Service-role client — bypasses RLS. Use only in trusted server code. */
 export function createAdminClient() {
   return createServerClient<Database>(

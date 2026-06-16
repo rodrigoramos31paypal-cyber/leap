@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
+import { unstable_cache } from "next/cache";
+import { createPublicClient } from "@/lib/supabase/server";
 import { getTrainerRatingStats, getTrainerReviews } from "@/lib/ratings";
 import type { TrainerRatingStats, TrainerReview } from "@/lib/ratings";
 
@@ -22,9 +23,10 @@ export type PublicTrainer = {
   reviews: TrainerReview[];
 };
 
-/** Carrega tudo o que a página pública precisa numa única passagem. */
-export async function getPublicTrainerBySlug(slug: string): Promise<PublicTrainer | null> {
-  const supabase = createClient();
+/** Carrega tudo o que a página pública precisa numa única passagem. Usa o
+ *  cliente anon SEM cookies para poder ser cacheado (ver getPublicTrainerBySlug). */
+async function loadPublicTrainerBySlug(slug: string): Promise<PublicTrainer | null> {
+  const supabase = createPublicClient();
 
   const { data } = await (supabase as any)
     .from("trainers")
@@ -38,10 +40,10 @@ export async function getPublicTrainerBySlug(slug: string): Promise<PublicTraine
   const trainerId = data.id as string;
   const fullName = (data.profiles?.full_name ?? "").trim() || "Treinador";
 
-  // Stats + primeiras reviews em paralelo.
+  // Stats + primeiras reviews em paralelo (mesmo cliente anon).
   const [stats, reviews] = await Promise.all([
-    getTrainerRatingStats(trainerId),
-    getTrainerReviews(trainerId, { limit: 20 }),
+    getTrainerRatingStats(trainerId, supabase),
+    getTrainerReviews(trainerId, { limit: 20 }, supabase),
   ]);
 
   return {
@@ -53,4 +55,19 @@ export async function getPublicTrainerBySlug(slug: string): Promise<PublicTraine
     stats,
     reviews,
   };
+}
+
+// PERF (audit): /t/<slug> é pública e partilhável, mas o root layout
+// (headers()/cookies) força render dinâmico em toda a app — não dá para a
+// tornar estática/ISR sem um refactor global. Em vez disso cacheamos os
+// DADOS (Data Cache do Next, revalidate 300s): as leituras à BD deixam de
+// correr a cada request e as 2 chamadas por request (generateMetadata +
+// página) deduplicam. Invalidar com revalidateTag(`public-trainer:<slug>`)
+// quando o trainer edita o perfil (bio/avatar).
+export function getPublicTrainerBySlug(slug: string): Promise<PublicTrainer | null> {
+  return unstable_cache(
+    () => loadPublicTrainerBySlug(slug),
+    ["public-trainer", slug],
+    { revalidate: 300, tags: [`public-trainer:${slug}`] },
+  )();
 }

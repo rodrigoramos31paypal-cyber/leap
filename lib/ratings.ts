@@ -17,8 +17,8 @@ export type TrainerReview = {
 };
 
 /** Média + nº total de avaliações para um trainer. */
-export async function getTrainerRatingStats(trainerId: string): Promise<TrainerRatingStats> {
-  const supabase = createClient();
+export async function getTrainerRatingStats(trainerId: string, client?: any): Promise<TrainerRatingStats> {
+  const supabase = client ?? createClient();
   const { data } = await (supabase as any)
     .from("trainer_rating_stats")
     .select("avg_stars, review_count")
@@ -34,9 +34,10 @@ export async function getTrainerRatingStats(trainerId: string): Promise<TrainerR
 export async function getTrainerReviews(
   trainerId: string,
   opts: { limit?: number; offset?: number } = {},
+  client?: any,
 ): Promise<TrainerReview[]> {
   const { limit = 20, offset = 0 } = opts;
-  const supabase = createClient();
+  const supabase = client ?? createClient();
   const { data } = await (supabase as any)
     .from("trainer_recent_reviews")
     .select("stars, comment, created_at, reviewer_name")

@@ -98,29 +98,37 @@ export const getActiveTrainersPublic = cache(async (): Promise<TrainerLite[]> =>
 export const getClientIdsInScope = cache(async (trainerIds: string[]): Promise<string[]> => {
   if (trainerIds.length === 0) return [];
   const supabase = createClient();
-  const [{ data: purs }, { data: books }, { data: profs }] = await Promise.all([
-    supabase.from("purchases").select("client_id").in("trainer_id", trainerIds),
-    supabase.from("bookings").select("client_id").in("trainer_id", trainerIds),
-    (supabase as any)
-      .from("profiles")
-      .select("id")
-      .eq("role", "client")
-      .in("trainer_id", trainerIds),
-  ]);
+  // PERF (audit): a exclusão de contas anonimizadas (@removido.invalid) era
+  // um 4º round-trip SERIAL — re-fetch dos profiles dos ids candidatos só
+  // para filtrar emails. Passa a correr EM PARALELO com os 3 reads de
+  // candidatos: buscamos o conjunto de ids removidos e subtraímo-lo. O
+  // comportamento mantém-se idêntico ao filtro JS anterior — clientes com
+  // email NULL continuam incluídos (NULL não faz match a @removido.invalid).
+  const [{ data: purs }, { data: books }, { data: profs }, { data: removed }] =
+    await Promise.all([
+      supabase.from("purchases").select("client_id").in("trainer_id", trainerIds),
+      supabase.from("bookings").select("client_id").in("trainer_id", trainerIds),
+      (supabase as any)
+        .from("profiles")
+        .select("id")
+        .eq("role", "client")
+        .in("trainer_id", trainerIds),
+      (supabase as any)
+        .from("profiles")
+        .select("id")
+        .ilike("email", "%@removido.invalid"),
+    ]);
+  const removedSet = new Set<string>(
+    ((removed ?? []) as any[]).map((r: any) => r.id),
+  );
   const set = new Set<string>();
-  for (const r of (purs ?? []) as any[]) set.add(r.client_id);
-  for (const r of (books ?? []) as any[]) set.add(r.client_id);
-  for (const r of (profs ?? []) as any[]) set.add(r.id);
-  if (set.size === 0) return [];
-
-  const ids = Array.from(set);
-  const { data: active } = await supabase
-    .from("profiles")
-    .select("id, email")
-    .in("id", ids);
-  return (active ?? [])
-    .filter((p: any) => !((p.email ?? "") as string).endsWith("@removido.invalid"))
-    .map((p: any) => p.id);
+  for (const r of (purs ?? []) as any[])
+    if (r.client_id && !removedSet.has(r.client_id)) set.add(r.client_id);
+  for (const r of (books ?? []) as any[])
+    if (r.client_id && !removedSet.has(r.client_id)) set.add(r.client_id);
+  for (const r of (profs ?? []) as any[])
+    if (r.id && !removedSet.has(r.id)) set.add(r.id);
+  return Array.from(set);
 });
 
 export const getClientCountInScope = cache(async (trainerIds: string[]): Promise<number> => {
