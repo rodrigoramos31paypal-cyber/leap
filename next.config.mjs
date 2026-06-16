@@ -22,16 +22,18 @@ const nextConfig = {
       ? [{ protocol: "https", hostname: supabaseHost, pathname: "/storage/v1/object/**" }]
       : [],
   },
-  // Pre-existing supabase typed-client errors leak from postgrest-js v2.108
-  // package drift after the latest npm install. Runtime behaviour is correct
-  // (JS is untyped at runtime); only `tsc --noEmit` complains. We unblock
-  // the production build until we regenerate types from supabase.
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  // Pre-existing react/no-unescaped-entities lint errors em strings PT
-  // (aspas a marcar termos como "actual"). Nao afectam runtime; so
-  // bloqueiam o build. Limpar a divida depois — por agora, unblock.
+  // SEC (audit jun/2026): type-check VOLTA a bloquear o build. Era uma
+  // dívida perigosa — com `ignoreBuildErrors` o CI não apanhava erros de
+  // tipo, e tipagem correcta é uma camada de defesa real (ex.: uma action
+  // sem o guard `requireStaff`/`requireOwner`, ou um retorno mal tipado,
+  // seria óbvio em CI). `tsc --noEmit` está limpo, por isso reactivar não
+  // bloqueia nada legítimo. NÃO voltar a pôr ignoreBuildErrors.
+  //
+  // eslint: AINDA ignorado no build — há erros reais por limpar primeiro:
+  //   • ~20× react/no-unescaped-entities (aspas em strings PT, cosmético);
+  //   • 1× react-hooks/rules-of-hooks em components/promo-carousel.tsx
+  //     (useEffect condicional — bug real a corrigir).
+  // Depois de limpos, remover este bloco para fechar a dívida por completo.
   eslint: {
     ignoreDuringBuilds: true,
   },
