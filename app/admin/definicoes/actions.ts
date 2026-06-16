@@ -9,7 +9,10 @@ import { logError } from "@/lib/errors";
 export async function saveTrainerBioAction(formData: FormData) {
   const supabase = createClient();
   const trainerId = String(formData.get("trainerId") ?? "");
-  const bio = String(formData.get("bio") ?? "").trim().slice(0, 500);
+  // SECURITY (C1): defesa em profundidade — remove <,> a entrada para que
+  // o conteudo do trainer nunca contenha markup. O output JSON-LD em
+  // /t/[slug] ja e escapado; isto e a 2a camada.
+  const bio = String(formData.get("bio") ?? "").trim().slice(0, 500).replace(/[<>]/g, "");
   if (!trainerId) return;
   const { error } = await supabase.from("trainers").update({ bio }).eq("id", trainerId);
   if (error) { logError("saveTrainerBioAction", error); setFlash("Não foi possível guardar a biografia", "error"); }

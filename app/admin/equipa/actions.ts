@@ -22,7 +22,8 @@ export async function addTrainerAction(formData: FormData): Promise<{ error?: st
   try {
     await requireOwner();
     const email = String(formData.get("email") ?? "").trim().toLowerCase();
-    const fullName = String(formData.get("full_name") ?? "").trim();
+    // SECURITY (C1): remove <,> do nome (aparece no JSON-LD da pagina publica).
+    const fullName = String(formData.get("full_name") ?? "").trim().replace(/[<>]/g, "");
     const slug = String(formData.get("slug") ?? "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
     const password = String(formData.get("password") ?? "");
     if (!email || !fullName || !slug || password.length < 8) {
