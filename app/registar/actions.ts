@@ -1,20 +1,41 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createPublicClient } from "@/lib/supabase/server";
 import { logError } from "@/lib/errors";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function registerAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const full_name = String(formData.get("full_name") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
-  // Vindo da página pública /t/<slug>: associa o cliente ao trainer
-  // logo no insert do profile (handle_new_user lê isto). Inválido → ignorado.
-  const trainer_id = String(formData.get("trainer_id") ?? "").trim() || null;
 
   if (password.length < 8) {
     redirect("/registar?error=" + encodeURIComponent("Password tem de ter pelo menos 8 caracteres."));
+  }
+
+  // SEC (H-C, audit jun/2026): defesa em profundidade no boundary.
+  // O trainer_id vem do form (página pública /t/<slug> → /registar?
+  // trainer=<id>) e acaba em user_metadata → handle_new_user. O trigger
+  // 0046 já valida que o trainer existe e está ACTIVO (senão grava NULL),
+  // mas validamos também aqui: se o trigger for alterado/perder esta
+  // verificação numa migração futura, não queremos gravar um trainer_id
+  // arbitrário — um atacante associar-se-ia como "ghost client" de outro
+  // trainer. Só passamos o valor adiante se for um UUID válido E
+  // corresponder a um trainer activo.
+  const trainerIdRaw = String(formData.get("trainer_id") ?? "").trim();
+  let trainer_id: string | null = null;
+  if (trainerIdRaw && UUID_RE.test(trainerIdRaw)) {
+    const pub = createPublicClient();
+    const { data } = await pub
+      .from("trainers")
+      .select("id")
+      .eq("id", trainerIdRaw)
+      .eq("active", true)
+      .maybeSingle();
+    if (data) trainer_id = trainerIdRaw;
   }
 
   const supabase = createClient();
