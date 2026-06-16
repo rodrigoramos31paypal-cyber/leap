@@ -1,22 +1,13 @@
 "use server";
 
 import { revalidateTeamViews } from "@/lib/revalidate";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
-
-async function requireOwner() {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Não autenticado.");
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-  if (profile?.role !== "owner") throw new Error("Acesso restrito ao owner.");
-  return user.id;
-}
+// Guard central único (lib/authz). Antes existia uma cópia local de
+// requireOwner aqui — comportamento idêntico, mas duas fontes que
+// divergiriam se a central mudasse. Convergido para uma só.
+import { requireOwner } from "@/lib/authz";
 
 export async function addTrainerAction(formData: FormData): Promise<{ error?: string; ok?: true }> {
   try {
@@ -215,7 +206,7 @@ export async function makeOwnerOnlyAction(formData: FormData) {
 /** Revoga admin de uma conta SEM trainer próprio (secção Admins): volta a cliente. */
 export async function revokeAdminByProfileAction(formData: FormData) {
   try {
-    const ownerId = await requireOwner();
+    const { id: ownerId } = await requireOwner();
     const profileId = String(formData.get("profileId") ?? "");
     if (!profileId) { setFlash("Conta inválida.", "error"); return; }
     if (profileId === ownerId) {
@@ -311,7 +302,7 @@ export async function toggleTrainerActiveAction(formData: FormData) {
  */
 export async function demoteTrainerAction(formData: FormData) {
   try {
-    const ownerId = await requireOwner();
+    const { id: ownerId } = await requireOwner();
     const id = String(formData.get("id") ?? "");
     if (!id) { setFlash("Trainer inválido.", "error"); return; }
 
