@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendPush, pushConfigured } from "@/lib/push";
+import { verifyBearer } from "@/lib/secrets";
 
 // ════════════════════════════════════════════════════════════════
 // Web Push dispatch · alvo de um Supabase Database Webhook em
@@ -17,9 +18,8 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 export async function POST(request: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  const auth = request.headers.get("authorization");
-  if (!secret || auth !== `Bearer ${secret}`) {
+  // QW-6: constant-time bearer check via helper partilhado.
+  if (!verifyBearer(request.headers.get("authorization"), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   if (!pushConfigured()) {

@@ -9,7 +9,16 @@
 //
 // BUMP `CACHE_NAME` sempre que mexes em chunks/policies — o handler
 // `activate` apaga as caches antigas e o utilizador pega já na nova.
-const CACHE_NAME = "leap-v10";
+// v11 (PERF, jun/2026): páginas autenticadas (/app/*, /admin/*) não
+// são metidas em cache. Antes eram (network-first + cache write em
+// todas as navegações RSC), o que (a) escrevia HTML/RSC per-user no
+// CacheStorage — risco de privacidade num tablet partilhado entre
+// users que faz logout/login, e (b) inflava a cache em MB nos
+// primeiros minutos de uso. Agora estas rotas vão sempre à rede e
+// caem em /offline em falha. As públicas (/, /login, /registar)
+// continuam com cache, agora com event.waitUntil para garantir
+// que a escrita conclui.
+const CACHE_NAME = "leap-v11";
 const APP_SHELL = [
   "/",
   "/login",
@@ -83,10 +92,24 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Páginas dinâmicas — network-first com fallback offline
+  // Páginas autenticadas (/app/*, /admin/*) — SEM cache.
+  // Cada utilizador vê os seus próprios dados; meter o RSC/HTML em
+  // cache partilhada do browser leak para o próximo user que use o
+  // dispositivo. Fallback /offline em caso de falha de rede.
   if (
     url.pathname.startsWith("/app/") ||
-    url.pathname.startsWith("/admin/") ||
+    url.pathname.startsWith("/admin/")
+  ) {
+    event.respondWith(
+      fetch(req).catch(() => caches.match("/offline"))
+    );
+    return;
+  }
+
+  // Páginas públicas — network-first com cache write. event.waitUntil
+  // garante que a escrita conclui mesmo se o handler termina cedo
+  // (essencial em iOS, que mata o SW agressivamente após responder).
+  if (
     url.pathname === "/" ||
     url.pathname === "/login" ||
     url.pathname === "/registar"
@@ -94,8 +117,10 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(req)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then((c) => c.put(req, copy));
+          if (res.ok) {
+            const copy = res.clone();
+            event.waitUntil(caches.open(CACHE_NAME).then((c) => c.put(req, copy)));
+          }
           return res;
         })
         .catch(() =>

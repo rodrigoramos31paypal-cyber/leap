@@ -104,9 +104,14 @@ function FilterChip({ label, href, active }: { label: string; href: string; acti
 async function SessoesTab({ userId, filter }: { userId: string; filter: "todas" | "futuras" | "passadas" }) {
   const supabase = createClient();
   const nowIso = new Date().toISOString();
+  // PERF (CB-5 audit jun/2026): antes era select("*") — trazia 15+
+  // colunas (cancellation_reason, confirmed_by/at, cancelled_by/at,
+  // purchase_id, series_id, credit_charged, …) que a UI nunca lê. 50
+  // rows × ~600 B → ~30 KB; com as colunas certas ~9 KB e JSON.parse
+  // 3x mais rápido em mobile.
   let query = supabase
     .from("bookings")
-    .select("*")
+    .select("id, starts_at, ends_at, session_type, status")
     .eq("client_id", userId);
   if (filter === "futuras") {
     query = query.gte("starts_at", nowIso).order("starts_at", { ascending: true });

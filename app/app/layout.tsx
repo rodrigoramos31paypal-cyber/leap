@@ -29,10 +29,11 @@ export default async function ClientLayout({ children }: { children: React.React
       .is("read_at", null);
   }
 
-  const [profile, { count: unread }] = await Promise.all([
-    getCurrentProfile(),
-    supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id).is("read_at", null),
-  ]);
+  // PERF (QW-9, audit jun/2026): a query de notifications saiu daqui.
+  // Bloqueava o paint do shell em cada navegação RSC só para mostrar o
+  // badge do sino. O NotificationBell popula o contador via realtime +
+  // polling + visibilitychange + chamada imediata em mount.
+  const profile = await getCurrentProfile();
 
   if (profile?.role && profile.role !== "client") {
     redirect("/admin/dashboard");
@@ -42,7 +43,7 @@ export default async function ClientLayout({ children }: { children: React.React
 
   return (
     <div className="min-h-screen bg-bone-50 pb-20 dark:bg-ink-900 md:pb-0">
-      <TopBar unread={unread ?? 0} userId={user.id} homeHref="/app/dashboard" />
+      <TopBar unread={0} userId={user.id} homeHref="/app/dashboard" />
       <ClientTopNav />
       <Toaster initial={flash} />
       <ReminderSync />

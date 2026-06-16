@@ -64,10 +64,20 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     "END:VCALENDAR",
   ].join("\r\n");
 
+  // PERF (QW-8 audit jun/2026): o .ics duma sessão passada nunca muda
+  // → max-age=86400 immutable. Para sessões futuras dá-se margem para
+  // reagendamentos com cache curto (5 min). Cache-Control private
+  // porque o ICS contém o nome do cliente.
+  const isPast = new Date(booking.starts_at).getTime() < Date.now();
+  const cacheControl = isPast
+    ? "private, max-age=86400, immutable"
+    : "private, max-age=300";
+
   return new NextResponse(ics, {
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",
       "Content-Disposition": `attachment; filename="leap-session-${booking.id.slice(0, 8)}.ics"`,
+      "Cache-Control": cacheControl,
     },
   });
 }

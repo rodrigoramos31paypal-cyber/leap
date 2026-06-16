@@ -46,6 +46,20 @@ export async function GET(request: NextRequest) {
         endsAt: s.endsAt.toISOString(),
       })),
     },
-    { headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=120" } },
+    {
+      // PERF (CB-8 audit jun/2026): o conteúdo deste endpoint depende
+      // só de (trainer, date, duration) — não há per-user data. Era
+      // `private` o que forçava bypass do Vercel Edge e cada cliente
+      // pagava middleware + 4 queries Supabase. Em peak (segunda 9h,
+      // 10 clientes a ver o mesmo dia), 10× round trips. Agora o Edge
+      // cacheia 30 s e partilha entre clientes — 1 query Supabase /
+      // 30 s por (trainer, date, duration). `create_booking` continua
+      // a validar atomicamente: se um slot for ocupado na janela de
+      // staleness, o servidor rejeita com mensagem clara.
+      headers: {
+        "Cache-Control": "public, s-maxage=30, stale-while-revalidate=300",
+        "CDN-Cache-Control": "public, s-maxage=30",
+      },
+    },
   );
 }

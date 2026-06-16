@@ -23,11 +23,13 @@ export function InstallPrompt() {
       (window.navigator as any).standalone === true;
     if (standalone) return;
 
-    // respeita dismiss recente
-    const last = Number(localStorage.getItem(DISMISS_KEY) ?? 0);
-    if (last && Date.now() - last < DISMISS_TTL_MS) return;
-
+    // PERF (QW-15 audit jun/2026): o read de localStorage é diferido
+    // para dentro do handler. Antes corria síncrono em mount em todos
+    // os utilizadores; agora montamos o listener leve e só lemos o
+    // dismiss quando o browser dispara beforeinstallprompt (raro).
     const handler = (e: Event) => {
+      const last = Number(localStorage.getItem(DISMISS_KEY) ?? 0);
+      if (last && Date.now() - last < DISMISS_TTL_MS) return;
       e.preventDefault();
       setDeferred(e as BeforeInstallPromptEvent);
       setShow(true);

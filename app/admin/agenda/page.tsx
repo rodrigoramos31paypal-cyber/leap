@@ -1,4 +1,5 @@
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { formatTime, BOOKING_STATUS } from "@/lib/utils";
@@ -10,12 +11,25 @@ import { getCurrentTrainerId, getAccessibleTrainerIds } from "@/lib/trainer";
 import { BlockPresets } from "@/components/block-presets";
 import { BookingBlock } from "./booking-popover";
 import { BusyBlock } from "./busy-block";
-import { BookingDialog } from "./booking-dialog";
-import { RescheduleDialog } from "./reschedule-dialog";
 import { SlotClickLayer } from "./slot-click-layer";
 import { CardSkeleton } from "@/components/skeleton";
 import { AgendaScrollTo7am } from "./agenda-scroll-to-7am";
 import { WeekSwipeNav } from "./week-swipe-nav";
+
+// PERF (QW-11 audit jun/2026): BookingDialog (842 linhas + form state +
+// typeahead search) e RescheduleDialog (195 linhas + drag handlers) só
+// abrem em resposta a eventos do utilizador (click num slot, drag-end
+// num bloco). Carregar o JS deles no bundle inicial da agenda é puro
+// desperdício — saem do caminho crítico via dynamic ssr:false. Cap.
+// ~25 KB minified no bundle de /admin/agenda.
+const BookingDialog = dynamic(
+  () => import("./booking-dialog").then((m) => m.BookingDialog),
+  { ssr: false },
+);
+const RescheduleDialog = dynamic(
+  () => import("./reschedule-dialog").then((m) => m.RescheduleDialog),
+  { ssr: false },
+);
 
 type View = "day" | "week" | "month";
 
@@ -216,11 +230,17 @@ async function CalendarView({
     view === "month"
       ? Promise.resolve(new Map<string, any>())
       : getMyNotesMapForBookings(bookings.map((b: any) => b.id)),
+    // PERF (CB-7 audit jun/2026): scope filter por trainer — antes
+    // trazia TODAS as compras confirmadas de cada cliente em qualquer
+    // trainer do sistema (irrelevante para o admin a olhar para a sua
+    // agenda). Para um cliente que treine com 2 trainers, era 2× o
+    // payload necessário; para owner com 5 trainers, 5×.
     clientIds.length > 0
       ? (supabase
           .from("purchases")
           .select("client_id, sessions_remaining, expires_at, status")
           .in("client_id", clientIds)
+          .in("trainer_id", scope)
           .eq("status", "confirmed")
           .then((r: any) => (r.data ?? []) as any[]))
       : Promise.resolve([] as any[]),
@@ -255,13 +275,20 @@ async function CalendarView({
       // última real, mesmo fora da janela visível. (Depende de creditRows,
       // por isso fica serial dentro desta vaga — só corre quando há mesmo
       // clientes a zero.)
+      // PERF (CB-7 audit jun/2026): a query original era sem limit()
+      // e ordenada por starts_at desc — para um cliente que treine há
+      // 2 anos, trazia centenas de rows para identificar 1 booking.
+      // Agora limitamos a (zeroClients × 5) — chega de sobra para a
+      // iteração JS escolher a mais tardia de cada cliente, e o
+      // payload é proporcional ao nº de clientes em vez do histórico.
       const { data: lastRows } = await supabase
         .from("bookings")
         .select("id, client_id, starts_at")
         .in("client_id", zeroClients)
         .in("trainer_id", scope)
         .in("status", ["booked", "confirmed"])
-        .order("starts_at", { ascending: false });
+        .order("starts_at", { ascending: false })
+        .limit(zeroClients.length * 5);
       const seen = new Set<string>();
       for (const row of (lastRows ?? []) as any[]) {
         if (seen.has(row.client_id)) continue; // só a mais tardia por cliente
@@ -811,25 +838,45 @@ type RowLayout = {
 // horário de Verão) seria posicionada na faixa das 09:30 enquanto
 // `formatTime` (hidratado no cliente em PT) mostrava "10:30". Esta
 // função alinha a matemática de posição com o que o cliente vê.
-function localHM(d: Date): { hour: number; minute: number } {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/Lisbon",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(d);
+//
+// PERF (CB-4 audit jun/2026): singleton do DateTimeFormat (era
+// instanciado por chamada — ~80-100 µs cada) + cache iso→minutos
+// indexado pela string original. `buildRowLayout` chamava localMinutes
+// 24×7×N vezes por render → ~10 000 chamadas, ~1 s de CPU server-side
+// em semanas cheias. Com cache, cada iso é convertido uma única vez.
+const _lisbonFmt = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Europe/Lisbon",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+const _lisbonMinCache = new Map<string, number>();
+
+function _minsFromIso(iso: string): number {
+  const cached = _lisbonMinCache.get(iso);
+  if (cached !== undefined) return cached;
+  const parts = _lisbonFmt.formatToParts(new Date(iso));
   let hour = 0;
   let minute = 0;
   for (const p of parts) {
     if (p.type === "hour") hour = parseInt(p.value, 10);
     else if (p.type === "minute") minute = parseInt(p.value, 10);
   }
-  return { hour, minute };
+  const m = hour * 60 + minute;
+  // Cap defensivo: este cache vive na vida do processo Lambda. Em SSR
+  // intensivo pode crescer; podamos para não criar leak.
+  if (_lisbonMinCache.size > 10_000) _lisbonMinCache.clear();
+  _lisbonMinCache.set(iso, m);
+  return m;
+}
+
+function localHM(d: Date): { hour: number; minute: number } {
+  const m = _minsFromIso(d.toISOString());
+  return { hour: Math.floor(m / 60), minute: m % 60 };
 }
 
 function localMinutes(d: Date): number {
-  const { hour, minute } = localHM(d);
-  return hour * 60 + minute;
+  return _minsFromIso(d.toISOString());
 }
 
 // Posição vertical (px) de um instante (em minutos-desde-meia-noite)
@@ -846,9 +893,12 @@ function clampPosition(
   start: Date,
   end: Date,
 ): { top: number; height: number } | null {
+  // CB-4: usa toISOString() → cache hit a partir da 2ª chamada na
+  // mesma vista (mesmo objecto booking aparece em clampPosition +
+  // overlapsHour + cálculo de colunas).
   const totalMin = TOTAL_HOURS * 60;
-  const startMin = localMinutes(start);
-  let endMin = localMinutes(end);
+  const startMin = _minsFromIso(start.toISOString());
+  let endMin = _minsFromIso(end.toISOString());
   if (endMin <= startMin) endMin = startMin + 60; // safety (cruza meia-noite)
   if (endMin <= 0 || startMin >= totalMin) return null;
   const top = yForMinutes(layout, Math.max(0, startMin));
@@ -866,16 +916,17 @@ function parseHM(t: string): number {
 }
 
 function overlapsHour(startsIso: string, endsIso: string | null, hs: number, he: number): boolean {
-  const s = localMinutes(new Date(startsIso));
-  let e = endsIso ? localMinutes(new Date(endsIso)) : s + 60;
+  // CB-4: passa a iso directa (zero alocação de Date) — usa o cache.
+  const s = _minsFromIso(startsIso);
+  let e = endsIso ? _minsFromIso(endsIso) : s + 60;
   if (e <= s) e = s + 60;
   return s < he && e > hs;
 }
 
 function hourFullyBlocked(blocks: any[], hs: number, he: number): boolean {
   for (const blk of blocks) {
-    const s = localMinutes(new Date(blk.starts_at));
-    let e = localMinutes(new Date(blk.ends_at));
+    const s = _minsFromIso(blk.starts_at);
+    let e = _minsFromIso(blk.ends_at);
     if (e <= s) e = TOTAL_HOURS * 60;
     if (s <= hs && e >= he) return true;
   }
@@ -1362,19 +1413,22 @@ function isoDate(d: Date) {
   return `${y}-${m}-${day}`;
 }
 
+// PERF (QW-10, audit jun/2026): singleton — antes era instanciado por
+// chamada, e este helper é chamado dentro do loop que expande blocos
+// recorrentes (até 42 dias × M blocos por render na vista mensal).
+const _lisbonOffsetFmt = new Intl.DateTimeFormat("en-US", {
+  timeZone: "Europe/Lisbon",
+  hourCycle: "h23",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+});
 function tzOffsetMinutesLisbon(date: Date): number {
-  const dtf = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Europe/Lisbon",
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
   const p: Record<string, string> = {};
-  for (const part of dtf.formatToParts(date)) p[part.type] = part.value;
+  for (const part of _lisbonOffsetFmt.formatToParts(date)) p[part.type] = part.value;
   const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
   return (asUTC - date.getTime()) / 60000;
 }

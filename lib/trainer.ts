@@ -3,7 +3,8 @@
 // outras queries comuns ao schema multi-trainer.
 // ════════════════════════════════════════════════════════════════
 import { cache } from "react";
-import { createClient, getSessionUser, getCurrentProfile } from "@/lib/supabase/server";
+import { unstable_cache } from "next/cache";
+import { createClient, createPublicClient, getSessionUser, getCurrentProfile } from "@/lib/supabase/server";
 
 export type TrainerLite = {
   id: string;
@@ -69,24 +70,43 @@ export const getAccessibleTrainerIds = cache(async (): Promise<string[]> => {
   return t ? [t.id] : [];
 });
 
-export const getActiveTrainersPublic = cache(async (): Promise<TrainerLite[]> => {
-  const supabase = createClient();
-  const { data } = await supabase
-    .from("trainers")
-    .select("id, profile_id, slug, active, bio, avatar_url, profiles:profile_id(full_name)")
-    .eq("active", true)
-    .order("slug");
+// PERF (QW-7 audit jun/2026): a lista de trainers activos muda muito
+// raramente (admin adiciona/remove ~1× por mês) mas era lida em quase
+// todas as páginas autenticadas (/app/agenda, /app/comprar, /app/loja
+// indiretamente). Em vez de uma query Supabase por navegação, fica em
+// `unstable_cache` com TTL 5 min + tag `active-trainers`; o
+// revalidateTeamViews invalida quando há alterações de equipa.
+//
+// IMPORTANTE: usa createPublicClient (sem cookies) — `unstable_cache`
+// não pode aceder a `cookies()` no callback. A query é à tabela
+// `trainers` com `active=true`, dados público-equivalentes via RLS
+// (qualquer authenticated vê o nome/slug/avatar dos trainers).
+const _loadActiveTrainersPublic = unstable_cache(
+  async (): Promise<TrainerLite[]> => {
+    const supabase = createPublicClient();
+    const { data } = await supabase
+      .from("trainers")
+      .select("id, profile_id, slug, active, bio, avatar_url, profiles:profile_id(full_name)")
+      .eq("active", true)
+      .order("slug");
+    return (data ?? []).map((t: any) => ({
+      id: t.id,
+      profile_id: t.profile_id,
+      slug: t.slug,
+      active: t.active,
+      bio: (t as any).bio ?? null,
+      avatar_url: (t as any).avatar_url ?? null,
+      full_name: (t as any).profiles?.full_name ?? "",
+    }));
+  },
+  ["active-trainers"],
+  { revalidate: 300, tags: ["active-trainers"] },
+);
 
-  return (data ?? []).map((t: any) => ({
-    id: t.id,
-    profile_id: t.profile_id,
-    slug: t.slug,
-    active: t.active,
-    bio: (t as any).bio ?? null,
-    avatar_url: (t as any).avatar_url ?? null,
-    full_name: (t as any).profiles?.full_name ?? "",
-  }));
-});
+// React.cache wrap exterior para dedup dentro do mesmo request.
+export const getActiveTrainersPublic = cache(
+  async (): Promise<TrainerLite[]> => _loadActiveTrainersPublic(),
+);
 
 /**
  * IDs de clientes dentro do scope de um trainer. Inclui:

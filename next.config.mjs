@@ -42,6 +42,12 @@ const nextConfig = {
     // PERF (Q1): garante imports por-ícone do lucide-react em vez de puxar
     // o módulo inteiro — bundle de cliente menor e builds mais rápidas.
     optimizePackageImports: ["lucide-react"],
+    // PERF (QW-12 audit jun/2026): mantém estas deps SERVER-only fora do
+    // bundle das funções serverless. exceljs (~1.2 MB) só é usado em
+    // /api/relatorios/export; web-push em /api/push/dispatch; o cliente
+    // Supabase tem dependências nativas que o webpack reempacotaria de
+    // outra forma. Externalizá-las acelera cold starts dos endpoints.
+    serverComponentsExternalPackages: ["exceljs", "web-push", "@supabase/supabase-js"],
   },
   // ──────────────────────────────────────────────────────────────
   // H2 do audit · security headers
