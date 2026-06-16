@@ -12,7 +12,7 @@ const items = [
   { href: "/app/dashboard", label: "Início", icon: Home },
   { href: "/app/agenda", label: "Agenda", icon: Calendar },
   { href: "/app/historico", label: "Histórico", icon: History },
-  { href: "/app/comprar", label: "Loja", icon: Store },
+  { href: "/app/loja", label: "Loja", icon: Store },
   { href: "/app/perfil", label: "Perfil", icon: User },
 ];
 
