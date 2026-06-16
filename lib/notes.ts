@@ -128,6 +128,27 @@ export async function getRecentSessionsForClient(
  *  Pedimos apenas `booking_id, body` em vez de `*` — deixamos de transferir
  *  id/subject_id/author_id/created_at/updated_at para cada nota da range
  *  visível. Comportamento idêntico: o editor continua a receber o body. */
+/** Mapa booking_id → nota do CLIENTE (apenas leitura para o trainer).
+ *  Usa a policy 0078 que deixa o trainer ler as notas que o cliente
+ *  escreveu nas sessões dele. */
+export async function getClientNotesMapForBookings(
+  bookingIds: string[],
+  clientId: string,
+): Promise<Map<string, SessionNote>> {
+  const map = new Map<string, SessionNote>();
+  if (bookingIds.length === 0) return map;
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("session_notes")
+    .select("booking_id, body")
+    .in("booking_id", bookingIds)
+    .eq("author_id", clientId);
+  for (const row of (data ?? []) as unknown as SessionNote[]) {
+    if (row.booking_id) map.set(row.booking_id, row);
+  }
+  return map;
+}
+
 export async function getMyNotesMapForBookings(bookingIds: string[]): Promise<Map<string, SessionNote>> {
   const map = new Map<string, SessionNote>();
   if (bookingIds.length === 0) return map;

@@ -17,7 +17,6 @@ import {
   Package,
   NotebookPen,
   BarChart3,
-  UserCog,
   MoreHorizontal,
   Megaphone,
   X,
@@ -53,7 +52,6 @@ const adminOverflow: Item[] = [
   { href: "/admin/relatorios", label: "Relatórios", icon: BarChart3 },
   { href: "/admin/promocoes", label: "Slideshow", icon: Megaphone },
   { href: "/admin/loja", label: "Loja", icon: Store },
-  { href: "/admin/equipa", label: "Equipa", icon: UserCog },
 ];
 
 export function BottomNav({ variant }: { variant: "client" | "admin" }) {

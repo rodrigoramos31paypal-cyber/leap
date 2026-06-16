@@ -143,7 +143,7 @@ export default async function SessaoPage({ params }: { params: { id: string } })
           <NotebookPen size={14} /> As minhas notas
         </h2>
         <div className="card p-4">
-          <NoteEditor bookingId={b.id} initialBody={note?.body ?? undefined} compact />
+          <NoteEditor bookingId={b.id} initialBody={note?.body ?? undefined} compact sharedWithTrainer />
         </div>
       </div>
     </div>

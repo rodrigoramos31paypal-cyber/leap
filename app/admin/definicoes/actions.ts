@@ -93,6 +93,26 @@ export async function addAvailabilityAction(formData: FormData) {
   revalidateAvailabilityViews();
 }
 
+export async function updateAvailabilityAction(formData: FormData) {
+  const supabase = createClient();
+  const id = String(formData.get("id") ?? "");
+  const startTime = String(formData.get("start_time") ?? "07:00");
+  const endTime = String(formData.get("end_time") ?? "21:00");
+  if (!id) return;
+  if (startTime >= endTime) {
+    setFlash("A hora de início tem de ser anterior à hora de fim", "error");
+    revalidatePath("/admin/definicoes");
+    return;
+  }
+  const { error } = await supabase
+    .from("trainer_availability")
+    .update({ start_time: startTime, end_time: endTime })
+    .eq("id", id);
+  if (error) { logError("updateAvailabilityAction", error); setFlash("Não foi possível guardar o horário", "error"); }
+  else setFlash("Horário actualizado");
+  revalidateAvailabilityViews();
+}
+
 export async function deleteAvailabilityAction(formData: FormData) {
   const supabase = createClient();
   const { error } = await supabase.from("trainer_availability").delete().eq("id", String(formData.get("id") ?? ""));

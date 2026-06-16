@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { logError } from "@/lib/errors";
 
 export async function createGeneralNoteAction(formData: FormData): Promise<{ error?: string; ok?: true } | void> {
@@ -141,6 +141,34 @@ export async function upsertNoteAction(formData: FormData): Promise<{ error?: st
     if (error) {
       logError("upsertNoteAction", error);
       return { error: "Não foi possível guardar a nota." };
+    }
+
+    // Se foi o CLIENTE a escrever, notifica o treinador da sessão.
+    try {
+      const { data: bk } = await supabase
+        .from("bookings")
+        .select("client_id, trainer_id")
+        .eq("id", bookingId)
+        .maybeSingle();
+      if (bk && (bk as any).client_id === user.id) {
+        const admin = createAdminClient();
+        const [{ data: tr }, { data: prof }] = await Promise.all([
+          admin.from("trainers").select("profile_id").eq("id", (bk as any).trainer_id).maybeSingle(),
+          admin.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
+        ]);
+        const name = ((prof as any)?.full_name ?? "").split(" ")[0] || "Um cliente";
+        if ((tr as any)?.profile_id) {
+          await (admin as any).from("notifications").insert({
+            user_id: (tr as any).profile_id,
+            type: "client_note",
+            title: "Nova nota de cliente",
+            body: name + " adicionou uma nota numa sessão.",
+            link: "/admin/agenda",
+          });
+        }
+      }
+    } catch (e) {
+      logError("upsertNoteAction:notify", e);
     }
   }
 
