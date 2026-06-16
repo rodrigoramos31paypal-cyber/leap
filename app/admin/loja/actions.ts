@@ -60,7 +60,9 @@ function storagePathFromUrl(url: string | null): string | null {
   return after.split("?")[0];
 }
 
-export async function createProductAction(formData: FormData) {
+export async function createProductAction(
+  formData: FormData,
+): Promise<{ ok: boolean; error?: string }> {
   const category = String(formData.get("category") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
@@ -70,23 +72,23 @@ export async function createProductAction(formData: FormData) {
 
   if (!CATEGORIES.includes(category)) {
     setFlash("Categoria inválida", "error");
-    return;
+    return { ok: false, error: "Categoria inválida" };
   }
   if (!name) {
     setFlash("Indica um nome", "error");
-    return;
+    return { ok: false, error: "Indica um nome" };
   }
   const fileErr = validateFile(file);
   if (fileErr) {
     setFlash(fileErr, "error");
-    return;
+    return { ok: false, error: fileErr };
   }
 
   const scope = await getAccessibleTrainerIds();
   const trainerId = (await getCurrentTrainerId()) ?? scope[0];
   if (!trainerId) {
     setFlash("Sem trainer associado", "error");
-    return;
+    return { ok: false, error: "Sem trainer associado" };
   }
 
   let imageUrl: string | null = null;
@@ -94,7 +96,7 @@ export async function createProductAction(formData: FormData) {
     imageUrl = await uploadImage(trainerId, file);
     if (!imageUrl) {
       setFlash("Não foi possível carregar a imagem", "error");
-      return;
+      return { ok: false, error: "Não foi possível carregar a imagem" };
     }
   }
 
@@ -111,10 +113,12 @@ export async function createProductAction(formData: FormData) {
   if (error) {
     logError("createProductAction", error);
     setFlash("Não foi possível criar o produto", "error");
-  } else {
-    setFlash("Produto criado");
+    revalidate();
+    return { ok: false, error: "Não foi possível criar o produto" };
   }
+  setFlash("Produto criado");
   revalidate();
+  return { ok: true };
 }
 
 export async function updateProductAction(formData: FormData) {
