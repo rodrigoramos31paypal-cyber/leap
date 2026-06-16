@@ -432,8 +432,8 @@ function HorariosTab({
   const usedDays = new Set(availability.map((a: any) => a.day_of_week));
   const availableDays = DAYS.map((d, i) => ({ d, i })).filter((x) => !usedDays.has(x.i));
 
-  const timeOptions = Array.from({ length: 36 }, (_, k) => {
-    const total = 6 * 60 + k * 30;
+  const timeOptions = Array.from({ length: 72 }, (_, k) => {
+    const total = 6 * 60 + k * 15;
     const h = Math.floor(total / 60);
     const m = total % 60;
     return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;

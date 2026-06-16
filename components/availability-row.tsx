@@ -9,8 +9,8 @@ import {
 
 const DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
-const TIME_OPTIONS = Array.from({ length: 36 }, (_, k) => {
-  const total = 6 * 60 + k * 30;
+const TIME_OPTIONS = Array.from({ length: 72 }, (_, k) => {
+  const total = 6 * 60 + k * 15;
   const h = Math.floor(total / 60);
   const m = total % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
