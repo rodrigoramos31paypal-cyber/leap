@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { notFound, redirect } from "next/navigation";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { eur } from "@/lib/utils";
@@ -46,8 +47,15 @@ export default async function LojaCategoriaPage({ params }: { params: { categori
             const card = (
               <div className="card flex h-full flex-col overflow-hidden transition hover:border-gold-400">
                 {p.image_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.image_url} alt={p.name} className="aspect-[4/3] w-full object-cover" />
+                  <div className="relative aspect-[4/3] w-full">
+                    <Image
+                      src={p.image_url}
+                      alt={p.name}
+                      fill
+                      sizes="(min-width: 640px) 50vw, 100vw"
+                      className="object-cover"
+                    />
+                  </div>
                 ) : (
                   <div className="aspect-[4/3] w-full bg-bone-100 dark:bg-white/5" />
                 )}

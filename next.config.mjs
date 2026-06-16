@@ -1,4 +1,8 @@
 /** @type {import('next').NextConfig} */
+const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
+  ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
+  : undefined;
+
 const nextConfig = {
   reactStrictMode: true,
   // H2 hardening: esconde `X-Powered-By: Next.js`. Information
@@ -11,6 +15,12 @@ const nextConfig = {
   // next/image falls back to png/webp automatically when unsupported.
   images: {
     formats: ["image/avif", "image/webp"],
+    // PERF (audit #4): autoriza o optimizer do Vercel a servir as imagens
+    // do Supabase Storage (banners, fotos de produto, avatares) em
+    // AVIF/WebP com resize/srcset. Sem este host, <Image> rejeitaria o URL.
+    remotePatterns: supabaseHost
+      ? [{ protocol: "https", hostname: supabaseHost, pathname: "/storage/v1/object/**" }]
+      : [],
   },
   // Pre-existing supabase typed-client errors leak from postgrest-js v2.108
   // package drift after the latest npm install. Runtime behaviour is correct

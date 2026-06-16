@@ -1,6 +1,9 @@
+import Image from "next/image";
 import Link from "next/link";
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient, getSessionUser, getCurrentProfile } from "@/lib/supabase/server";
+import { CardSkeleton } from "@/components/skeleton";
 import { getClientCredits, getClientCreditsByTrainer } from "@/lib/credits";
 import { formatDateTime, pluralize, BOOKING_STATUS } from "@/lib/utils";
 import { Calendar, ShoppingBag, Dumbbell, AlertCircle, ChevronRight } from "lucide-react";
@@ -21,12 +24,16 @@ export default async function ClientDashboard() {
   const supabase = createClient();
   const nowIso = new Date().toISOString();
 
+  // PERF (audit #3): só a 1ª vaga (above-the-fold: saldo, CTAs, promo,
+  // próxima sessão) bloqueia o 1º byte. As secções de baixo ("O teu
+  // progresso" + "Histórico recente"), que precisam de queries extra, são
+  // streamed via <Suspense> (BelowFold) — o cartão de sessões e os botões
+  // pintam de imediato. recentPast saiu desta vaga para o BelowFold.
   const [
     profile,
     credits,
     creditsByTrainer,
     { data: upcoming },
-    { data: recentPast },
     { data: latestPackRows },
     { data: banners },
   ] = await Promise.all([
@@ -41,13 +48,6 @@ export default async function ClientDashboard() {
       .gte("starts_at", nowIso)
       .order("starts_at", { ascending: true })
       .limit(1),
-    supabase
-      .from("bookings")
-      .select("id, starts_at, session_type, status")
-      .eq("client_id", user.id)
-      .lt("starts_at", nowIso)
-      .order("starts_at", { ascending: false })
-      .limit(4),
     supabase
       .from("purchases")
       .select("id, pack_snapshot, sessions_total, sessions_remaining, created_at, expires_at")
@@ -68,66 +68,6 @@ export default async function ClientDashboard() {
   const noCredits = credits.total === 0;
 
   const nextSession = (upcoming ?? [])[0] as any | undefined;
-  const nowMs = Date.now();
-  const latestPack = ((latestPackRows ?? []) as any[]).find(
-    (p) =>
-      p.sessions_remaining > 0 &&
-      (!p.expires_at || new Date(p.expires_at).getTime() >= nowMs),
-  ) as any | undefined;
-  const packName = latestPack ? (latestPack.pack_snapshot as any)?.name ?? "Pack" : null;
-
-  // Barra "O teu progresso": progresso de sessoes FINALIZADAS no pack atual.
-  // A barra reflete o pack comprado mais recente. Uma sessao so conta quando esta
-  // FINALIZADA (1 minuto depois do fim do horario marcado, ends_at), nao quando e
-  // marcada. Pack de 4: 0% ate a 1a sessao acabar -> 25 / 50 / 75 / 100%.
-  // Quando a ultima sessao termina mantem-se a 100% ate ser comprado um novo pack;
-  // o novo pack (0 sessoes finalizadas) recomeca em 0%.
-  const barPack = ((latestPackRows ?? []) as any[])[0] as any | undefined;
-
-  // PERF (audit #3): estas duas queries dependem apenas de latestPackRows
-  // (ja em memoria), por isso corremo-las EM PARALELO em vez de uma a seguir
-  // a outra -- poupa um round-trip a BD no caminho do dashboard.
-  //   - presenca: sessoes passadas desde a compra do pack atual,
-  //     presentes (confirmed) vs faltas (no_show).
-  //   - packPct: sessoes FINALIZADAS do pack mais recente.
-  const [presencaRes, packPctRes] = await Promise.all([
-    latestPack
-      ? supabase
-          .from("bookings")
-          .select("status")
-          .eq("client_id", user.id)
-          .gte("starts_at", latestPack.created_at)
-          .lt("starts_at", nowIso)
-          .in("status", ["confirmed", "no_show"])
-      : Promise.resolve({ data: null }),
-    barPack && barPack.sessions_total > 0
-      ? supabase
-          .from("bookings")
-          .select("ends_at")
-          .eq("purchase_id", barPack.id)
-          .in("status", ["booked", "confirmed", "no_show"])
-      : Promise.resolve({ data: null }),
-  ]);
-
-  // Taxa de presença (apenas do pack atual).
-  let presenca: number | null = null;
-  let faltas = 0;
-  if (latestPack) {
-    const rows = (presencaRes.data ?? []) as any[];
-    const attended = rows.filter((r) => r.status === "confirmed").length;
-    faltas = rows.filter((r) => r.status === "no_show").length;
-    const tot = attended + faltas;
-    presenca = tot > 0 ? Math.round((attended / tot) * 100) : null;
-  }
-
-  let packPct = 0;
-  if (barPack && barPack.sessions_total > 0) {
-    const finalizeBeforeMs = nowMs - 60_000; // finalizada 1 min apos o fim
-    const finalized = ((packPctRes.data ?? []) as any[]).filter(
-      (b) => b.ends_at && new Date(b.ends_at).getTime() <= finalizeBeforeMs,
-    ).length;
-    packPct = Math.min(100, Math.round((finalized / barPack.sessions_total) * 100));
-  }
 
   return (
     <div className="space-y-2">
@@ -214,8 +154,7 @@ export default async function ClientDashboard() {
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-ink-900/10 bg-bone-100 dark:border-white/10 dark:bg-white/[0.06]">
                     {t.avatarUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={t.avatarUrl} alt={t.trainerName} className="h-full w-full object-cover" />
+                      <Image src={t.avatarUrl} alt={t.trainerName} width={40} height={40} className="h-full w-full object-cover" />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center font-display text-sm font-bold text-ink-500">
                         {(t.trainerName.trim()[0] ?? "T").toUpperCase()}
@@ -238,6 +177,93 @@ export default async function ClientDashboard() {
         </section>
       )}
 
+      {/* PERF (audit #3): secções abaixo da dobra streamed — não bloqueiam
+          o 1º paint do cartão de saldo + CTAs. */}
+      <Suspense
+        fallback={
+          <>
+            <CardSkeleton className="h-32" />
+            <CardSkeleton className="h-40" />
+          </>
+        }
+      >
+        <BelowFold userId={user.id} nowIso={nowIso} latestPackRows={(latestPackRows ?? []) as any[]} />
+      </Suspense>
+    </div>
+  );
+}
+
+async function BelowFold({
+  userId,
+  nowIso,
+  latestPackRows,
+}: {
+  userId: string;
+  nowIso: string;
+  latestPackRows: any[];
+}) {
+  const supabase = createClient();
+  const nowMs = Date.now();
+
+  const latestPack = (latestPackRows as any[]).find(
+    (p) =>
+      p.sessions_remaining > 0 &&
+      (!p.expires_at || new Date(p.expires_at).getTime() >= nowMs),
+  ) as any | undefined;
+  const packName = latestPack ? (latestPack.pack_snapshot as any)?.name ?? "Pack" : null;
+  // A barra reflecte o pack comprado mais recente (mesmo já gasto).
+  const barPack = (latestPackRows as any[])[0] as any | undefined;
+
+  // PERF (audit #3): uma única vaga paralela — histórico + presença +
+  // progresso do pack. Toda a secção é streamed, fora do caminho crítico.
+  const [{ data: recentPast }, presencaRes, packPctRes] = await Promise.all([
+    supabase
+      .from("bookings")
+      .select("id, starts_at, session_type, status")
+      .eq("client_id", userId)
+      .lt("starts_at", nowIso)
+      .order("starts_at", { ascending: false })
+      .limit(4),
+    latestPack
+      ? supabase
+          .from("bookings")
+          .select("status")
+          .eq("client_id", userId)
+          .gte("starts_at", latestPack.created_at)
+          .lt("starts_at", nowIso)
+          .in("status", ["confirmed", "no_show"])
+      : Promise.resolve({ data: null }),
+    barPack && barPack.sessions_total > 0
+      ? supabase
+          .from("bookings")
+          .select("ends_at")
+          .eq("purchase_id", barPack.id)
+          .in("status", ["booked", "confirmed", "no_show"])
+      : Promise.resolve({ data: null }),
+  ]);
+
+  // Taxa de presença (apenas do pack atual).
+  let presenca: number | null = null;
+  let faltas = 0;
+  if (latestPack) {
+    const rows = (presencaRes.data ?? []) as any[];
+    const attended = rows.filter((r) => r.status === "confirmed").length;
+    faltas = rows.filter((r) => r.status === "no_show").length;
+    const tot = attended + faltas;
+    presenca = tot > 0 ? Math.round((attended / tot) * 100) : null;
+  }
+
+  let packPct = 0;
+  if (barPack && barPack.sessions_total > 0) {
+    const finalizeBeforeMs = nowMs - 60_000; // finalizada 1 min apos o fim
+    const finalized = ((packPctRes.data ?? []) as any[]).filter(
+      (b) => b.ends_at && new Date(b.ends_at).getTime() <= finalizeBeforeMs,
+    ).length;
+    packPct = Math.min(100, Math.round((finalized / barPack.sessions_total) * 100));
+  }
+
+  return (
+    <>
       {/* O teu progresso */}
       <section>
         <div className="mb-0.5 flex items-center justify-between">
@@ -305,7 +331,7 @@ export default async function ClientDashboard() {
           </ul>
         )}
       </section>
-    </div>
+    </>
   );
 }
 
