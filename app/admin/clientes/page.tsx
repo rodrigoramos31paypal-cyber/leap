@@ -22,11 +22,10 @@ type ClientRow = {
 const PAGE_SIZE = 10;
 
 function resolveTab(raw?: string): Tab {
-  if (raw === "todos" || raw === "past" || raw === "esgotar") return raw as Tab;
+  if (raw === "todos" || raw === "past" || raw === "esgotar" || raw === "upcoming") return raw as Tab;
   // "new" foi removido — qualquer link antigo cai em "todos" (que agora
-  // inclui também os recém-registados).
-  if (raw === "new") return "todos";
-  return "upcoming";
+  // inclui também os recém-registados). Default da página: "todos clientes".
+  return "todos";
 }
 
 function labelFor(tab: Tab, q: string): string {
