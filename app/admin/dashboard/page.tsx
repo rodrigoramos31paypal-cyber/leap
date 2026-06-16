@@ -106,48 +106,81 @@ async function Kpis({ year, month }: { year: number; month: number }) {
   const trainerIds = await getAccessibleTrainerIds();
   const trainerScope = trainerIds.length > 0 ? trainerIds : [""];
 
-  const [
-    { count: pendingPaymentsCount },
-    { data: monthPurchases },
-    { data: monthBookings },
-    totalClientsInScope,
-  ] = await Promise.all([
-    supabase
-      .from("purchases")
-      .select("id", { count: "exact", head: true })
-      .in("status", ["awaiting_confirmation", "pending_payment"])
-      .in("trainer_id", trainerScope),
-    supabase
-      .from("purchases")
-      .select("amount_cents, sessions_total, confirmed_at")
-      .eq("status", "confirmed")
-      .neq("payment_method", "complimentary")
-      .in("trainer_id", trainerScope)
-      .gte("confirmed_at", monthStart.toISOString())
-      .lt("confirmed_at", monthEnd.toISOString()),
-    supabase
-      .from("bookings")
-      .select("status, client_id")
-      .in("trainer_id", trainerScope)
-      .gte("starts_at", monthStart.toISOString())
-      .lt("starts_at", monthEnd.toISOString()),
+  // PERF (P-05 audit jun/2026): KPIs agregados no Postgres via a RPC
+  // get_dashboard_kpis — UM round-trip, zero linhas transferidas (antes
+  // trazia todas as bookings/purchases do mes e agregava em JS). Scope
+  // vazio devolve zeros. FALLBACK: se a RPC falhar (ex.: codigo deployed
+  // antes da migracao 0084 ser aplicada), corre o caminho antigo para o
+  // dashboard nao partir.
+  const [kpiRes, totalClientsInScope] = await Promise.all([
+    (supabase as any).rpc("get_dashboard_kpis", {
+      p_trainer_ids: trainerIds,
+      p_month_start: monthStart.toISOString(),
+      p_month_end: monthEnd.toISOString(),
+    }),
     getClientCountInScope(trainerIds),
   ]);
 
-  const revenue = ((monthPurchases ?? []) as any[]).reduce((s: number, r: any) => s + r.amount_cents, 0);
-  const packsSold = (monthPurchases ?? []).length;
-  let sessionsBooked = 0, sessionsConfirmed = 0, sessionsCancelled = 0, sessionsNoShow = 0;
-  const activeClientsSet = new Set<string>();
-  for (const b of ((monthBookings ?? []) as any[])) {
-    if (b.status === "booked" || b.status === "confirmed") {
-      sessionsBooked++;
-      activeClientsSet.add(b.client_id);
+  let revenue = 0;
+  let packsSold = 0;
+  let pendingPaymentsCount: number | null = 0;
+  let sessionsBooked = 0;
+  let sessionsConfirmed = 0;
+  let sessionsNoShow = 0;
+  let activeClients = 0;
+
+  const kpi = (kpiRes?.data as any[] | null)?.[0];
+  if (!kpiRes?.error && kpi) {
+    revenue = Number(kpi.revenue_cents) || 0;
+    packsSold = Number(kpi.packs_sold) || 0;
+    pendingPaymentsCount = Number(kpi.pending_payments) || 0;
+    sessionsBooked = Number(kpi.sessions_booked) || 0;
+    sessionsConfirmed = Number(kpi.sessions_confirmed) || 0;
+    sessionsNoShow = Number(kpi.sessions_no_show) || 0;
+    activeClients = Number(kpi.active_clients) || 0;
+  } else {
+    // FALLBACK (caminho antigo): fetch + agregacao em JS. Identico ao
+    // que existia antes da RPC; so corre se a RPC falhar.
+    const [
+      { count: pendingCount },
+      { data: monthPurchases },
+      { data: monthBookings },
+    ] = await Promise.all([
+      supabase
+        .from("purchases")
+        .select("id", { count: "exact", head: true })
+        .in("status", ["awaiting_confirmation", "pending_payment"])
+        .in("trainer_id", trainerScope),
+      supabase
+        .from("purchases")
+        .select("amount_cents, sessions_total, confirmed_at")
+        .eq("status", "confirmed")
+        .neq("payment_method", "complimentary")
+        .in("trainer_id", trainerScope)
+        .gte("confirmed_at", monthStart.toISOString())
+        .lt("confirmed_at", monthEnd.toISOString()),
+      supabase
+        .from("bookings")
+        .select("status, client_id")
+        .in("trainer_id", trainerScope)
+        .gte("starts_at", monthStart.toISOString())
+        .lt("starts_at", monthEnd.toISOString()),
+    ]);
+    revenue = ((monthPurchases ?? []) as any[]).reduce((acc: number, r: any) => acc + r.amount_cents, 0);
+    packsSold = (monthPurchases ?? []).length;
+    pendingPaymentsCount = pendingCount ?? 0;
+    const activeClientsSet = new Set<string>();
+    for (const b of ((monthBookings ?? []) as any[])) {
+      if (b.status === "booked" || b.status === "confirmed") {
+        sessionsBooked++;
+        activeClientsSet.add(b.client_id);
+      }
+      if (b.status === "confirmed") sessionsConfirmed++;
+      else if (b.status === "no_show") sessionsNoShow++;
     }
-    if (b.status === "confirmed") sessionsConfirmed++;
-    else if (b.status === "cancelled") sessionsCancelled++;
-    else if (b.status === "no_show") sessionsNoShow++;
+    activeClients = activeClientsSet.size;
   }
-  const activeClients = activeClientsSet.size;
+
   const avgRevenuePerClient = activeClients > 0 ? Math.round(revenue / activeClients) : 0;
 
   return (
