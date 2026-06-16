@@ -298,12 +298,19 @@ async function CalendarView({
   return (
     <>
       {view === "day" && (
-        <WeekSwipeNav
+        <DayView
+          day={day}
+          bookings={bookings ?? []}
+          blocks={allBlocks}
+          reserved={reserved ?? []}
+          notesMap={notesMap}
+          sessionsLeftMap={sessionsLeftMap}
+          lastCreditIds={lastCreditIds}
+          canBook={canBook}
+          avail={availMap}
           prevHref={`/admin/agenda?view=day&d=${isoDate(stepBack("day", day))}`}
           nextHref={`/admin/agenda?view=day&d=${isoDate(stepForward("day", day))}`}
-        >
-          <DayView day={day} bookings={bookings ?? []} blocks={allBlocks} reserved={reserved ?? []} notesMap={notesMap} lastCreditIds={lastCreditIds} />
-        </WeekSwipeNav>
+        />
       )}
       {view === "week" && (
         <WeekView
@@ -396,62 +403,285 @@ function BookingItem({ b, note, isLastCredit = false }: { b: any; note?: { body:
   );
 }
 
+// ─── DayView ────────────────────────────────────────────────────────
+// Reaproveita a MESMA grelha-tempo da WeekView mas com uma única coluna.
+// Sessões: BookingBlock (popover + drag-and-drop para reagendar).
+// Bloqueios: BusyBlock (clicável para editar/remover). Slot vazio:
+// SlotClickLayer (abre o BookingDialog para nova marcação). Tudo igual
+// ao que a vista semanal já oferece — pedido explícito do cliente.
 function DayView({
   day,
   bookings,
   blocks,
   reserved,
   notesMap,
+  sessionsLeftMap,
   lastCreditIds,
+  canBook,
+  avail,
+  prevHref,
+  nextHref,
 }: {
   day: Date;
   bookings: any[];
   blocks: any[];
   reserved: any[];
   notesMap: Map<string, any>;
+  sessionsLeftMap: Map<string, number>;
   lastCreditIds: Set<string>;
+  canBook: boolean;
+  avail: AvailMap;
+  prevHref: string;
+  nextHref: string;
 }) {
-  const dayBookings = bookings.filter((b) => sameDay(new Date(b.starts_at), day));
-  const dayBlocks = blocks.filter((b) => sameDay(new Date(b.starts_at), day));
-  const dayReserved = reserved.filter((r) => sameDay(new Date(r.starts_at), day));
+  const days = [day];
+  const byDay = bucketByDay(bookings, blocks, reserved);
+  const { bookings: dayBookings, blocks: dayBlocks, reserved: dayReserved } =
+    byDay.get(dayKey(day)) ?? EMPTY_DAY;
+  const today = new Date();
+  const isToday = sameDay(day, today);
 
-  // merge cronológico
-  const items: Array<
-    | { kind: "booking"; at: Date; data: any }
-    | { kind: "block"; at: Date; data: any }
-    | { kind: "reserved"; at: Date; data: any }
-  > = [
-    ...dayBookings.map((b) => ({ kind: "booking" as const, at: new Date(b.starts_at), data: b })),
-    ...dayBlocks.map((b) => ({ kind: "block" as const, at: new Date(b.starts_at), data: b })),
-    ...dayReserved.map((r) => ({ kind: "reserved" as const, at: new Date(r.starts_at), data: r })),
-  ].sort((a, b) => a.at.getTime() - b.at.getTime());
+  // Mesmo layout de horas com altura variável usado na semana — horas
+  // não-marcáveis encolhem, dia de trabalho cabe sem scroll.
+  const layout = buildRowLayout(days, byDay, avail);
+  const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => HOUR_START + i);
+
+  const todayHM = localHM(today);
+  const nowMinutes = todayHM.hour * 60 + todayHM.minute;
+  const nowInRange = nowMinutes >= HOUR_START * 60 && nowMinutes <= HOUR_END * 60;
+  const nowTop = yForMinutes(layout, nowMinutes);
+
+  // Coluna única — eixo de horas + 1fr.
+  const GRID_COLS = "32px minmax(0, 1fr)";
 
   return (
-    <div className="card p-4">
-      <div className="mb-3">
-        <div className="text-xs uppercase tracking-wide text-ink-500">{weekday(day)}</div>
-        <div className="font-display text-xl font-bold">{fmt(day)}</div>
-      </div>
+    <WeekSwipeNav prevHref={prevHref} nextHref={nextHref}>
+      <div className="card overflow-hidden">
+        <div className="overflow-x-hidden">
+          <div
+            id="agenda-week-scroll"
+            className="w-full overflow-y-auto"
+            style={{ maxHeight: "75vh" }}
+          >
+            {/* Day header — sticky, igual ao da semana. */}
+            <div
+              className="sticky top-0 z-30 grid border-b border-ink-900/10 bg-bone-50"
+              style={{ gridTemplateColumns: GRID_COLS }}
+            >
+              <div className="border-r border-ink-900/10" />
+              <div className="border-r border-ink-900/10 px-2 py-2 text-center">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+                  {weekday(day)}
+                </div>
+                <div className={`font-display text-xl font-bold ${isToday ? "text-gold-600" : ""}`}>
+                  {fmt(day)}
+                </div>
+              </div>
+            </div>
 
-      {items.length === 0 ? (
-        <p className="text-sm text-ink-500">Sem sessões nem bloqueios.</p>
-      ) : (
-        <ul className="space-y-2">
-          {items.map((it) => (
-            <li key={`${it.kind}-${it.data.id}`} className="grid grid-cols-[60px_1fr] gap-3 border-b border-ink-900/5 pb-2 last:border-0">
-              <div className="text-xs font-medium text-ink-500 tabular-nums">{formatTime(it.at)}</div>
-              {it.kind === "booking" ? (
-                <ul><BookingItem b={it.data} note={notesMap.get(it.data.id)} isLastCredit={lastCreditIds.has(it.data.id)} /></ul>
-              ) : it.kind === "reserved" ? (
-                <ReservedItem r={it.data} />
-              ) : (
-                <BlockItem b={it.data} />
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+            {/* Time grid */}
+            <div
+              className="grid"
+              style={{ gridTemplateColumns: GRID_COLS, height: layout.total }}
+            >
+              {/* Eixo de horas. */}
+              <div data-timeaxis className="relative border-r border-ink-900/10 bg-bone-50">
+                {hours.map((h) => {
+                  const isCollapsed = layout.collapsed[h];
+                  return (
+                    <div
+                      key={h}
+                      className={`absolute right-1 text-[9px] font-medium tabular-nums ${
+                        isCollapsed ? "text-ink-400/70" : "text-ink-500"
+                      }`}
+                      style={{ top: layout.tops[h] + (isCollapsed ? 1 : 4) }}
+                    >
+                      {String(h).padStart(2, "0")}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Day column — exactly the same internals as WeekView's column. */}
+              <div
+                data-daycol={isoDate(day)}
+                className="relative border-r border-ink-900/10"
+              >
+                {hours.map((h) => {
+                  const isCollapsed = layout.collapsed[h];
+                  const top = layout.tops[h];
+                  const ht = layout.heights[h];
+                  return (
+                    <div key={`row-${h}`}>
+                      {isCollapsed && (
+                        <div
+                          className="pointer-events-none absolute left-0 right-0 bg-ink-900/[0.03]"
+                          style={{ top, height: ht }}
+                        >
+                          <div
+                            className="absolute left-0 right-0 border-t border-dashed border-ink-900/15"
+                            style={{ top: ht / 2 }}
+                          />
+                        </div>
+                      )}
+                      <div
+                        className="pointer-events-none absolute left-0 right-0 border-t border-ink-900/10"
+                        style={{ top }}
+                      />
+                      {!isCollapsed && (
+                        <>
+                          <div
+                            className="pointer-events-none absolute left-0 right-0 border-t border-dashed border-ink-900/10"
+                            style={{ top: top + ht / 2 }}
+                          />
+                          <div
+                            className="pointer-events-none absolute left-0 right-0 border-t border-dotted border-ink-900/5"
+                            style={{ top: top + ht / 4 }}
+                          />
+                          <div
+                            className="pointer-events-none absolute left-0 right-0 border-t border-dotted border-ink-900/5"
+                            style={{ top: top + (ht * 3) / 4 }}
+                          />
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {canBook && (
+                  <SlotClickLayer
+                    dateIso={isoDate(day)}
+                    rowTops={layout.tops}
+                    rowHeights={layout.heights}
+                  />
+                )}
+
+                {isToday && nowInRange && (
+                  <div
+                    className="pointer-events-none absolute left-0 right-0 z-20 flex items-center"
+                    style={{ top: nowTop }}
+                  >
+                    <div className="-ml-1 h-2.5 w-2.5 rounded-full bg-red-500" />
+                    <div className="h-px flex-1 bg-red-500" />
+                  </div>
+                )}
+
+                {dayReserved.map((r: any) => {
+                  const s = new Date(r.starts_at);
+                  const e = new Date(r.ends_at);
+                  const pos = clampPosition(layout, s, e);
+                  if (!pos) return null;
+                  return (
+                    <div
+                      key={`r-${r.series_id}`}
+                      className="absolute left-0.5 right-0.5 overflow-hidden rounded border border-dashed border-ink-900/30 bg-bone-100/80 p-1 text-[10px] text-ink-700"
+                      style={{ top: pos.top, height: pos.height }}
+                      title={`Reservado para ${r.client_name ?? "cliente"}`}
+                    >
+                      <div className="truncate font-semibold uppercase tracking-wide">Reservado</div>
+                      <div className="truncate">{r.client_name ?? "(cliente)"}</div>
+                    </div>
+                  );
+                })}
+
+                {dayBlocks.map((blk: any) => {
+                  const pos = clampPosition(layout, new Date(blk.starts_at), new Date(blk.ends_at));
+                  if (!pos) return null;
+                  return (
+                    <BusyBlock
+                      key={`x-${blk.id}`}
+                      b={blk}
+                      canEdit={canBook}
+                      style={{ top: pos.top, height: pos.height }}
+                    />
+                  );
+                })}
+
+                {(() => {
+                  // Mesmo algoritmo de side-by-side / sobreposição da
+                  // WeekView (greedy + reuso) — extraído tal e qual para
+                  // que sessões empilhadas dividam a largura da coluna do
+                  // dia, igual à vista semanal.
+                  const act = dayBookings
+                    .filter((x: any) => x.status === "booked" || x.status === "confirmed" || x.status === "no_show")
+                    .map((x: any) => ({
+                      id: x.id,
+                      s: new Date(x.starts_at).getTime(),
+                      e: x.ends_at
+                        ? new Date(x.ends_at).getTime()
+                        : new Date(x.starts_at).getTime() + 3_600_000,
+                    }))
+                    .sort((a: { s: number }, b: { s: number }) => a.s - b.s);
+                  const colOf = new Map<string, number>();
+                  const groupOf = new Map<string, number>();
+                  const groupCols = new Map<number, number>();
+                  let nextGroup = 0;
+                  let curGroup = -1;
+                  const live: { id: string; e: number; col: number }[] = [];
+                  for (const it of act) {
+                    for (let i = live.length - 1; i >= 0; i--) {
+                      if (live[i].e <= it.s) live.splice(i, 1);
+                    }
+                    if (live.length === 0) curGroup = nextGroup++;
+                    const used = new Set(live.map((l) => l.col));
+                    let col = 0;
+                    while (used.has(col)) col++;
+                    colOf.set(it.id, col);
+                    groupOf.set(it.id, curGroup);
+                    groupCols.set(
+                      curGroup,
+                      Math.max(groupCols.get(curGroup) ?? 1, col + 1),
+                    );
+                    live.push({ id: it.id, e: it.e, col });
+                  }
+
+                  return dayBookings.map((b: any) => {
+                    const s = new Date(b.starts_at);
+                    const e = b.ends_at
+                      ? new Date(b.ends_at)
+                      : new Date(s.getTime() + 60 * 60 * 1000);
+                    const pos = clampPosition(layout, s, e);
+                    if (!pos) return null;
+                    const canDrag =
+                      canBook &&
+                      (b.status === "booked" || b.status === "confirmed") &&
+                      s.getTime() > Date.now();
+                    const g = groupOf.get(b.id);
+                    const cols = g !== undefined ? groupCols.get(g) ?? 1 : 1;
+                    const col = colOf.get(b.id) ?? 0;
+                    const isOverlap = cols > 1;
+                    const overlapStyle: React.CSSProperties = isOverlap
+                      ? ({
+                          "--ov-col": col,
+                          "--ov-cols": cols,
+                          zIndex: (b.status === "no_show" ? 10 : 20) + col,
+                        } as any)
+                      : {};
+                    return (
+                      <BookingBlock
+                        key={`b-${b.id}`}
+                        b={b}
+                        note={notesMap.get(b.id)}
+                        style={{ top: pos.top, height: pos.height, ...overlapStyle }}
+                        draggable={canDrag}
+                        rowTops={layout.tops}
+                        rowHeights={layout.heights}
+                        snapMin={15}
+                        sessionsLeft={sessionsLeftMap.get(b.client_id)}
+                        isLastCredit={lastCreditIds.has(b.id)}
+                        overlap={isOverlap}
+                        overlapCol={col}
+                      />
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <AgendaScrollTo7am top={layout.tops[7]} />
+    </WeekSwipeNav>
   );
 }
 
@@ -1082,93 +1312,98 @@ function MonthView({ gridStart, anchor, bookings, blocks, reserved, lastCreditId
   );
 }
 
-// ─── BlockTimeForm: nova UX para bloquear horário ──────────────────
-function BlockTimeForm({
-  trainerId,
-  defaultDate,
-}: {
-  trainerId: string;
-  defaultDate: string;
-}) {
-  // 07:00 → 22:00 em incrementos de 30 min
-  const timeOptions = Array.from({ length: 31 }, (_, i) => {
-    const h = 7 + Math.floor(i / 2);
-    const m = (i % 2) * 30;
-    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+// ─── helpers ──────────────────────────────────────────────────────────
+
+type DayBucket = { bookings: any[]; blocks: any[]; reserved: any[] };
+const EMPTY_DAY: DayBucket = { bookings: [], blocks: [], reserved: [] };
+function dayKey(d: Date) {
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+function bucketByDay(bookings: any[], blocks: any[], reserved: any[]): Map<string, DayBucket> {
+  const map = new Map<string, DayBucket>();
+  const cell = (k: string) => {
+    let e = map.get(k);
+    if (!e) { e = { bookings: [], blocks: [], reserved: [] }; map.set(k, e); }
+    return e;
+  };
+  for (const b of bookings) cell(dayKey(new Date(b.starts_at))).bookings.push(b);
+  for (const b of blocks) cell(dayKey(new Date(b.starts_at))).blocks.push(b);
+  for (const r of reserved) cell(dayKey(new Date(r.starts_at))).reserved.push(r);
+  return map;
+}
+
+function isoDate(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function tzOffsetMinutesLisbon(date: Date): number {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Lisbon",
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
   });
+  const p: Record<string, string> = {};
+  for (const part of dtf.formatToParts(date)) p[part.type] = part.value;
+  const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
+  return (asUTC - date.getTime()) / 60000;
+}
+function lisbonWallToUtc(y: number, mo: number, d: number, h: number, mi: number): Date {
+  const guess = Date.UTC(y, mo, d, h, mi, 0);
+  const off = tzOffsetMinutesLisbon(new Date(guess));
+  return new Date(guess - off * 60000);
+}
+function startOfWeek(d: Date) {
+  const x = new Date(d);
+  const day = (x.getDay() + 6) % 7;
+  x.setDate(x.getDate() - day);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+function startOfMonthGrid(d: Date) {
+  const first = new Date(d.getFullYear(), d.getMonth(), 1);
+  return startOfWeek(first);
+}
+function addDays(d: Date, n: number) {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+}
+function sameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
 
-  return (
-    <details className="card overflow-hidden">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-4 transition hover:bg-bone-50">
-        <div className="inline-flex items-center gap-2 text-sm font-semibold">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-red-50 text-red-600">
-            <Ban size={14} />
-          </span>
-          <span>Marcar-me indisponível</span>
-        </div>
-        <span className="text-xs text-ink-500">Bloquear um horário</span>
-      </summary>
+function stepBack(view: "day" | "week" | "month", day: Date) {
+  if (view === "day") return addDays(day, -1);
+  if (view === "week") return addDays(day, -7);
+  return new Date(day.getFullYear(), day.getMonth() - 1, 1);
+}
 
-      <form
-        action={addBlockQuickAction}
-        className="space-y-4 border-t border-ink-900/10 p-4"
-      >
-        <input type="hidden" name="trainerId" value={trainerId} />
+function stepForward(view: "day" | "week" | "month", day: Date) {
+  if (view === "day") return addDays(day, 1);
+  if (view === "week") return addDays(day, 7);
+  return new Date(day.getFullYear(), day.getMonth() + 1, 1);
+}
 
-        {/* Quick presets */}
-        <div>
-          <div className="label">Atalhos</div>
-          <BlockPresets fromId="blockFrom" toId="blockTo" />
-        </div>
+const WEEKDAYS_PT = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+function weekday(d: Date) {
+  return WEEKDAYS_PT[d.getDay()];
+}
+function fmt(d: Date) {
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+function shortName(full?: string | null) {
+  const first = (full ?? "").trim().split(/\s+/)[0] ?? "";
+  return first.slice(0, 7);
+}
 
-        {/* Date + From + To */}
-        {/* min-w-0 on each grid item: prevents native iOS date input's
-            intrinsic content width (label + calendar icon) from pushing
-            the column wider than the viewport. */}
-        <div className="grid gap-3 sm:grid-cols-[1.4fr_1fr_1fr]">
-          <div className="min-w-0">
-            <label className="label" htmlFor="blockDate">Dia</label>
-            <input
-              id="blockDate"
-              name="date"
-              type="date"
-              defaultValue={defaultDate}
-              required
-              className="input block min-w-0 max-w-full appearance-none"
-            />
-          </div>
-          <div className="min-w-0">
-            <label className="label" htmlFor="blockFrom">Início</label>
-            <select id="blockFrom" name="from" required defaultValue="08:00" className="input min-w-0 max-w-full">
-              {timeOptions.slice(0, -1).map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-          </div>
-          <div className="min-w-0">
-            <label className="label" htmlFor="blockTo">Fim</label>
-            <select id="blockTo" name="to" required defaultValue="12:00" className="input min-w-0 max-w-full">
-              {timeOptions.slice(1).map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Reason */}
-        <div>
-          <label className="label" htmlFor="blockReason">Motivo (opcional)</label>
-          <input
-            id="blockReason"
-            name="reason"
-            placeholder="Ex: férias, consulta médica, formação…"
-            className="input"
-          />
-        </div>
-
-        {/* Submit */}
-        <div className="flex items-center justify-between gap-3 border-t border-ink-900/5 pt-3">
-          <p className="text-[11px] text-ink-500">
             O slot ficará bloqueado para novas marcações.
           </p>
           <button type="submit" className="btn-primary inline-flex items-center gap-1.5">
