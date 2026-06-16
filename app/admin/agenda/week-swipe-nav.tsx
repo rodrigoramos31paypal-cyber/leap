@@ -1,7 +1,9 @@
 "use client";
 
 import { useRef } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 // ════════════════════════════════════════════════════════════════
 // WeekSwipeNav · em ecrãs táctil, swipe esquerda → próxima semana,
@@ -60,6 +62,23 @@ export function WeekSwipeNav({
 
   return (
     <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+      {/* Setas anterior/seguinte — só desktop (no telemóvel usa-se swipe). */}
+      <div className="mb-2 hidden items-center justify-between md:flex">
+        <Link
+          href={prevHref}
+          aria-label="Anterior"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-ink-900/10 text-ink-600 hover:bg-ink-900/5 dark:border-white/15 dark:text-bone-50 dark:hover:bg-white/5"
+        >
+          <ChevronLeft size={18} />
+        </Link>
+        <Link
+          href={nextHref}
+          aria-label="Seguinte"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-ink-900/10 text-ink-600 hover:bg-ink-900/5 dark:border-white/15 dark:text-bone-50 dark:hover:bg-white/5"
+        >
+          <ChevronRight size={18} />
+        </Link>
+      </div>
       {children}
     </div>
   );

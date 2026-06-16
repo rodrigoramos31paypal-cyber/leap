@@ -167,7 +167,7 @@ async function SessoesTab({ userId, filter }: { userId: string; filter: "todas" 
                 <NotebookPen size={12} /> As minhas notas
               </summary>
               <div className="mt-2">
-                <NoteEditor bookingId={b.id} initialBody={notesMap.get(b.id)?.body} compact />
+                <NoteEditor bookingId={b.id} initialBody={notesMap.get(b.id)?.body} compact sharedWithTrainer />
               </div>
             </details>
           </li>

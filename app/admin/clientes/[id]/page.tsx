@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getClientCredits } from "@/lib/credits";
 import { eur, formatDateTime, BOOKING_STATUS } from "@/lib/utils";
 import { NoteEditor } from "@/components/note-editor";
-import { getMyNotesMapForBookings } from "@/lib/notes";
+import { getMyNotesMapForBookings, getClientNotesMapForBookings } from "@/lib/notes";
 import { getAccessibleTrainerIds } from "@/lib/trainer";
 import { GrantPackForm } from "./grant-pack-form";
 import { setClientBannedAction } from "./actions";
@@ -45,6 +45,7 @@ export default async function ClientDetail({ params }: { params: { id: string } 
     ]);
   const purchases = (purchasesRaw ?? []) as any[];
   const bookings = (bookingsRaw ?? []) as any[];
+  const clientNotesMap = await getClientNotesMapForBookings(bookings.map((b: any) => b.id), params.id);
 
   // 2a vaga: packs depende de trainerIds; notesMap depende de bookings.
   // Independentes entre si — corremos em paralelo.
@@ -168,6 +169,14 @@ export default async function ClientDetail({ params }: { params: { id: string } 
                     {(BOOKING_STATUS as any)[b.status] ?? b.status}
                   </span>
                 </div>
+                {clientNotesMap.get(b.id)?.body && (
+                  <div className="mt-3 rounded-lg border border-gold-200 bg-gold-50 p-3 dark:border-gold-400/30 dark:bg-gold-400/10">
+                    <div className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold text-gold-700">
+                      <NotebookPen size={12} /> Nota do cliente
+                    </div>
+                    <p className="whitespace-pre-wrap text-xs text-ink-700">{clientNotesMap.get(b.id)?.body}</p>
+                  </div>
+                )}
                 <details className="mt-3 border-t border-ink-900/5 pt-3">
                   <summary className="cursor-pointer inline-flex items-center gap-1.5 text-xs font-semibold text-ink-600 hover:text-ink-900">
                     <NotebookPen size={12} /> Minhas notas{notesMap.get(b.id) ? " · ✓" : ""}

@@ -1,15 +1,16 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getCurrentProfile } from "@/lib/supabase/server";
 import {
   saveSettingsAction,
   saveTrainerBioAction,
   addAvailabilityAction,
-  deleteAvailabilityAction,
   deleteBlockAction,
 } from "./actions";
 import { googleEnabled, microsoftEnabled } from "@/lib/calendar-sync";
 import { getCurrentTrainer } from "@/lib/trainer";
 import { CopyButton } from "@/components/copy-button";
 import { AvatarUploader } from "@/components/avatar-uploader";
+import { AvailabilityRow } from "@/components/availability-row";
+import { EquipaSection } from "@/app/admin/equipa/equipa-section";
 import { NotificationPrefToggle } from "@/components/notification-pref-toggle";
 import {
   Smartphone,
@@ -19,19 +20,21 @@ import {
   SlidersHorizontal,
   Clock,
   Calendar as CalendarIcon,
+  UserCog,
 } from "lucide-react";
 import Link from "next/link";
 
 const DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
-type TabId = "perfil" | "regras" | "horarios" | "calendario" | "seguranca";
+type TabId = "perfil" | "regras" | "horarios" | "calendario" | "seguranca" | "equipa";
 
-const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
+const TABS: { id: TabId; label: string; icon: React.ReactNode; ownerOnly?: boolean }[] = [
   { id: "perfil",     label: "Perfil",     icon: <User size={14} /> },
   { id: "regras",     label: "Regras",     icon: <SlidersHorizontal size={14} /> },
   { id: "horarios",   label: "Horários",   icon: <Clock size={14} /> },
   { id: "calendario", label: "Calendário", icon: <CalendarIcon size={14} /> },
   { id: "seguranca",  label: "Segurança",  icon: <ShieldCheck size={14} /> },
+  { id: "equipa",     label: "Equipa",     icon: <UserCog size={14} />, ownerOnly: true },
 ];
 
 export default async function DefinicoesPage({
@@ -45,10 +48,12 @@ export default async function DefinicoesPage({
   };
 }) {
   const supabase = createClient();
-  const [trainer, { data: { user } }] = await Promise.all([
+  const [trainer, { data: { user } }, profile] = await Promise.all([
     getCurrentTrainer(),
     supabase.auth.getUser(),
+    getCurrentProfile(),
   ]);
+  const isOwner = profile?.role === "owner";
   if (!trainer) {
     return (
       <div className="card p-5 text-sm text-ink-500">
@@ -61,6 +66,7 @@ export default async function DefinicoesPage({
   const activeTab: TabId = ((): TabId => {
     const t = searchParams.tab;
     if (t === "regras" || t === "horarios" || t === "calendario" || t === "seguranca") return t;
+    if (t === "equipa" && isOwner) return "equipa";
     return "perfil";
   })();
 
@@ -78,7 +84,7 @@ export default async function DefinicoesPage({
         </p>
       </div>
 
-      <TabNav active={activeTab} />
+      <TabNav active={activeTab} isOwner={isOwner} />
 
       {activeTab === "perfil" && (
         <PerfilTab
@@ -106,6 +112,7 @@ export default async function DefinicoesPage({
         />
       )}
       {activeTab === "seguranca" && <SegurancaTab />}
+      {activeTab === "equipa" && isOwner && <EquipaSection />}
     </div>
   );
 }
@@ -113,10 +120,10 @@ export default async function DefinicoesPage({
 // ════════════════════════════════════════════════════════════════
 // Tab navigation (server component).
 // ════════════════════════════════════════════════════════════════
-function TabNav({ active }: { active: TabId }) {
+function TabNav({ active, isOwner }: { active: TabId; isOwner: boolean }) {
   return (
     <div className="flex gap-1 overflow-x-auto border-b border-ink-900/10 pb-px">
-      {TABS.map((t) => {
+      {TABS.filter((t) => isOwner || !t.ownerOnly).map((t) => {
         const isActive = t.id === active;
         return (
           <Link
@@ -451,23 +458,13 @@ function HorariosTab({
             <li className="text-sm text-ink-500">Sem horários definidos.</li>
           )}
           {sortedAvailability.map((a: any) => (
-            <li
+            <AvailabilityRow
               key={a.id}
-              className="flex items-center justify-between border-b border-ink-900/5 pb-2 last:border-0"
-            >
-              <div>
-                <span className="font-medium">{DAYS[a.day_of_week]}</span>{" "}
-                <span className="text-ink-500 tabular-nums">
-                  {a.start_time.slice(0, 5)} – {a.end_time.slice(0, 5)}
-                </span>
-              </div>
-              <form action={deleteAvailabilityAction}>
-                <input type="hidden" name="id" value={a.id} />
-                <button className="text-xs font-medium text-red-700 hover:underline">
-                  Eliminar
-                </button>
-              </form>
-            </li>
+              id={a.id}
+              dayOfWeek={a.day_of_week}
+              startTime={a.start_time}
+              endTime={a.end_time}
+            />
           ))}
         </ul>
 

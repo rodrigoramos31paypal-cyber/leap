@@ -9,11 +9,13 @@ export function NoteEditor({
   initialBody,
   placeholder = "Escreve aqui a tua nota desta sessão…",
   compact = false,
+  sharedWithTrainer = false,
 }: {
   bookingId: string;
   initialBody?: string;
   placeholder?: string;
   compact?: boolean;
+  sharedWithTrainer?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [body, setBody] = useState(initialBody ?? "");
@@ -118,7 +120,7 @@ export function NoteEditor({
         </button>
         {error && <span className="text-xs text-red-700">{error}</span>}
       </div>
-      <p className="text-[10px] text-ink-500">Só tu vês esta nota.</p>
+      <p className="text-[10px] text-ink-500">{sharedWithTrainer ? "O teu treinador também vê esta nota." : "Só tu vês esta nota."}</p>
     </div>
   );
 }

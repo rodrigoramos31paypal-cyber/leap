@@ -7,7 +7,7 @@ import { AdminNavItem } from "@/components/admin-nav-item";
 import { Toaster } from "@/components/toaster";
 import { consumeFlash } from "@/lib/flash";
 import { isMfaSatisfied, listVerifiedFactors } from "@/lib/mfa";
-import { LayoutDashboard, Calendar, Users, CreditCard, BarChart3, Settings, Package, UserCog, NotebookPen, Images, Store } from "lucide-react";
+import { LayoutDashboard, Calendar, Users, CreditCard, BarChart3, Settings, Package, NotebookPen, Images, Store } from "lucide-react";
 
 import type { Metadata } from "next";
 export const metadata: Metadata = { robots: { index: false, follow: false } };
@@ -52,7 +52,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     redirect(`/login/2fa?next=${encodeURIComponent(target)}`);
   }
 
-  const isOwner = profile?.role === "owner";
   const flash = consumeFlash();
 
   return (
@@ -78,9 +77,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <AdminNavItem href="/admin/relatorios" icon={<BarChart3 size={16} />} label="Relatórios" />
             <AdminNavItem href="/admin/promocoes" icon={<Images size={16} />} label="Slideshow" />
             <AdminNavItem href="/admin/loja" icon={<Store size={16} />} label="Loja" />
-            {isOwner && (
-              <AdminNavItem href="/admin/equipa" icon={<UserCog size={16} />} label="Equipa" />
-            )}
             <AdminNavItem href="/admin/definicoes" icon={<Settings size={16} />} label="Definições" />
           </nav>
         </aside>
