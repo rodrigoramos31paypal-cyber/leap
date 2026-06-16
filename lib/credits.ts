@@ -152,6 +152,21 @@ export async function rejectPurchase(purchaseId: string, reason?: string) {
   if (error) throw error;
 }
 
+/**
+ * Cancela uma compra JÁ confirmada (caso típico: admin aceitou-a por
+ * engano). Coloca a compra em 'cancelled', leva sessions_remaining a 0
+ * e marca o pagamento como reembolsado. Vai parar ao separador
+ * "Rejeitados" da página de pagamentos.
+ */
+export async function cancelConfirmedPurchase(purchaseId: string, reason?: string) {
+  const supabase = createClient();
+  const { error } = await (supabase as any).rpc("cancel_confirmed_purchase", {
+    p_purchase_id: purchaseId,
+    p_reason: reason,
+  });
+  if (error) throw error;
+}
+
 export async function createBooking(args: {
   trainerId: string;
   startsAt: Date;

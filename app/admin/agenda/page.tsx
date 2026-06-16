@@ -143,7 +143,12 @@ async function CalendarView({
   // PERF: pedimos só as colunas usadas pela UI da agenda (antes era `*`).
   let bookingsQuery = supabase
     .from("bookings")
-    .select("id, starts_at, ends_at, session_type, status, client_id, trainer_id, series_id, profiles:client_id(full_name)")
+    .select(
+      // purchases:purchase_id(...) → permite mostrar o progresso do pack
+      // no popover ("3/4 sessões" = 3 restantes de um pack de 4) em vez
+      // do saldo agregado do cliente.
+      "id, starts_at, ends_at, session_type, status, client_id, trainer_id, series_id, purchase_id, profiles:client_id(full_name), purchases:purchase_id(sessions_total, sessions_remaining, pack_snapshot)",
+    )
     .in("trainer_id", scope)
     .gte("starts_at", rangeStart.toISOString())
     .lt("starts_at", rangeEnd.toISOString());

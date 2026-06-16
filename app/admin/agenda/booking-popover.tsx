@@ -533,13 +533,25 @@ export function BookingBlock({
             </div>
           )}
 
-          {/* Saldo de sessões + link para o perfil. O saldo é o que
-              o cliente ainda tem disponível em packs (não inclui esta
-              sessão se ela já foi descontada). */}
+          {/* Progresso DO PACK que paga esta sessão (não do saldo geral
+              do cliente). Mostra "X/Y" onde X = sessões restantes neste
+              pack e Y = total do pack. Ex: cliente comprou um pack de 4
+              e fez 1 marcação → "3/4 sessões". Fallback para o saldo
+              agregado para sessões grátis (sem purchase) ou registos
+              antigos. */}
           <div className="mb-3 flex items-center justify-between gap-2 rounded-md border border-ink-900/10 bg-bone-50 px-3 py-2 text-xs">
             <div className="inline-flex items-center gap-1.5">
               <Coins size={14} className="text-gold-600" />
-              {sessionsLeft === undefined ? (
+              {b.purchases?.sessions_total ? (
+                <span className="text-ink-700">
+                  <span className="font-semibold tabular-nums">
+                    {b.purchases.sessions_remaining}/{b.purchases.sessions_total}
+                  </span>{" "}
+                  sessões{b.purchases?.pack_snapshot?.name
+                    ? ` · ${b.purchases.pack_snapshot.name}`
+                    : ""}
+                </span>
+              ) : sessionsLeft === undefined ? (
                 <span className="text-ink-500">Sessões: —</span>
               ) : sessionsLeft === 0 ? (
                 <span className="font-semibold text-red-700">

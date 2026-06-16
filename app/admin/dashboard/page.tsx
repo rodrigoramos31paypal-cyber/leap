@@ -217,9 +217,7 @@ async function TodaySessions() {
                   <div className="text-sm font-medium">{b.profiles?.full_name ?? "—"}</div>
                   <div className="text-xs text-ink-500 capitalize">{b.session_type} · {formatDateTime(b.starts_at).split(" ")[1]}</div>
                 </div>
-                <span className={b.status === "confirmed" ? "chip-ok" : "chip-gold"}>
-                  {b.status === "confirmed" ? "Confirmada" : "Marcada"}
-                </span>
+                <span className="chip-ok">Confirmada</span>
               </li>
             ))}
           </ul>
