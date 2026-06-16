@@ -9,7 +9,7 @@
 //
 // BUMP `CACHE_NAME` sempre que mexes em chunks/policies — o handler
 // `activate` apaga as caches antigas e o utilizador pega já na nova.
-const CACHE_NAME = "leap-v6";
+const CACHE_NAME = "leap-v7";
 const APP_SHELL = [
   "/",
   "/login",
