@@ -127,8 +127,10 @@ export default async function ClientDashboard() {
 
       <PushSubscribeCard />
 
-      {/* Sessões disponíveis */}
-      <div className="card p-4">
+      {/* Sessões disponíveis — em desktop limitamos a largura para o
+          card não esticar ao máximo do container (parecia desproporcionado
+          em ecrãs largos). Mobile mantém-se inalterado (full-width). */}
+      <div className="card p-4 md:max-w-2xl">
         <div className="flex items-center justify-between">
           <span className="text-xs uppercase tracking-wide text-ink-500 dark:text-bone-100/60">Sessões disponíveis</span>
           <Dumbbell size={16} className="text-gold-400" />
