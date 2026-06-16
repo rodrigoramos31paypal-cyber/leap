@@ -17,13 +17,10 @@ export default async function LojaPage() {
   if (!user) redirect("/login");
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Loja</h1>
-        <p className="text-sm text-ink-500">Packs, ebooks, roupa e suplementos.</p>
-      </div>
+    <div className="flex min-h-[70vh] flex-col">
+      <h1 className="font-display text-2xl font-bold tracking-tight">Loja</h1>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid flex-1 grid-cols-2 content-center gap-3">
         {bubbles.map((b) => {
           const Icon = b.icon;
           return (
