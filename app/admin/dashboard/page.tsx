@@ -232,17 +232,24 @@ function Stat({
 }: {
   icon: React.ReactNode; label: string; value: string; accent?: "gold"; href?: string;
 }) {
-  // Mobile: 2 cards por linha → reduz padding, encolhe label e número
-  // para caber confortavelmente em ecrãs 360-390px. Em sm+ volta ao
-  // tamanho original (4 cards por linha em lg).
+  // Cartões alinhados (mesma altura mesmo quando o label ocupa 2 linhas).
+  // • h-full + flex column → todos os cards numa linha esticam ao mais alto.
+  // • Cabeçalho (label + icon) com min-height reserva espaço para 2 linhas
+  //   de label, para que cards de label curto não fiquem com o número mais
+  //   acima do que cards de label longo.
+  // • mt-auto no valor → empurra-o sempre para o fundo do card.
   const inner = (
-    <div className={`card p-3 sm:p-4 ${accent === "gold" ? "border-gold-400 bg-gold-50" : ""}`}>
-      <div className="flex items-start justify-between gap-2 text-ink-500">
+    <div
+      className={`card flex h-full flex-col p-3 sm:p-4 ${
+        accent === "gold" ? "border-gold-400 bg-gold-50" : ""
+      }`}
+    >
+      <div className="flex min-h-[28px] items-start justify-between gap-2 text-ink-500 sm:min-h-[34px]">
         <span className="text-[10px] uppercase tracking-wide leading-tight sm:text-xs">{label}</span>
         {icon}
       </div>
-      <div className="mt-1.5 font-display text-xl font-bold sm:mt-2 sm:text-2xl">{value}</div>
+      <div className="mt-auto pt-1.5 font-display text-xl font-bold sm:pt-2 sm:text-2xl">{value}</div>
     </div>
   );
-  return href ? <Link href={href}>{inner}</Link> : inner;
+  return href ? <Link href={href} className="block h-full">{inner}</Link> : inner;
 }
