@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Home, Calendar, ShoppingBag, User } from "lucide-react";
+import { Home, Calendar, History, Store, User } from "lucide-react";
 
 // Navegação do cliente para DESKTOP. No mobile usa-se a BottomNav
 // (md:hidden); esta barra é md:block. Sem isto, no desktop os clientes
@@ -11,7 +11,8 @@ import { Home, Calendar, ShoppingBag, User } from "lucide-react";
 const items = [
   { href: "/app/dashboard", label: "Início", icon: Home },
   { href: "/app/agenda", label: "Agenda", icon: Calendar },
-  { href: "/app/comprar", label: "Packs", icon: ShoppingBag },
+  { href: "/app/historico", label: "Histórico", icon: History },
+  { href: "/app/comprar", label: "Loja", icon: Store },
   { href: "/app/perfil", label: "Perfil", icon: User },
 ];
 
