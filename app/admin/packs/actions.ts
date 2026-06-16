@@ -1,13 +1,40 @@
 "use server";
 
+// ════════════════════════════════════════════════════════════════
+// SEC (C-C audit jun/2026): defesa em profundidade.
+//
+// Antes: estas actions confiavam EXCLUSIVAMENTE na policy RLS
+// "packs: admin write" (de 0051), que exige
+// `is_admin() AND _trainer_is_accessible(trainer_id)`. Funciona,
+// mas (a) sem guard de aplicação o erro RLS aparece como falha
+// genérica em vez de mensagem amigável, (b) não há audit/alert, e
+// (c) basta um drop/edit acidental da policy em migração futura
+// para abrir IDOR de packs (alterar preços/desactivar packs de
+// outro trainer).
+//
+// Padrão idêntico ao H-4 fix de `definicoes/actions.ts`:
+//   • requireStaff() ao topo (throw → caller fica fail-closed).
+//   • savePackAction: ownership check do trainerId vindo do form.
+//   • update/toggle/delete: fetch trainer_id da linha (variante
+//     por id) + ownership check.
+// ════════════════════════════════════════════════════════════════
+
 import { revalidatePackViews } from "@/lib/revalidate";
 import { createClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
+import { requireStaff } from "@/lib/authz";
+import { getCurrentTrainerId } from "@/lib/trainer";
 
 export async function savePackAction(formData: FormData) {
+  const profile = await requireStaff();
   const supabase = createClient();
   const trainerId = String(formData.get("trainerId") ?? "");
+  // C-C: owner pode criar para qualquer trainer; trainer só no próprio.
+  if (profile.role !== "owner" && trainerId !== (await getCurrentTrainerId())) {
+    setFlash("Sem permissão.", "error");
+    return;
+  }
   const name = String(formData.get("name") ?? "").trim();
   const session_type = String(formData.get("session_type") ?? "individual") as "individual" | "dupla";
   const sessions = Number(formData.get("sessions") ?? 0);
@@ -41,8 +68,21 @@ export async function savePackAction(formData: FormData) {
 }
 
 export async function updatePackAction(formData: FormData) {
+  const profile = await requireStaff();
   const supabase = createClient();
   const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  // C-C: variante por id — fetch trainer_id da linha antes do update.
+  const { data: row } = await supabase
+    .from("packs")
+    .select("trainer_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!row) { setFlash("Pack não encontrado", "error"); return; }
+  if (profile.role !== "owner" && row.trainer_id !== (await getCurrentTrainerId())) {
+    setFlash("Sem permissão.", "error");
+    return;
+  }
   const name = String(formData.get("name") ?? "").trim();
   const sessions = Number(formData.get("sessions") ?? 0);
   const price_euros = Number(formData.get("price_euros") ?? 0);
@@ -72,8 +112,21 @@ export async function updatePackAction(formData: FormData) {
 }
 
 export async function togglePackAction(formData: FormData) {
+  const profile = await requireStaff();
   const supabase = createClient();
   const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  // C-C: variante por id.
+  const { data: row } = await supabase
+    .from("packs")
+    .select("trainer_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!row) { setFlash("Pack não encontrado", "error"); return; }
+  if (profile.role !== "owner" && row.trainer_id !== (await getCurrentTrainerId())) {
+    setFlash("Sem permissão.", "error");
+    return;
+  }
   const active = formData.get("active") === "true";
   const { error } = await supabase.from("packs").update({ active }).eq("id", id);
   if (error) {
@@ -86,8 +139,21 @@ export async function togglePackAction(formData: FormData) {
 }
 
 export async function deletePackAction(formData: FormData) {
-  const supabase = createClient();
+  const profile = await requireStaff();
   const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const supabase = createClient();
+  // C-C: variante por id — fetch trainer_id da linha antes do delete.
+  const { data: row } = await supabase
+    .from("packs")
+    .select("trainer_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!row) { setFlash("Pack não encontrado", "error"); return; }
+  if (profile.role !== "owner" && row.trainer_id !== (await getCurrentTrainerId())) {
+    setFlash("Sem permissão.", "error");
+    return;
+  }
   const { error } = await supabase.from("packs").delete().eq("id", id);
   if (error) {
     logError("deletePackAction", error);
