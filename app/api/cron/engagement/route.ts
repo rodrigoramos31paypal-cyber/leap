@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail, emailTemplates } from "@/lib/email";
 import { formatDateTime } from "@/lib/utils";
+import { verifyBearer } from "@/lib/secrets";
 
 // ════════════════════════════════════════════════════════════════
 // Cron · re-engagement (saldo baixo / sem sessões / pack a expirar).
@@ -36,9 +37,8 @@ const LOW_CREDIT_COOLDOWN_DAYS = 14;
 const LOW_CREDIT_DELAY_HOURS = 24;
 
 export async function GET(request: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  const auth = request.headers.get("authorization");
-  if (!secret || auth !== `Bearer ${secret}`) {
+  // QW-6: constant-time bearer check via helper partilhado.
+  if (!verifyBearer(request.headers.get("authorization"), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

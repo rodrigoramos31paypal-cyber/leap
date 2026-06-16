@@ -101,6 +101,12 @@ export function PromoCarousel({ banners }: { banners: PromoBanner[] }) {
 // mente do rácio que o autor do banner usou. Antes de a imagem carregar,
 // fallback a `aspect-[3/1]` (típico de banners promocionais).
 function PromoCard({ b }: { b: PromoBanner }) {
+  // PERF (QW-14 audit jun/2026): antes, ao carregar a imagem
+  // injectávamos uma <style> tag por banner com `aspect-ratio: X
+  // !important` numa media query. Cada injecção causa style
+  // recalculation + reflow — visível como jank no mobile quando o
+  // carrossel passa para um banner novo. Agora aplicamos via inline
+  // `style` no próprio div em md+, sem injectar CSS.
   const [aspect, setAspect] = useState<number | null>(null);
 
   function onImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
@@ -110,21 +116,17 @@ function PromoCard({ b }: { b: PromoBanner }) {
     }
   }
 
+  // Em desktop (md:h-auto), aspect-ratio inline ganha. Em mobile o
+  // h-28 explícito ganha, e o aspect-ratio é ignorado.
+  const styleObj: React.CSSProperties | undefined = aspect
+    ? { aspectRatio: aspect }
+    : undefined;
+
   return (
     <div
-      data-promo-card={b.id}
       className="relative flex h-28 overflow-hidden rounded-2xl bg-ink-900 text-bone-50 transition active:scale-[0.99] md:h-auto md:aspect-[3/1]"
+      style={styleObj}
     >
-      {/* Em md+, força o aspect ratio ao rácio natural assim que ele é
-          medido. Sobrepõe-se ao md:aspect-[3/1] do className via
-          selector + !important para vencer a especificidade. */}
-      {aspect && (
-        <style>{`
-          @media (min-width: 768px) {
-            [data-promo-card="${b.id}"] { aspect-ratio: ${aspect} !important; }
-          }
-        `}</style>
-      )}
       {b.image_url && (
         <Image
           src={b.image_url}

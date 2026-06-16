@@ -30,14 +30,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       .is("read_at", null);
   }
 
-  const [profile, { count: unread }] = await Promise.all([
-    getCurrentProfile(),
-    supabase
-      .from("notifications")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .is("read_at", null),
-  ]);
+  // PERF (QW-9 audit jun/2026): query de notificações removida — ver
+  // app/app/layout.tsx para o racional. NotificationBell auto-popula.
+  const profile = await getCurrentProfile();
 
   if (profile?.role !== "trainer" && profile?.role !== "owner") {
     redirect("/app/dashboard");
@@ -66,7 +61,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="min-h-screen bg-bone-50 pb-20 dark:bg-ink-900 md:pb-0">
       <TopBar
         title="Admin"
-        unread={unread ?? 0}
+        unread={0}
         notifLink="/admin/notificacoes"
         userId={user.id}
         homeHref="/admin/dashboard"

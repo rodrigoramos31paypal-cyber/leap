@@ -64,9 +64,12 @@ export default async function BuyPackPage({ searchParams }: { searchParams: { tr
     );
   }
 
+  // PERF (CB-5 audit jun/2026): só as colunas que a UI lê — antes
+  // trazia tudo (description, created_at, updated_at, …) e era
+  // forwarded para client components como objecto inteiro.
   const { data: packs } = await supabase
     .from("packs")
-    .select("*")
+    .select("id, name, sessions, price_cents, session_type, validity_days, is_single_session, sort_order")
     .eq("trainer_id", trainerId)
     .eq("active", true)
     .order("session_type")

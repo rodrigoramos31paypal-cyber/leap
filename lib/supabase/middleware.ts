@@ -2,6 +2,40 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database";
 
+// ────────────────────────────────────────────────────────────────
+// PERF (CB-2 audit jun/2026): cache do resultado de getClaims() por
+// fingerprint do cookie de auth durante 30 s. Sem isto, cada prefetch
+// RSC (5+ por página com nav) dispara um getClaims() — e mesmo sendo
+// "local" para tokens assimétricos, em HS256 (default) faz round-trip
+// ao auth server.
+//
+// Segurança: o cookie é o input — se mudar (logout, refresh do token
+// pelo cookie adapter), a chave de cache muda automaticamente. O TTL
+// curto (30 s) é mais um cap defensivo do que necessário.
+//
+// Estado por instância edge (V8 isolate). Sem partilha entre instâncias
+// — está OK porque é só um cache de hot path com TTL minúsculo.
+// ────────────────────────────────────────────────────────────────
+type ClaimsCacheEntry = { claims: any; expiresAt: number };
+const claimsCache = new Map<string, ClaimsCacheEntry>();
+const CLAIMS_TTL_MS = 30_000;
+
+function claimsKey(request: NextRequest): string | null {
+  const parts: string[] = [];
+  for (const c of request.cookies.getAll()) {
+    if (c.name.startsWith("sb-") && c.name.includes("auth-token")) {
+      parts.push(`${c.name}=${c.value}`);
+    }
+  }
+  if (parts.length === 0) return null;
+  return parts.sort().join("|");
+}
+
+function pruneClaimsCache(now: number) {
+  if (claimsCache.size <= 500) return;
+  for (const [k, v] of claimsCache) if (v.expiresAt <= now) claimsCache.delete(k);
+}
+
 export async function updateSession(
   request: NextRequest,
   extraRequestHeaders?: Record<string, string>,
@@ -64,26 +98,37 @@ export async function updateSession(
     return response;
   }
 
-  // PERF (audit #1): verificação de sessão local em vez de round-trip
-  // ao GoTrue. `getClaims()` valida a ASSINATURA do JWT em processo
-  // quando o projecto usa signing keys assimétricas (ES256/RS256/EdDSA):
-  // zero latência de rede no caminho crítico de cada request/prefetch.
+  // PERF (audit #1 + CB-2 jun/2026): verificação de sessão local +
+  // memoização por cookie. `getClaims()` valida o JWT em processo (ou
+  // faz fallback para getUser em HS256 legacy). O cache por
+  // fingerprint do cookie evita N round-trips quando há N prefetches
+  // RSC com o mesmo cookie.
   //
-  // IMPORTANTE — pré-condição: enquanto os tokens forem assinados com o
-  // segredo HS256 legacy, a auth-js faz fallback transparente para
-  // getUser() (mesmo comportamento de hoje, sem regressão). O ganho de
-  // performance só se materializa após migrar para signing keys
-  // assimétricas no dashboard Supabase (Auth → JWT Keys → migrar p/ ECC).
-  //
-  // SEGURANÇA: ao contrário de descodificar o JWT à mão, getClaims()
-  // verifica a assinatura criptográfica — não é forjável, fecha o
-  // loophole do header `next-router-prefetch`.
+  // SEGURANÇA: o cookie é a chave; se for revogado/refrescado, a chave
+  // muda automaticamente. TTL de 30 s é um cap defensivo extra.
   //
   // SESSÃO: getClaims() → getSession() → __loadSession() continua a
-  // refrescar tokens expirados (_callRefreshToken) e o cookie adapter
-  // re-escreve os cookies via setAll — o refresh de sessão mantém-se.
-  const { data: claimsData } = await supabase.auth.getClaims();
-  const user = claimsData?.claims ?? null;
+  // refrescar tokens expirados; o cache não previne o refresh, só
+  // evita re-validar a mesma chave dentro do TTL.
+  const now = Date.now();
+  const key = claimsKey(request);
+  let user: any = null;
+  if (key) {
+    const cached = claimsCache.get(key);
+    if (cached && cached.expiresAt > now) {
+      user = cached.claims;
+    } else {
+      const { data: claimsData } = await supabase.auth.getClaims();
+      user = claimsData?.claims ?? null;
+      if (user) {
+        claimsCache.set(key, { claims: user, expiresAt: now + CLAIMS_TTL_MS });
+        pruneClaimsCache(now);
+      }
+    }
+  } else {
+    const { data: claimsData } = await supabase.auth.getClaims();
+    user = claimsData?.claims ?? null;
+  }
 
   // Public paths
   const isPublic =

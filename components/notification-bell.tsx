@@ -59,6 +59,11 @@ export function NotificationBell({
       setUnread(count ?? 0);
     }
 
+    // PERF (QW-9, jun/2026): layouts deixaram de fazer a query de
+    // notificações para acelerar o paint do shell. Fazemos uma chamada
+    // imediata aqui — não bloqueia o render, popula o badge em <100 ms.
+    refresh();
+
     // Realtime channel (best effort — pode falhar em alguns ambientes).
     const channel = supabase
       .channel(`notif-${userId}`)
@@ -108,7 +113,13 @@ export function NotificationBell({
 
     // Fallback de polling — garantia de actualização em tempo "quase-real"
     // mesmo se o canal realtime falhar (rede, free tier limits, etc.).
-    const interval = window.setInterval(refresh, POLL_MS);
+    //
+    // PERF (QW-5 audit jun/2026): pausa quando o separador está em
+    // background. Para um user com a app aberta 8h em segundo plano,
+    // poupa ~240 queries por dia.
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, POLL_MS);
 
     // Actualiza imediatamente quando o separador volta a estar visível.
     function onVisible() {

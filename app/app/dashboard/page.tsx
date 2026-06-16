@@ -8,7 +8,7 @@ import { getClientCredits, getClientCreditsByTrainer } from "@/lib/credits";
 import { formatDateTime, pluralize, BOOKING_STATUS } from "@/lib/utils";
 import { Calendar, ShoppingBag, Dumbbell, AlertCircle, ChevronRight } from "lucide-react";
 import { PushSubscribeCard } from "@/components/push-subscribe-card";
-import { PromoCarousel } from "@/components/promo-carousel";
+import { PromoSlot } from "@/components/promo-slot";
 
 // Fillers temporários até o cliente fornecer os banners reais.
 const FILLER_BANNERS = [
@@ -121,8 +121,10 @@ export default async function ClientDashboard() {
         </div>
       )}
 
-      {/* Banners promocionais (ex: ebooks) */}
-      <PromoCarousel banners={(((banners as any[]) ?? []).length ? banners : FILLER_BANNERS) as any} />
+      {/* Banners promocionais. PERF (QW-2 audit jun/2026): SSR pinta
+          o 1º slide via PromoBannerStatic (zero JS); o PromoCarousel
+          é dynamic ssr:false e — quando hidrata — substitui-o. */}
+      <PromoSlot banners={(((banners as any[]) ?? []).length ? banners : FILLER_BANNERS) as any} />
 
       {/* Próxima sessão */}
       {nextSession && (
@@ -154,7 +156,15 @@ export default async function ClientDashboard() {
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-ink-900/10 bg-bone-100 dark:border-white/10 dark:bg-white/[0.06]">
                     {t.avatarUrl ? (
-                      <Image src={t.avatarUrl} alt={t.trainerName} width={40} height={40} className="h-full w-full object-cover" />
+                      <Image
+                        src={t.avatarUrl}
+                        alt={t.trainerName}
+                        width={40}
+                        height={40}
+                        sizes="40px"
+                        loading="lazy"
+                        className="h-full w-full object-cover"
+                      />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center font-display text-sm font-bold text-ink-500">
                         {(t.trainerName.trim()[0] ?? "T").toUpperCase()}

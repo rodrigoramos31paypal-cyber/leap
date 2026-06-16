@@ -1,7 +1,7 @@
 "use client";
 // recurring booking: count selector + graceful credit handling
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { cn, formatTime, formatDateTime } from "@/lib/utils";
 import { Clock, Repeat } from "lucide-react";
@@ -44,6 +44,13 @@ export function BookingFlow({
   const [partial, setPartial] = useState<PartialResult | null>(null);
   const [resolved, setResolved] = useState<Set<string>>(new Set());
   const [recurring, setRecurring] = useState(false);
+  // PERF (CB-3 audit jun/2026): cache em memória dos slots já lidos
+  // neste mount, por chave `trainer|YYYY-MM-DD|duration`. Re-tocar
+  // num dia já visto → 0 round-trips. TTL implícito: vida do
+  // componente. Trade-off aceitável: se outro cliente acabou de
+  // marcar nesse slot, o create_booking valida atomicamente no
+  // servidor.
+  const slotsCache = useRef(new Map<string, { startsAt: string; endsAt: string }[]>());
   // Quantas semanas marcar de uma vez. Default conservador: 4 (ou menos,
   // se o cliente tiver menos créditos). O cliente ajusta com o stepper.
   const [recurringCount, setRecurringCount] = useState<number>(() =>
@@ -53,14 +60,21 @@ export function BookingFlow({
 
   useEffect(() => {
     let cancelled = false;
+    const cacheKey = `${trainerId}|${ymd(date)}|${duration}`;
+    // CB-3 cache hit → 0 round-trips. Set síncrono, render imediato.
+    const cached = slotsCache.current.get(cacheKey);
+    if (cached) {
+      setSlots(cached);
+      setPicked(null);
+      setLoading(false);
+      return;
+    }
     (async () => {
       setLoading(true);
       // Envia o dia-calendário LOCAL ("YYYY-MM-DD"), não toISOString():
       // meia-noite local convertida para UTC saltava para o dia anterior
       // (ex.: Segunda 00:00 Lisboa → Domingo 23:00 UTC), e o servidor
       // calculava o dia-da-semana errado.
-      // PERF (C3): GET cacheável a /api/slots em vez da Server Action
-      // serializada. Pedidos paralelos + cache no browser → seletor fluido.
       const params = new URLSearchParams({
         trainer: trainerId,
         date: ymd(date),
@@ -75,6 +89,7 @@ export function BookingFlow({
         if (res.ok) {
           const data = await res.json();
           next = data.slots ?? [];
+          slotsCache.current.set(cacheKey, next);
         }
       } catch {
         // rede falhou — mostra "sem horários" em vez de crashar.
@@ -436,13 +451,21 @@ function ConflictSuggestions({
       let list = same.map((s) => ({ startsAt: s.startsAt, sameDay: true }));
 
       // 2) fallback: outros dias da mesma semana
+      // PERF (CB-3 audit jun/2026): antes eram 6 fetches em série
+      // dentro de um for(await), criando uma waterfall de ~1.5-3 s.
+      // Paralelo com Promise.all colapsa para 1 RTT.
       if (list.length === 0) {
         const monday = mondayOf(conflictDay);
+        const days: Date[] = [];
         for (let k = 0; k < 7; k++) {
           const d = new Date(monday);
           d.setDate(d.getDate() + k);
-          if (isSameDay(d, conflictDay)) continue;
-          const ss = await fetchSlots(trainerId, d, durationMin);
+          if (!isSameDay(d, conflictDay)) days.push(d);
+        }
+        const results = await Promise.all(
+          days.map((d) => fetchSlots(trainerId, d, durationMin)),
+        );
+        for (const ss of results) {
           for (const s of ss) list.push({ startsAt: s.startsAt, sameDay: false });
         }
       }

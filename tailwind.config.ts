@@ -2,10 +2,12 @@ import type { Config } from "tailwindcss";
 
 const config: Config = {
   darkMode: "class",
+  // PERF (QW-13 audit jun/2026): lib/ removido — nenhum ficheiro em lib
+  // contém classes Tailwind. Reduz o conjunto de ficheiros que o
+  // Tailwind escava em cada build.
   content: [
     "./app/**/*.{ts,tsx}",
     "./components/**/*.{ts,tsx}",
-    "./lib/**/*.{ts,tsx}",
   ],
   theme: {
     extend: {
