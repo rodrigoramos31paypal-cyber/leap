@@ -18,11 +18,17 @@
 
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import { rateLimit, getRequestIp } from "@/lib/rate-limit";
 
 // Horizonte do feed: passado 7 dias (para histórico recente no
 // telemóvel) e futuro 6 meses. Suficiente para um cliente normal.
 const PAST_DAYS = 7;
 const FUTURE_DAYS = 180;
+
+// SEC (H-D, audit jun/2026): UUID v4 ESTRITO. A regex antiga
+// /^[0-9a-f-]{36}$/i aceitava lixo degenerado (ex.: 36 traços) que
+// consumia uma query Supabase à toa. Exigimos o formato canónico.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function toIcsDate(d: Date) {
   return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
@@ -64,7 +70,7 @@ function eventToVevent(e: Event, now: Date) {
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: { token: string } },
 ) {
   // O ficheiro pode chegar como `<uuid>.ics` (apps que requerem
@@ -72,9 +78,25 @@ export async function GET(
   const raw = params.token ?? "";
   const token = raw.replace(/\.ics$/i, "");
 
-  // Validação leve para evitar query SQL em lixo. UUID v4: 36 chars.
-  if (!/^[0-9a-f-]{36}$/i.test(token)) {
+  // SEC (H-D): valida formato UUID v4 estrito ANTES de qualquer query —
+  // lixo é rejeitado de imediato sem tocar na BD.
+  if (!UUID_RE.test(token)) {
     return new NextResponse("Invalid token", { status: 404 });
+  }
+
+  // SEC (H-D): rate-limit por IP. O middleware exclui /api/calendar/feed
+  // do rate-limit global (os clientes de calendário fazem GETs
+  // frequentes), o que deixava este endpoint aberto a brute-force
+  // ilimitado contra o token. Um cliente de calendário legítimo só
+  // refresca ~1×/hora (REFRESH-INTERVAL=PT1H), por isso o limite
+  // "generic" (30/min) é folgado para uso real mas trava enumeração.
+  const ip = getRequestIp(req.headers);
+  const rl = await rateLimit("generic", `cal-feed:${ip}`);
+  if (!rl.success) {
+    return new NextResponse("Too many requests", {
+      status: 429,
+      headers: { "Retry-After": String(rl.retryAfterSeconds) },
+    });
   }
 
   // Admin client porque não há sessão — autenticamos pelo token URL.
