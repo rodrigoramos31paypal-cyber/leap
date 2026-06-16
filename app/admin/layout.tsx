@@ -6,7 +6,7 @@ import { BottomNav } from "@/components/bottom-nav";
 import { AdminNavItem } from "@/components/admin-nav-item";
 import { Toaster } from "@/components/toaster";
 import { consumeFlash } from "@/lib/flash";
-import { isMfaSatisfied, listVerifiedFactors } from "@/lib/mfa";
+import { getAalInfo, isDeviceTrusted } from "@/lib/mfa";
 import { LayoutDashboard, Calendar, Users, CreditCard, BarChart3, Settings, Package, NotebookPen, Images, Store } from "lucide-react";
 
 import type { Metadata } from "next";
@@ -46,8 +46,16 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // 2FA gate para o admin: se tem factor verificado e o device ainda
   // não está confiado nem a sessão em AAL2, manda para o desafio.
   // Mantém o path actual em ?next para retornar depois da verificação.
-  const factors = await listVerifiedFactors();
-  if (factors.length > 0 && !(await isMfaSatisfied(user.id))) {
+  //
+  // PERF (audit #1): este gate corre em CADA navegação e CADA prefetch RSC
+  // dos links do admin. Antes chamava listVerifiedFactors() ->
+  // mfa.listFactors() -> getUser(), um round-trip ao GoTrue por request.
+  // Agora lemos o estado MFA do JWT/cookie localmente (getAalInfo) e só
+  // tocamos na BD (isDeviceTrusted) quando é mesmo preciso: o user TEM 2FA
+  // mas a sessão ainda não está em AAL2. Sessões já em AAL2 e users sem 2FA
+  // não pagam qualquer query.
+  const { currentLevel, hasMfa } = await getAalInfo();
+  if (hasMfa && currentLevel !== "aal2" && !(await isDeviceTrusted(user.id))) {
     const target = path || "/admin/dashboard";
     redirect(`/login/2fa?next=${encodeURIComponent(target)}`);
   }

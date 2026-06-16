@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { cache } from "react";
 import { createHash, randomBytes } from "crypto";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 
@@ -29,11 +30,29 @@ export async function listVerifiedFactors() {
   return (data.totp ?? []).filter((f) => f.status === "verified");
 }
 
+// PERF (audit #1, hot path): getAuthenticatorAssuranceLevel() SEM argumento
+// é LOCAL — lê o cookie de sessão e descodifica o JWT, zero round-trip ao
+// GoTrue. Devolve:
+//   - currentLevel: o aal do JWT actual (aal1 = só password, aal2 = +2FA)
+//   - hasMfa:       true se o user TEM factores verificados (nextLevel ===
+//                   "aal2", lido de session.user.factors no cookie) — a
+//                   forma LOCAL de saber "este user usa 2FA?" sem chamar
+//                   listFactors()->getUser() (que é um round-trip de rede).
+// Cached por request para deduplicar entre layout e páginas.
+export const getAalInfo = cache(
+  async (): Promise<{ currentLevel: "aal1" | "aal2"; hasMfa: boolean }> => {
+    const supabase = createClient();
+    const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    return {
+      currentLevel: (data?.currentLevel as "aal1" | "aal2") ?? "aal1",
+      hasMfa: data?.nextLevel === "aal2",
+    };
+  },
+);
+
 /** Devolve o "Authenticator Assurance Level" actual da sessão. */
 export async function getAal(): Promise<"aal1" | "aal2"> {
-  const supabase = createClient();
-  const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-  return (data?.currentLevel as "aal1" | "aal2") ?? "aal1";
+  return (await getAalInfo()).currentLevel;
 }
 
 /** Verifica se há um cookie trusted-device VÁLIDO para o user dado. */

@@ -76,25 +76,6 @@ export default async function ClientDashboard() {
   ) as any | undefined;
   const packName = latestPack ? (latestPack.pack_snapshot as any)?.name ?? "Pack" : null;
 
-  // Taxa de presença (apenas do pack atual): sessões passadas desde a
-  // compra do pack, presentes (confirmed) vs faltas (no_show).
-  let presenca: number | null = null;
-  let faltas = 0;
-  if (latestPack) {
-    const { data: since } = await supabase
-      .from("bookings")
-      .select("status")
-      .eq("client_id", user.id)
-      .gte("starts_at", latestPack.created_at)
-      .lt("starts_at", nowIso)
-      .in("status", ["confirmed", "no_show"]);
-    const rows = (since ?? []) as any[];
-    const attended = rows.filter((r) => r.status === "confirmed").length;
-    faltas = rows.filter((r) => r.status === "no_show").length;
-    const tot = attended + faltas;
-    presenca = tot > 0 ? Math.round((attended / tot) * 100) : null;
-  }
-
   // Barra "O teu progresso": progresso de sessoes FINALIZADAS no pack atual.
   // A barra reflete o pack comprado mais recente. Uma sessao so conta quando esta
   // FINALIZADA (1 minuto depois do fim do horario marcado, ends_at), nao quando e
@@ -102,15 +83,47 @@ export default async function ClientDashboard() {
   // Quando a ultima sessao termina mantem-se a 100% ate ser comprado um novo pack;
   // o novo pack (0 sessoes finalizadas) recomeca em 0%.
   const barPack = ((latestPackRows ?? []) as any[])[0] as any | undefined;
+
+  // PERF (audit #3): estas duas queries dependem apenas de latestPackRows
+  // (ja em memoria), por isso corremo-las EM PARALELO em vez de uma a seguir
+  // a outra -- poupa um round-trip a BD no caminho do dashboard.
+  //   - presenca: sessoes passadas desde a compra do pack atual,
+  //     presentes (confirmed) vs faltas (no_show).
+  //   - packPct: sessoes FINALIZADAS do pack mais recente.
+  const [presencaRes, packPctRes] = await Promise.all([
+    latestPack
+      ? supabase
+          .from("bookings")
+          .select("status")
+          .eq("client_id", user.id)
+          .gte("starts_at", latestPack.created_at)
+          .lt("starts_at", nowIso)
+          .in("status", ["confirmed", "no_show"])
+      : Promise.resolve({ data: null }),
+    barPack && barPack.sessions_total > 0
+      ? supabase
+          .from("bookings")
+          .select("ends_at")
+          .eq("purchase_id", barPack.id)
+          .in("status", ["booked", "confirmed", "no_show"])
+      : Promise.resolve({ data: null }),
+  ]);
+
+  // Taxa de presença (apenas do pack atual).
+  let presenca: number | null = null;
+  let faltas = 0;
+  if (latestPack) {
+    const rows = (presencaRes.data ?? []) as any[];
+    const attended = rows.filter((r) => r.status === "confirmed").length;
+    faltas = rows.filter((r) => r.status === "no_show").length;
+    const tot = attended + faltas;
+    presenca = tot > 0 ? Math.round((attended / tot) * 100) : null;
+  }
+
   let packPct = 0;
   if (barPack && barPack.sessions_total > 0) {
-    const { data: packBookings } = await supabase
-      .from("bookings")
-      .select("ends_at")
-      .eq("purchase_id", barPack.id)
-      .in("status", ["booked", "confirmed", "no_show"]);
     const finalizeBeforeMs = nowMs - 60_000; // finalizada 1 min apos o fim
-    const finalized = ((packBookings ?? []) as any[]).filter(
+    const finalized = ((packPctRes.data ?? []) as any[]).filter(
       (b) => b.ends_at && new Date(b.ends_at).getTime() <= finalizeBeforeMs,
     ).length;
     packPct = Math.min(100, Math.round((finalized / barPack.sessions_total) * 100));
