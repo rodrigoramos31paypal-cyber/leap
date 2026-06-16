@@ -29,10 +29,15 @@ export async function registerAction(formData: FormData) {
 
   if (error) {
     logError("registerAction", error);
-    const msg = error.message.includes("registered")
-      ? "Este email já está registado."
-      : "Não foi possível criar a conta.";
-    redirect("/registar?error=" + encodeURIComponent(msg));
+    // SEC (H-B, audit jun/2026): anti-enumeração. NÃO distinguir
+    // "email já registado" de outros erros — caso contrário um atacante
+    // itera emails e descobre quem tem conta (input valioso para
+    // credential stuffing). Por simetria com /recuperar, redireccionamos
+    // sempre para a página de sucesso: ou a conta foi criada, ou já
+    // existia (Supabase manda um email idempotente nesse caso) — em
+    // qualquer cenário não há acção útil para o atacante. Quem realmente
+    // já tinha conta usa o fluxo "esqueci-me da password".
+    redirect("/registar?success=1");
   }
 
   redirect("/registar?success=1");
