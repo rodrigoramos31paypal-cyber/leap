@@ -42,30 +42,48 @@ export const getSessionUser = cache(async () => {
   return session?.user ?? null;
 });
 
-/** Como getSessionUser, mas valida o JWT contra o auth server. Usar só quando necessário. */
+/** Como getSessionUser, mas valida o JWT contra o auth server (round-trip ao
+ *  GoTrue). Apanha REVOGAÇÃO server-side (sign-out noutro device, ban) de
+ *  imediato. Usar quando a revogação instantânea importa mesmo (ex.: MFA). */
 export const getAuthUser = cache(async () => {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   return user ?? null;
 });
 
+/** Claims do JWT do request, validadas LOCALMENTE.
+ *
+ *  PERF (P-04, audit jun/2026): o projecto usa chaves assimétricas (ES256 —
+ *  ver JWKS). `getClaims()` verifica a assinatura do JWT em processo contra
+ *  a chave pública (cacheada), SEM round-trip ao auth server. Mesma
+ *  estratégia que o middleware já corre em produção. `sub` = user id. */
+export const getClaimsUser = cache(async () => {
+  const supabase = createClient();
+  const { data } = await supabase.auth.getClaims();
+  return data?.claims ?? null;
+});
+
 /** Profile do user logado (role, full_name). Cached por request.
  *
- *  SECURITY (H-1, audit jun/2026): usa `getAuthUser()` (valida JWT) em
- *  vez de `getSessionUser()` (só lê cookie). O middleware já valida o
- *  cookie em cada request, mas a fronteira de autorização tem de ficar
- *  de pé sozinha — se a matcher do middleware mudar ou perder cobertura
- *  por engano, `requireStaff()`/`requireOwner()` continuam seguros.
- *  React.cache() deduplica a chamada dentro do mesmo request, por isso
- *  o custo extra é desprezível. */
+ *  SECURITY/PERF (P-04, audit jun/2026): valida o JWT CRIPTOGRAFICAMENTE via
+ *  `getClaims()` (assinatura ES256 verificada localmente) em vez de
+ *  `getUser()` (round-trip ao GoTrue em CADA navegação). A fronteira de
+ *  autorização continua a ficar "de pé sozinha" — sem JWT válido devolve
+ *  null aqui, independentemente do middleware.
+ *
+ *  Trade-off consciente: confia num JWT válido até EXPIRAR (TTL do access
+ *  token); não apanha revogação server-side instantânea. Mitigações: (1) o
+ *  `role` é relido de `profiles` a cada request → despromoção de admin é
+ *  apanhada AO VIVO; (2) fluxos sensíveis (MFA) usam `getAuthUser()`. */
 export const getCurrentProfile = cache(async () => {
-  const user = await getAuthUser();
-  if (!user) return null;
+  const claims = await getClaimsUser();
+  const userId = claims?.sub;
+  if (!userId) return null;
   const supabase = createClient();
   const { data } = await supabase
     .from("profiles")
     .select("id, role, full_name")
-    .eq("id", user.id)
+    .eq("id", userId)
     .single();
   return data ?? null;
 });
