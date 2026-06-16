@@ -68,7 +68,7 @@ export default function HomePage() {
         <div className="mt-14 grid w-full max-w-3xl grid-cols-2 gap-3 sm:grid-cols-4">
           <FeatureCard icon={<Dumbbell size={18} />} title="Packs" desc="PT Individual ou Dupla." />
           <FeatureCard icon={<Calendar size={18} />} title="Agenda" desc="Marca em segundos." />
-          <FeatureCard icon={<CreditCard size={18} />} title="Pagamentos" desc="MB Way, Multibanco, Cartão." />
+          <FeatureCard icon={<CreditCard size={18} />} title="Pagamentos" desc="MB WAY e Revolut." />
           <FeatureCard icon={<ShieldCheck size={18} />} title="Sessões" desc="Sempre actualizadas." />
         </div>
       </section>

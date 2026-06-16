@@ -6,6 +6,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getCurrentTrainerId, getAccessibleTrainerIds } from "@/lib/trainer";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
+import { requireStaff } from "@/lib/authz";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
@@ -63,6 +64,7 @@ function storagePathFromUrl(url: string | null): string | null {
 export async function createProductAction(
   formData: FormData,
 ): Promise<{ ok: boolean; error?: string }> {
+  await requireStaff();
   const category = String(formData.get("category") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
@@ -122,6 +124,7 @@ export async function createProductAction(
 }
 
 export async function updateProductAction(formData: FormData) {
+  await requireStaff();
   const id = String(formData.get("id") ?? "");
   const category = String(formData.get("category") ?? "");
   const name = String(formData.get("name") ?? "").trim();
@@ -179,6 +182,7 @@ export async function updateProductAction(formData: FormData) {
 }
 
 export async function toggleProductAction(formData: FormData) {
+  await requireStaff();
   const id = String(formData.get("id") ?? "");
   const active = String(formData.get("active") ?? "") === "1";
   if (!id) return;
@@ -197,6 +201,7 @@ export async function toggleProductAction(formData: FormData) {
 }
 
 export async function deleteProductAction(formData: FormData) {
+  await requireStaff();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   const supabase = createClient();

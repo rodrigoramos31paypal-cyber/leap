@@ -6,6 +6,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getCurrentTrainerId, getAccessibleTrainerIds } from "@/lib/trainer";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
+import { requireStaff } from "@/lib/authz";
 
 const MAX_SLIDES = 3;
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -54,6 +55,7 @@ function storagePathFromUrl(url: string | null): string | null {
 }
 
 export async function createBannerAction(formData: FormData) {
+  await requireStaff();
   const title = String(formData.get("title") ?? "").trim();
   const subtitle = String(formData.get("subtitle") ?? "").trim();
   const buttonLabel = String(formData.get("button_label") ?? "").trim();
@@ -111,6 +113,7 @@ export async function createBannerAction(formData: FormData) {
 }
 
 export async function updateBannerAction(formData: FormData) {
+  await requireStaff();
   const id = String(formData.get("id") ?? "");
   const title = String(formData.get("title") ?? "").trim();
   const subtitle = String(formData.get("subtitle") ?? "").trim();
@@ -158,6 +161,7 @@ export async function updateBannerAction(formData: FormData) {
 }
 
 export async function toggleBannerAction(formData: FormData) {
+  await requireStaff();
   const id = String(formData.get("id") ?? "");
   const active = String(formData.get("active") ?? "") === "1";
   if (!id) return;
@@ -176,6 +180,7 @@ export async function toggleBannerAction(formData: FormData) {
 }
 
 export async function deleteBannerAction(formData: FormData) {
+  await requireStaff();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   const supabase = createClient();

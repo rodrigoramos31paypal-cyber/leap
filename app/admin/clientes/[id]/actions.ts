@@ -15,8 +15,10 @@ import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
 import { logAudit } from "@/lib/audit";
 import { captureAlert, isAccessDenied } from "@/lib/alerts";
+import { requireStaff } from "@/lib/authz";
 
 export async function adjustCreditsAction(formData: FormData) {
+  await requireStaff();
   const purchaseId = String(formData.get("purchaseId") ?? "");
   const delta = Number(formData.get("delta") ?? 0);
   const reason = String(formData.get("reason") ?? "").trim();
@@ -45,6 +47,7 @@ export async function adjustCreditsAction(formData: FormData) {
 }
 
 export async function grantPackAction(formData: FormData): Promise<void> {
+  await requireStaff();
   const mode = String(formData.get("mode") ?? "pack");
   const clientId = String(formData.get("clientId") ?? "");
   const method = String(formData.get("method") ?? "manual_cash") as
@@ -174,6 +177,7 @@ export async function grantPackAction(formData: FormData): Promise<void> {
 export async function adminDeleteClientAction(
   formData: FormData,
 ): Promise<{ ok: boolean; error?: string }> {
+  await requireStaff();
   const clientId = String(formData.get("clientId") ?? "");
   const confirm = String(formData.get("confirm") ?? "").trim();
   if (!clientId) return { ok: false, error: "Cliente não identificado." };
@@ -236,6 +240,7 @@ export async function adminDeleteClientAction(
 }
 
 export async function setClientBannedAction(formData: FormData): Promise<void> {
+  await requireStaff();
   const clientId = String(formData.get("clientId") ?? "");
   const banned = formData.get("banned") === "true";
   if (!clientId) {

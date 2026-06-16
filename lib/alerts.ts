@@ -26,7 +26,7 @@ export type AlertContext = Record<string, unknown> & { level?: AlertLevel };
 
 /**
  * Regista/dispara um alerta. `event` é um identificador estável
- * (ex. "ifthenpay_callback_rejected") para agrupar no provider.
+ * (ex. "admin_access_denied") para agrupar no provider.
  */
 export async function captureAlert(event: string, context: AlertContext = {}): Promise<void> {
   const { level = "error", ...rest } = context;
