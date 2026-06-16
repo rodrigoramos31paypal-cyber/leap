@@ -15,7 +15,7 @@ import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
 import { logAudit } from "@/lib/audit";
 import { captureAlert, isAccessDenied } from "@/lib/alerts";
-import { requireStaff } from "@/lib/authz";
+import { requireStaff, requireOwner } from "@/lib/authz";
 
 export async function adjustCreditsAction(formData: FormData) {
   await requireStaff();
@@ -177,7 +177,10 @@ export async function grantPackAction(formData: FormData): Promise<void> {
 export async function adminDeleteClientAction(
   formData: FormData,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requireStaff();
+  // H-2 (audit jun/2026): apagar a conta é irreversível e destrói PII.
+  // Restringido a owner — least privilege. (Trainer regular continua
+  // a poder ajustar sessões / atribuir packs.)
+  await requireOwner();
   const clientId = String(formData.get("clientId") ?? "");
   const confirm = String(formData.get("confirm") ?? "").trim();
   if (!clientId) return { ok: false, error: "Cliente não identificado." };
@@ -240,7 +243,10 @@ export async function adminDeleteClientAction(
 }
 
 export async function setClientBannedAction(formData: FormData): Promise<void> {
-  await requireStaff();
+  // H-2 (audit jun/2026): suspender/reactivar conta é destrutivo
+  // (bloqueia o cliente de comprar packs) e owner-grade. Restringido
+  // a owner para evitar abuso por trainers.
+  await requireOwner();
   const clientId = String(formData.get("clientId") ?? "");
   const banned = formData.get("banned") === "true";
   if (!clientId) {

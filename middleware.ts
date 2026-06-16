@@ -32,6 +32,14 @@ const RATE_LIMITED: RateRule[] = [
   { test: isPostOnly("/registar"), kind: "register" },
   { test: isPostOnly("/recuperar"), kind: "register" },
   { test: isPostOnly("/auth/reset"), kind: "register" },
+  // H-3 (audit jun/2026): coverage gaps. Endpoints autenticados que
+  // permitem enumeração / DoS por chamadas em rajada. Bucket `generic`
+  // (30 req/min) é generoso para uso normal e suficiente para travar
+  // scraping/abuso. Chave inclui o path para que diferentes endpoints
+  // não dividam o mesmo bucket.
+  { test: (p) => p === "/api/slots" || p.startsWith("/api/slots?"), kind: "generic" },
+  { test: (p) => p.startsWith("/api/bookings/") && p.endsWith("/ics"), kind: "generic" },
+  { test: (p, m) => m === "POST" && p === "/api/notifications/read", kind: "generic" },
 ];
 
 export async function middleware(request: NextRequest) {
