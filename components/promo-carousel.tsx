@@ -35,8 +35,6 @@ export function PromoCarousel({ banners }: { banners: PromoBanner[] }) {
   const ref = useRef<HTMLDivElement>(null);
   const lastInteractRef = useRef<number>(0);
 
-  if (!banners.length) return null;
-
   function onScroll() {
     const el = ref.current;
     if (!el) return;
@@ -61,6 +59,11 @@ export function PromoCarousel({ banners }: { banners: PromoBanner[] }) {
     }, ROTATE_MS);
     return () => window.clearInterval(id);
   }, [banners.length]);
+
+  // Guard AFTER all hooks — React requires a stable hook order on
+  // every render (rules-of-hooks). Previously this sat above useEffect,
+  // so an empty `banners` rendered fewer hooks than a populated one.
+  if (!banners.length) return null;
 
   return (
     <div>
