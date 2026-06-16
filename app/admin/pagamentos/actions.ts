@@ -7,8 +7,10 @@ import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
 import { logAudit } from "@/lib/audit";
 import { captureAlert, isAccessDenied } from "@/lib/alerts";
+import { requireStaff, requireOwner } from "@/lib/authz";
 
 export async function confirmPurchaseAction(formData: FormData) {
+  await requireStaff();
   const id = String(formData.get("purchaseId") ?? "");
   if (!id) return;
   try {
@@ -25,6 +27,7 @@ export async function confirmPurchaseAction(formData: FormData) {
 }
 
 export async function rejectPurchaseAction(formData: FormData) {
+  await requireStaff();
   const id = String(formData.get("purchaseId") ?? "");
   const reason = String(formData.get("reason") ?? "").trim() || undefined;
   if (!id) return;
@@ -48,6 +51,7 @@ export async function rejectPurchaseAction(formData: FormData) {
 // passa a 'cancelled', perde as sessões restantes e o pagamento é
 // marcado como reembolsado. Aparece no separador "Rejeitados".
 export async function cancelConfirmedPurchaseAction(formData: FormData) {
+  await requireOwner(); // C-D / H-2 parity: destrutivo (zera saldo + reembolso), owner-only.
   const id = String(formData.get("purchaseId") ?? "");
   const reason = String(formData.get("reason") ?? "").trim() || undefined;
   if (!id) return;
