@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient, getSessionUser, getCurrentProfile } from "@/lib/supabase/server";
 import { getClientCredits, getClientCreditsByTrainer } from "@/lib/credits";
 import { formatDateTime, pluralize, BOOKING_STATUS } from "@/lib/utils";
-import { Calendar, ShoppingBag, Sparkles, AlertCircle, ChevronRight } from "lucide-react";
+import { Calendar, ShoppingBag, Dumbbell, AlertCircle, ChevronRight } from "lucide-react";
 import { PushSubscribeCard } from "@/components/push-subscribe-card";
 import { PromoCarousel } from "@/components/promo-carousel";
 
@@ -131,7 +131,7 @@ export default async function ClientDashboard() {
       <div className="card p-4">
         <div className="flex items-center justify-between">
           <span className="text-xs uppercase tracking-wide text-ink-500 dark:text-bone-100/60">Sessões disponíveis</span>
-          <Sparkles size={16} className="text-gold-400" />
+          <Dumbbell size={16} className="text-gold-400" />
         </div>
         <div className="mt-2 flex items-baseline gap-2">
           <span className="font-display text-4xl font-black text-gold-500 dark:text-gold-400">{credits.total}</span>
