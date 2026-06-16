@@ -4,7 +4,6 @@ import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { eur, formatDateTime, BOOKING_STATUS, PURCHASE_STATUS } from "@/lib/utils";
 import { cancelBookingAction, rebookAction } from "./actions";
 import { CalendarPlus, RefreshCcw, NotebookPen } from "lucide-react";
-import { BackLink } from "@/components/back-link";
 import { NoteEditor } from "@/components/note-editor";
 import { getMyNotesMapForBookings } from "@/lib/notes";
 
@@ -25,7 +24,6 @@ export default async function HistoricoPage({
 
   return (
     <div className="space-y-5">
-      <BackLink />
       <div>
         <h1 className="font-display text-2xl font-bold tracking-tight">Histórico</h1>
         <p className="text-sm text-ink-500">Sessões e compras.</p>

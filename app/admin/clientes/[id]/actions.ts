@@ -1,5 +1,6 @@
 "use server";
 
+import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import { revalidateCreditsViews } from "@/lib/revalidate";
 import {
   adjustCredits,
@@ -43,12 +44,6 @@ export async function adjustCreditsAction(formData: FormData) {
   revalidateCreditsViews(clientId);
 }
 
-/**
- * Atribuir pack manualmente ao cliente — sem o cliente passar pelo site.
- * Suporta dois modos:
- *  - mode="pack": usa um pack predefinido (packId obrigatório)
- *  - mode="custom": passa N sessões + preço directamente (sem pack)
- */
 export async function grantPackAction(formData: FormData): Promise<void> {
   const mode = String(formData.get("mode") ?? "pack");
   const clientId = String(formData.get("clientId") ?? "");
@@ -63,7 +58,6 @@ export async function grantPackAction(formData: FormData): Promise<void> {
     return;
   }
 
-  // Defesa server-side: não atribuir sessões a contas removidas (RGPD).
   const supabase = createClient();
   const { data: target } = await supabase
     .from("profiles")
@@ -75,7 +69,6 @@ export async function grantPackAction(formData: FormData): Promise<void> {
     return;
   }
 
-  // ── Modo "remover": tira N sessões do saldo do cliente ──────────
   if (mode === "remove") {
     const count = Number(formData.get("remove_sessions") ?? 0);
     if (!Number.isFinite(count) || count <= 0) {
@@ -147,10 +140,6 @@ export async function grantPackAction(formData: FormData): Promise<void> {
       purchaseId = await createPurchase(packId, method, clientId);
     }
 
-    // O checkbox "confirmar já" foi removido: confirmamos SEMPRE. As
-    // sessões ficam imediatamente disponíveis e, se o método for pago
-    // (dinheiro/MBWay/Revolut), o pagamento entra na receita. Cortesia
-    // confirma na mesma mas não conta como receita (ver dashboard).
     await confirmPurchase(purchaseId);
     setFlash(
       sessionsGranted > 0
@@ -177,10 +166,59 @@ export async function grantPackAction(formData: FormData): Promise<void> {
 }
 
 /**
- * Suspender / reativar a conta de um cliente. Suspenso = continua a
- * aceder à conta, mas NÃO consegue comprar packs (bloqueado na RPC
- * create_purchase, qualquer método). Só admin/serviço (validado na RPC).
+ * Apagar (anonimizar) a conta de um cliente como ADMIN. Mesmo
+ * comportamento RGPD do auto-delete: anonimiza profile + apaga PII
+ * sem retenção (compras/marcações ficam por razões contabilísticas).
+ * Type-to-confirm ("APAGAR") para evitar cliques acidentais.
  */
+export async function adminDeleteClientAction(
+  formData: FormData,
+): Promise<{ ok: boolean; error?: string }> {
+  const clientId = String(formData.get("clientId") ?? "");
+  const confirm = String(formData.get("confirm") ?? "").trim();
+  if (!clientId) return { ok: false, error: "Cliente não identificado." };
+  if (confirm !== "APAGAR") {
+    return { ok: false, error: "Escreve APAGAR para confirmar." };
+  }
+
+  const supabase = createClient();
+
+  const { error: rpcErr } = await (supabase as any).rpc("anonymize_client_account", {
+    p_client_id: clientId,
+  });
+  if (rpcErr) {
+    logError("adminDeleteClientAction:anonymize", rpcErr);
+    if (isAccessDenied(rpcErr)) {
+      await captureAlert("admin_access_denied", { action: "anonymizeClient", clientId });
+    }
+    return { ok: false, error: "Não foi possível apagar a conta. Tenta de novo." };
+  }
+
+  try {
+    const admin = createSupabaseAdmin(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { persistSession: false, autoRefreshToken: false } },
+    );
+    const { error: banErr } = await admin.auth.admin.updateUserById(clientId, {
+      email: `apagado+${clientId}@removido.invalid`,
+      ban_duration: "876000h",
+      user_metadata: {},
+    });
+    if (banErr) logError("adminDeleteClientAction:ban", banErr);
+  } catch (e) {
+    logError("adminDeleteClientAction:ban", e);
+  }
+
+  await logAudit("client_delete_admin", {
+    targetTable: "profiles",
+    targetId: clientId,
+  });
+
+  revalidateCreditsViews(clientId);
+  return { ok: true };
+}
+
 export async function setClientBannedAction(formData: FormData): Promise<void> {
   const clientId = String(formData.get("clientId") ?? "");
   const banned = formData.get("banned") === "true";

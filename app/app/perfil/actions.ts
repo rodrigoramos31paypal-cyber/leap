@@ -7,6 +7,36 @@ import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
 import { revalidateProfileViews } from "@/lib/revalidate";
 
+// Mudar palavra-passe do utilizador autenticado. Supabase permite a
+// actualização sem a password actual (a sessão prova a identidade), mas
+// pedimos confirmação para evitar erros e exigimos um mínimo de 8 chars
+// — igual ao fluxo de reset.
+export async function changePasswordAction(formData: FormData) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const password = String(formData.get("password") ?? "");
+  const confirm = String(formData.get("confirm") ?? "");
+  if (password.length < 8) {
+    setFlash("A palavra-passe tem de ter pelo menos 8 caracteres.", "error");
+    redirect("/app/perfil?tab=perfil");
+  }
+  if (password !== confirm) {
+    setFlash("As palavras-passe não coincidem.", "error");
+    redirect("/app/perfil?tab=perfil");
+  }
+
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) {
+    logError("changePasswordAction", error);
+    setFlash("Não foi possível atualizar a palavra-passe.", "error");
+    redirect("/app/perfil?tab=perfil");
+  }
+  setFlash("Palavra-passe atualizada");
+  redirect("/app/perfil?tab=perfil");
+}
+
 export async function updateProfileAction(formData: FormData) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -34,8 +64,6 @@ export async function updateProfileAction(formData: FormData) {
 // em bookings/purchases e há obrigação legal de retenção contabilística).
 // Em vez disso: apaga dados pessoais sem retenção, anonimiza o perfil
 // (mantém marcações/compras anonimizadas), e bloqueia o login.
-// Devolve um resultado (NÃO faz redirect) — a navegação é feita no
-// cliente. Mais fiável que <form action> + redirect e mostra erros.
 export async function deleteAccountAction(
   formData: FormData,
 ): Promise<{ ok: boolean; error?: string }> {
@@ -49,16 +77,12 @@ export async function deleteAccountAction(
   if (!user) return { ok: false, error: "Sessão expirada. Volta a entrar." };
   const uid = user.id;
 
-  // 1) Anonimizar dados pessoais via RPC SECURITY DEFINER (limitada a
-  //    auth.uid()). Fiável e independente da service-role key no runtime.
   const { error: rpcErr } = await (supabase as any).rpc("anonymize_my_account");
   if (rpcErr) {
     logError("deleteAccountAction:anonymize", rpcErr);
     return { ok: false, error: "Não foi possível apagar a conta. Tenta de novo ou contacta-nos." };
   }
 
-  // 2) Bloquear o login (remover PII do auth + ban). Só esta parte precisa
-  //    da service role; se falhar, os dados pessoais JÁ foram anonimizados.
   try {
     const admin = createSupabaseAdmin(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -75,7 +99,6 @@ export async function deleteAccountAction(
     logError("deleteAccountAction:ban", e);
   }
 
-  // 3) Terminar sessão server-side. A navegação para "/" é feita no cliente.
   await supabase.auth.signOut().catch(() => {});
   revalidateProfileViews(uid);
   return { ok: true };

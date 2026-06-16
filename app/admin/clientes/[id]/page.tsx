@@ -9,6 +9,7 @@ import { getMyNotesMapForBookings, getClientNotesMapForBookings } from "@/lib/no
 import { getAccessibleTrainerIds } from "@/lib/trainer";
 import { GrantPackForm } from "./grant-pack-form";
 import { setClientBannedAction } from "./actions";
+import { DeleteClientSection } from "./delete-client-section";
 
 export default async function ClientDetail({ params }: { params: { id: string } }) {
   const supabase = createClient();
@@ -21,11 +22,8 @@ export default async function ClientDetail({ params }: { params: { id: string } 
     notFound();
   }
   const profileId = profile.id;
-  // Conta removida (RGPD): email anonimizado → bloqueia atribuições.
   const isDeleted = (profile.email ?? "").endsWith("@removido.invalid");
 
-  // PERF: estas 4 chamadas sao independentes — antes corriam em serie
-  // (4 round-trips sequenciais). Agora em paralelo (1 vaga).
   const [trainerIds, credits, { data: purchasesRaw }, { data: bookingsRaw }] =
     await Promise.all([
       getAccessibleTrainerIds(),
@@ -47,8 +45,6 @@ export default async function ClientDetail({ params }: { params: { id: string } 
   const bookings = (bookingsRaw ?? []) as any[];
   const clientNotesMap = await getClientNotesMapForBookings(bookings.map((b: any) => b.id), params.id);
 
-  // 2a vaga: packs depende de trainerIds; notesMap depende de bookings.
-  // Independentes entre si — corremos em paralelo.
   const [{ data: packsRaw }, notesMap] = await Promise.all([
     supabase
       .from("packs")
@@ -77,29 +73,30 @@ export default async function ClientDetail({ params }: { params: { id: string } 
         </Link>
       </div>
 
-      {/* Suspensão de conta — bloqueia a compra de packs (qualquer método). */}
       {profile.banned && (
         <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
           Conta suspensa — este cliente não consegue comprar packs.
         </div>
       )}
       {!isDeleted && (
-        <form action={setClientBannedAction}>
-          <input type="hidden" name="clientId" value={profileId} />
-          <input type="hidden" name="banned" value={profile.banned ? "false" : "true"} />
-          <button
-            className={
-              profile.banned
-                ? "btn-primary text-xs"
-                : "btn-outline border-red-200 text-xs text-red-700 hover:bg-red-50"
-            }
-          >
-            {profile.banned ? "Reativar conta" : "Suspender conta (bloquear compras)"}
-          </button>
-        </form>
+        <div className="flex flex-wrap items-start gap-2">
+          <form action={setClientBannedAction}>
+            <input type="hidden" name="clientId" value={profileId} />
+            <input type="hidden" name="banned" value={profile.banned ? "false" : "true"} />
+            <button
+              className={
+                profile.banned
+                  ? "btn-primary text-xs"
+                  : "btn-outline border-red-200 text-xs text-red-700 hover:bg-red-50"
+              }
+            >
+              {profile.banned ? "Reativar conta" : "Suspender conta (bloquear compras)"}
+            </button>
+          </form>
+          <DeleteClientSection clientId={profileId} />
+        </div>
       )}
 
-      {/* Dupla escondida — mostramos apenas o total. */}
       <div className="grid gap-3 sm:grid-cols-1">
         <div className="card p-4">
           <div className="text-xs uppercase tracking-wide text-ink-500">Total sessões disponíveis</div>
@@ -107,7 +104,6 @@ export default async function ClientDetail({ params }: { params: { id: string } 
         </div>
       </div>
 
-      {/* Atribuir sessões manualmente — sem o cliente passar pelo site */}
       {isDeleted ? (
         <div className="card p-4 text-sm text-ink-500">
           Esta conta foi removida (RGPD). Não é possível atribuir sessões.

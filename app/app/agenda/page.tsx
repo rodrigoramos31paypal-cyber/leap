@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { getClientCredits } from "@/lib/credits";
 import { BookingFlow } from "./booking-flow";
-import { BackLink } from "@/components/back-link";
 import { getActiveTrainersPublic, getTrainerForClient } from "@/lib/trainer";
 import { formatDateTime } from "@/lib/utils";
 
@@ -64,7 +63,6 @@ export default async function AgendaPage({
   if (!trainerId && actives.length > 1) {
     return (
       <div className="space-y-5">
-        <BackLink />
         <div>
           <h1 className="font-display text-2xl font-bold tracking-tight">Escolhe o treinador</h1>
           <p className="text-sm text-ink-500">Cada treinador tem o seu calendário.</p>
@@ -100,7 +98,6 @@ export default async function AgendaPage({
   if (!trainerId) {
     return (
       <div className="space-y-5">
-        <BackLink />
         <div className="card p-5 text-sm text-ink-500">Sem trainers disponíveis.</div>
       </div>
     );
@@ -120,7 +117,6 @@ export default async function AgendaPage({
 
   return (
     <div className="space-y-5">
-      <BackLink />
       <div>
         <h1 className="font-display text-2xl font-bold tracking-tight">Marcar sessão</h1>
         <p className="text-sm text-ink-500">

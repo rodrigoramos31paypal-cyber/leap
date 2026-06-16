@@ -43,8 +43,8 @@ export default async function AdminLojaPage() {
         </p>
       </div>
 
-      {/* Novo produto */}
-      <details className="card p-5" open={list.length === 0}>
+      {/* Novo produto · fechado por defeito (decisão de produto). */}
+      <details className="card p-5">
         <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
           <Plus size={16} /> Novo produto
         </summary>

@@ -18,9 +18,14 @@ export default async function LojaPage() {
 
   return (
     <div className="flex min-h-[70vh] flex-col">
-      <h1 className="font-display text-2xl font-bold tracking-tight">Loja</h1>
+      <div>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Loja</h1>
+        <p className="text-sm text-ink-500">
+          Packs, ebooks, roupa e suplementos.
+        </p>
+      </div>
 
-      <div className="grid flex-1 grid-cols-2 content-center gap-3">
+      <div className="mt-5 grid flex-1 grid-cols-2 content-center gap-3">
         {bubbles.map((b) => {
           const Icon = b.icon;
           return (

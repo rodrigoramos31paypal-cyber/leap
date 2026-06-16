@@ -1,23 +1,26 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
-import { updateProfileAction } from "./actions";
-import { BackLink } from "@/components/back-link";
+import { changePasswordAction, updateProfileAction } from "./actions";
 import { NotificationPrefToggle } from "@/components/notification-pref-toggle";
 import { DeleteAccountSection } from "@/components/delete-account-section";
-import { ShieldCheck, ChevronRight, User, Bell, NotebookPen, Plus, Sparkles } from "lucide-react";
+import { ShieldCheck, User, Bell, NotebookPen, Plus, Sparkles, KeyRound } from "lucide-react";
 import { NoteEditor } from "@/components/note-editor";
 import { GeneralNoteEditor } from "@/components/general-note-editor";
 import { listMyNotes } from "@/lib/notes";
 import { formatDateTime } from "@/lib/utils";
+import { listVerifiedFactors } from "@/lib/mfa";
+import { EnrollCard } from "./seguranca/enroll-card";
+import { unenrollAction } from "./seguranca/actions";
 
-type TabId = "perfil" | "notas" | "notificacoes" | "seguranca";
+// "seguranca" foi absorvida pela tab "Perfil" — 2FA + mudança de
+// palavra-passe + apagar conta estão agora no mesmo ecrã.
+type TabId = "perfil" | "notas" | "notificacoes";
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: "perfil",       label: "Perfil",       icon: <User size={14} /> },
   { id: "notas",        label: "Notas",        icon: <NotebookPen size={14} /> },
   { id: "notificacoes", label: "Notificações", icon: <Bell size={14} /> },
-  { id: "seguranca",    label: "Segurança",    icon: <ShieldCheck size={14} /> },
 ];
 
 export default async function PerfilPage({
@@ -32,7 +35,7 @@ export default async function PerfilPage({
 
   const activeTab: TabId = ((): TabId => {
     const t = searchParams.tab;
-    if (t === "notas" || t === "notificacoes" || t === "seguranca") return t;
+    if (t === "notas" || t === "notificacoes") return t;
     return "perfil";
   })();
 
@@ -40,7 +43,6 @@ export default async function PerfilPage({
 
   return (
     <div className="space-y-5">
-      <BackLink />
       <div>
         <h1 className="font-display text-2xl font-bold tracking-tight">Perfil</h1>
         <p className="text-sm text-ink-500">Os teus dados, notificações e segurança.</p>
@@ -52,12 +54,13 @@ export default async function PerfilPage({
 
       <TabNav active={activeTab} />
 
-      {activeTab === "perfil" && <PerfilTab profile={tabData.profile} />}
+      {activeTab === "perfil" && (
+        <PerfilTab profile={tabData.profile} factors={tabData.factors ?? []} />
+      )}
       {activeTab === "notas" && <NotasTab notes={tabData.notes ?? []} />}
       {activeTab === "notificacoes" && (
         <NotificacoesTab reminderOn={tabData.reminderOn} creditAlertOn={tabData.creditAlertOn} />
       )}
-      {activeTab === "seguranca" && <SegurancaTab />}
     </div>
   );
 }
@@ -97,6 +100,7 @@ async function loadTabData(
   if (tab === "perfil") {
     const { data: profile } = await supabase.from("profiles").select("*").eq("id", userId).single();
     data.profile = profile;
+    data.factors = await listVerifiedFactors().catch(() => []);
   }
 
   if (tab === "notas") {
@@ -120,7 +124,8 @@ async function loadTabData(
   return data;
 }
 
-function PerfilTab({ profile }: { profile: any }) {
+function PerfilTab({ profile, factors }: { profile: any; factors: any[] }) {
+  const hasFactor = factors.length > 0;
   return (
     <div className="space-y-4">
       <form action={updateProfileAction} className="card space-y-4 p-5">
@@ -139,7 +144,81 @@ function PerfilTab({ profile }: { profile: any }) {
         <button type="submit" className="btn-primary w-full">Guardar</button>
       </form>
 
-      {/* Apagar conta — movido da antiga tab "Dados". */}
+      <section>
+        <h2 className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-ink-500">
+          <ShieldCheck size={14} /> Verificação em dois passos
+        </h2>
+        {hasFactor ? (
+          <div className="card space-y-3 p-5">
+            <div className="flex items-start gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-600">
+                <ShieldCheck size={18} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-semibold">2FA está activa</div>
+                <div className="text-xs text-ink-500">
+                  Vais ter de meter um código do teu app de autenticação ao entrares
+                  em dispositivos novos.
+                </div>
+              </div>
+            </div>
+            {factors.map((f: any) => (
+              <form
+                key={f.id}
+                action={unenrollAction}
+                className="flex items-center justify-between gap-3 rounded-lg border border-ink-900/10 bg-bone-50 px-3 py-2"
+              >
+                <input type="hidden" name="factorId" value={f.id} />
+                <input type="hidden" name="returnTo" value="/app/perfil?tab=perfil" />
+                <div className="text-xs">
+                  <div className="font-semibold">{f.friendly_name || "Authenticator app"}</div>
+                  <div className="text-ink-500">
+                    Configurado em {new Date(f.created_at).toLocaleDateString("pt-PT")}
+                  </div>
+                </div>
+                <button className="btn-outline text-xs text-red-700 hover:bg-red-50 border-red-200">
+                  Desactivar
+                </button>
+              </form>
+            ))}
+          </div>
+        ) : (
+          <EnrollCard returnTo="/app/perfil?tab=perfil" />
+        )}
+      </section>
+
+      <section>
+        <h2 className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-ink-500">
+          <KeyRound size={14} /> Mudar palavra-passe
+        </h2>
+        <form action={changePasswordAction} className="card space-y-4 p-5">
+          <div>
+            <label className="label">Nova palavra-passe</label>
+            <input
+              name="password"
+              type="password"
+              minLength={8}
+              required
+              autoComplete="new-password"
+              className="input"
+              placeholder="Mínimo 8 caracteres"
+            />
+          </div>
+          <div>
+            <label className="label">Confirmar nova palavra-passe</label>
+            <input
+              name="confirm"
+              type="password"
+              minLength={8}
+              required
+              autoComplete="new-password"
+              className="input"
+            />
+          </div>
+          <button type="submit" className="btn-primary w-full">Atualizar palavra-passe</button>
+        </form>
+      </section>
+
       <div className="card p-5">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-500">Apagar conta</h2>
         <DeleteAccountSection />
@@ -227,24 +306,3 @@ function NotificacoesTab({
     </div>
   );
 }
-
-function SegurancaTab() {
-  return (
-    <Link
-      href="/app/perfil/seguranca"
-      className="card flex items-center justify-between p-4 hover:border-gold-400"
-    >
-      <div className="flex items-center gap-3">
-        <span className="grid h-10 w-10 place-items-center rounded-lg bg-bone-100 text-ink-700">
-          <ShieldCheck size={18} />
-        </span>
-        <div>
-          <div className="text-sm font-semibold">Segurança</div>
-          <div className="text-xs text-ink-500">Verificação em dois passos e dispositivos.</div>
-        </div>
-      </div>
-      <ChevronRight size={16} className="text-ink-500" />
-    </Link>
-  );
-}
-
