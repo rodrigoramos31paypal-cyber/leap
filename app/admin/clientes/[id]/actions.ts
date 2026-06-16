@@ -191,7 +191,23 @@ export async function adminDeleteClientAction(
     if (isAccessDenied(rpcErr)) {
       await captureAlert("admin_access_denied", { action: "anonymizeClient", clientId });
     }
-    return { ok: false, error: "Não foi possível apagar a conta. Tenta de novo." };
+    // Surface the underlying cause to the admin so we can tell apart
+    // "missing migration" from "permission denied" from real DB errors.
+    const raw = String((rpcErr as any)?.message ?? "").toLowerCase();
+    if (raw.includes("does not exist") || raw.includes("não encontrado") || (rpcErr as any)?.code === "PGRST202") {
+      return {
+        ok: false,
+        error:
+          "RPC anonymize_client_account em falta na base de dados. Aplica a migration 0081_admin_client_management.sql (Supabase Dashboard → SQL Editor → cola o ficheiro → Run).",
+      };
+    }
+    if (isAccessDenied(rpcErr)) {
+      return { ok: false, error: "Sem permissão para apagar este cliente." };
+    }
+    return {
+      ok: false,
+      error: `Não foi possível apagar a conta: ${(rpcErr as any)?.message ?? "erro desconhecido"}`,
+    };
   }
 
   try {
