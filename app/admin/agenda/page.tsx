@@ -128,34 +128,39 @@ async function CalendarView({
   ]);
   const scope = trainerIds.length > 0 ? trainerIds : [""];
 
-  // Preferência do viewer: mostrar canceladas na agenda? Default false →
-  // esconde-as (evita o calendário cheio de eventos sobrepostos/riscados).
-  let showCancelled = false;
-  if (myTrainerId) {
-    const { data: st } = await (supabase as any)
-      .from("trainer_settings")
-      .select("show_cancelled_in_calendar")
-      .eq("trainer_id", myTrainerId)
-      .maybeSingle();
-    showCancelled = (st as any)?.show_cancelled_in_calendar ?? false;
-  }
-
-  // PERF: pedimos só as colunas usadas pela UI da agenda (antes era `*`).
-  let bookingsQuery = supabase
-    .from("bookings")
-    .select(
-      // purchases:purchase_id(...) → permite mostrar o progresso do pack
-      // no popover ("3/4 sessões" = 3 restantes de um pack de 4) em vez
-      // do saldo agregado do cliente.
-      "id, starts_at, ends_at, session_type, status, client_id, trainer_id, series_id, purchase_id, profiles:client_id(full_name), purchases:purchase_id(sessions_total, sessions_remaining, pack_snapshot)",
-    )
-    .in("trainer_id", scope)
-    .gte("starts_at", rangeStart.toISOString())
-    .lt("starts_at", rangeEnd.toISOString());
-  if (!showCancelled) bookingsQuery = bookingsQuery.neq("status", "cancelled");
-
-  const [{ data: bookings }, { data: blocks }, { data: reserved }] = await Promise.all([
-    bookingsQuery.order("starts_at"),
+  // PERF (audit #2): UMA vaga paralela para TUDO o que não depende do
+  // payload de `bookings`. Antes a preferência show_cancelled, os
+  // bloqueios recorrentes (+skips) e a disponibilidade semanal eram
+  // 'waterfalled' em série (≈4-5 round-trips desnecessários). As
+  // canceladas passam a ser filtradas em JS depois de sabermos a
+  // preferência — em vez de condicionar a query e serializar.
+  const [
+    settingRes,
+    bookingsRes,
+    blocksRes,
+    reservedRes,
+    recurringBlocksRes,
+    blockSkipsRes,
+    availRes,
+  ] = await Promise.all([
+    myTrainerId
+      ? (supabase as any)
+          .from("trainer_settings")
+          .select("show_cancelled_in_calendar")
+          .eq("trainer_id", myTrainerId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    // PERF: só as colunas usadas pela UI (antes era `*`). purchases:
+    // purchase_id(...) → progresso do pack no popover.
+    supabase
+      .from("bookings")
+      .select(
+        "id, starts_at, ends_at, session_type, status, client_id, trainer_id, series_id, purchase_id, profiles:client_id(full_name), purchases:purchase_id(sessions_total, sessions_remaining, pack_snapshot)",
+      )
+      .in("trainer_id", scope)
+      .gte("starts_at", rangeStart.toISOString())
+      .lt("starts_at", rangeEnd.toISOString())
+      .order("starts_at"),
     supabase
       .from("trainer_blocked_times")
       .select("id, trainer_id, starts_at, ends_at, reason")
@@ -168,67 +173,100 @@ async function CalendarView({
       .in("trainer_id", scope)
       .gte("starts_at", rangeStart.toISOString())
       .lt("starts_at", rangeEnd.toISOString()),
+    (supabase as any)
+      .from("trainer_recurring_blocks")
+      .select("id, trainer_id, day_of_week, start_time, end_time, reason, active")
+      .in("trainer_id", scope)
+      .eq("active", true),
+    (supabase as any)
+      .from("trainer_recurring_block_skips")
+      .select("trainer_id, skip_date")
+      .in("trainer_id", scope)
+      .gte("skip_date", isoDate(rangeStart))
+      .lt("skip_date", isoDate(rangeEnd)),
+    view === "week"
+      ? (supabase as any)
+          .from("trainer_availability")
+          .select("day_of_week, start_time, end_time, active")
+          .in("trainer_id", scope)
+          .eq("active", true)
+      : Promise.resolve({ data: [] }),
   ]);
 
-  // PERF (#4): MonthView não consome notesMap — só Day/Week. Saltamos o
-  // round-trip (e o payload das notas) por completo na vista de mês.
-  const notesMap =
+  // Preferência do viewer: mostrar canceladas? Default false → esconde-as
+  // (evita o calendário cheio de eventos sobrepostos/riscados).
+  const showCancelled = (settingRes.data as any)?.show_cancelled_in_calendar ?? false;
+  let bookings = (bookingsRes.data ?? []) as any[];
+  if (!showCancelled) bookings = bookings.filter((b: any) => b.status !== "cancelled");
+  const blocks = blocksRes.data;
+  const reserved = reservedRes.data;
+  const recurringBlocks = recurringBlocksRes.data;
+  const blockSkips = blockSkipsRes.data;
+  const availRows = availRes.data;
+
+  // PERF (audit #2): 2ª (e última) vaga — só os reads que dependem mesmo
+  // de `bookings`, corridos em paralelo entre si.
+  //   • notesMap: notas do treinador por marcação (só Day/Week; o Month
+  //     não consome notas → saltamos o round-trip e o payload).
+  //   • creditRows: saldo de sessões por cliente (purchases confirmadas).
+  const clientIds = Array.from(
+    new Set(bookings.map((b: any) => b.client_id).filter(Boolean)),
+  );
+  const [notesMap, creditRows] = await Promise.all([
     view === "month"
-      ? new Map<string, any>()
-      : await getMyNotesMapForBookings((bookings ?? []).map((b: any) => b.id));
+      ? Promise.resolve(new Map<string, any>())
+      : getMyNotesMapForBookings(bookings.map((b: any) => b.id)),
+    clientIds.length > 0
+      ? (supabase
+          .from("purchases")
+          .select("client_id, sessions_remaining, expires_at, status")
+          .in("client_id", clientIds)
+          .eq("status", "confirmed")
+          .then((r: any) => (r.data ?? []) as any[]))
+      : Promise.resolve([] as any[]),
+  ]);
 
   // Sessões restantes por cliente — soma de `sessions_remaining` em
-  // purchases CONFIRMED e não expiradas. Só relevante em Day/Week
-  // (no Month não há popover por sessão). Saltamos o query no Month.
+  // purchases CONFIRMED e não expiradas.
   const sessionsLeftMap = new Map<string, number>();
-  // "Última sessão / último crédito": IDs das marcações a sinalizar a
-  // vermelho. Um cliente cujo saldo de packs chegou a 0 (gastou o
-  // último crédito) tem a sua ÚLTIMA marcação ativa marcada aqui, para
-  // alertar o treinador de que aquele cliente fica sem sessões.
+  // "Último crédito": IDs das marcações a sinalizar a vermelho. Um cliente
+  // cujo saldo de packs chegou a 0 (gastou o último crédito) tem a sua
+  // ÚLTIMA marcação ativa marcada aqui, para alertar o treinador.
   const lastCreditIds = new Set<string>();
-  {
-    const clientIds = Array.from(
-      new Set((bookings ?? []).map((b: any) => b.client_id).filter(Boolean)),
-    );
-    if (clientIds.length > 0) {
-      const { data: creditRows } = await supabase
-        .from("purchases")
-        .select("client_id, sessions_remaining, expires_at, status")
-        .in("client_id", clientIds)
-        .eq("status", "confirmed");
-      const now = Date.now();
-      for (const row of (creditRows ?? []) as any[]) {
-        if (row.expires_at && new Date(row.expires_at).getTime() < now) continue;
-        sessionsLeftMap.set(
-          row.client_id,
-          (sessionsLeftMap.get(row.client_id) ?? 0) + Number(row.sessions_remaining ?? 0),
-        );
-      }
-
-      // Clientes com saldo de packs == 0 (último crédito gasto). Têm de
-      // ter um registo de saldo (>= 1 pack confirmado) — um cliente sem
-      // packs (ex.: cortesia) não entra no mapa e não é sinalizado.
-      const zeroClients = clientIds.filter(
-        (id: string) => sessionsLeftMap.get(id) === 0,
+  if (clientIds.length > 0) {
+    const now = Date.now();
+    for (const row of creditRows as any[]) {
+      if (row.expires_at && new Date(row.expires_at).getTime() < now) continue;
+      sessionsLeftMap.set(
+        row.client_id,
+        (sessionsLeftMap.get(row.client_id) ?? 0) + Number(row.sessions_remaining ?? 0),
       );
-      if (zeroClients.length > 0) {
-        // A ÚLTIMA marcação ativa (mais tardia no tempo) de cada cliente
-        // sem saldo é a "sessão do último crédito". Procuramos sem
-        // limite de data para apanhar a última real, mesmo fora da
-        // janela visível.
-        const { data: lastRows } = await supabase
-          .from("bookings")
-          .select("id, client_id, starts_at")
-          .in("client_id", zeroClients)
-          .in("trainer_id", scope)
-          .in("status", ["booked", "confirmed"])
-          .order("starts_at", { ascending: false });
-        const seen = new Set<string>();
-        for (const row of (lastRows ?? []) as any[]) {
-          if (seen.has(row.client_id)) continue; // só a mais tardia por cliente
-          seen.add(row.client_id);
-          lastCreditIds.add(row.id);
-        }
+    }
+
+    // Clientes com saldo de packs == 0 (último crédito gasto). Têm de ter
+    // um registo de saldo (>= 1 pack confirmado) — um cliente sem packs
+    // (ex.: cortesia) não entra no mapa e não é sinalizado.
+    const zeroClients = clientIds.filter(
+      (id: string) => sessionsLeftMap.get(id) === 0,
+    );
+    if (zeroClients.length > 0) {
+      // A ÚLTIMA marcação ativa (mais tardia) de cada cliente sem saldo é
+      // a "sessão do último crédito". Sem limite de data para apanhar a
+      // última real, mesmo fora da janela visível. (Depende de creditRows,
+      // por isso fica serial dentro desta vaga — só corre quando há mesmo
+      // clientes a zero.)
+      const { data: lastRows } = await supabase
+        .from("bookings")
+        .select("id, client_id, starts_at")
+        .in("client_id", zeroClients)
+        .in("trainer_id", scope)
+        .in("status", ["booked", "confirmed"])
+        .order("starts_at", { ascending: false });
+      const seen = new Set<string>();
+      for (const row of (lastRows ?? []) as any[]) {
+        if (seen.has(row.client_id)) continue; // só a mais tardia por cliente
+        seen.add(row.client_id);
+        lastCreditIds.add(row.id);
       }
     }
   }
@@ -237,17 +275,7 @@ async function CalendarView({
   // Expandidos em instâncias concretas para o intervalo visível, para
   // renderizarem como "indisponível" e contarem no collapse das linhas.
   // Um "skip" para uma data limpa a recorrência só nesse dia.
-  const { data: recurringBlocks } = await (supabase as any)
-    .from("trainer_recurring_blocks")
-    .select("id, trainer_id, day_of_week, start_time, end_time, reason, active")
-    .in("trainer_id", scope)
-    .eq("active", true);
-  const { data: blockSkips } = await (supabase as any)
-    .from("trainer_recurring_block_skips")
-    .select("trainer_id, skip_date")
-    .in("trainer_id", scope)
-    .gte("skip_date", isoDate(rangeStart))
-    .lt("skip_date", isoDate(rangeEnd));
+  // (recurringBlocks + blockSkips já vieram na 1ª vaga acima.)
   const skipSet = new Set<string>();
   for (const s of (blockSkips ?? []) as any[]) skipSet.add(`${s.trainer_id}:${s.skip_date}`);
 
@@ -282,12 +310,7 @@ async function CalendarView({
   // encolher na vista de semana. Só carregado nessa vista.
   const availMap: AvailMap = new Map();
   if (view === "week") {
-    const { data: av } = await (supabase as any)
-      .from("trainer_availability")
-      .select("day_of_week, start_time, end_time, active")
-      .in("trainer_id", scope)
-      .eq("active", true);
-    for (const row of (av ?? []) as any[]) {
+    for (const row of (availRows ?? []) as any[]) {
       const dow = Number(row.day_of_week);
       const arr = availMap.get(dow) ?? [];
       arr.push([parseHM(String(row.start_time)), parseHM(String(row.end_time))]);

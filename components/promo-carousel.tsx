@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 
 export type PromoBanner = {
@@ -125,12 +126,13 @@ function PromoCard({ b }: { b: PromoBanner }) {
         `}</style>
       )}
       {b.image_url && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        <Image
           src={b.image_url}
           alt={b.title || "slide"}
+          fill
+          sizes="(min-width: 768px) 800px, 100vw"
           onLoad={onImageLoad}
-          className="absolute inset-0 h-full w-full object-cover object-center"
+          className="object-cover object-center"
         />
       )}
       <div className="absolute inset-0 bg-gradient-to-l from-ink-900/65 via-ink-900/20 to-transparent" />

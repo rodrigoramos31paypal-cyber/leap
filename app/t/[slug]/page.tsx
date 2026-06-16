@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import Link from "next/link";
@@ -102,8 +103,13 @@ export default async function PublicTrainerPage({
       <header className="card flex items-start gap-4 p-5">
         <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-2xl bg-ink-900 font-display text-3xl font-black text-gold-400">
           {t.avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={t.avatarUrl} alt={t.fullName} className="h-full w-full object-cover" />
+            <Image
+              src={t.avatarUrl}
+              alt={t.fullName}
+              width={80}
+              height={80}
+              className="h-full w-full object-cover"
+            />
           ) : (
             t.fullName?.[0]?.toUpperCase() ?? "T"
           )}

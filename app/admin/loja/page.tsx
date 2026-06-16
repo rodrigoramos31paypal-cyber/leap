@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { getAccessibleTrainerIds } from "@/lib/trainer";
 import { eur } from "@/lib/utils";
@@ -70,8 +71,13 @@ export default async function AdminLojaPage() {
                   <li key={p.id} className="card overflow-hidden">
                     <div className="flex items-stretch gap-3 p-4">
                       {p.image_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={p.image_url} alt={p.name} className="h-16 w-16 shrink-0 rounded-lg object-cover" />
+                        <Image
+                          src={p.image_url}
+                          alt={p.name}
+                          width={64}
+                          height={64}
+                          className="h-16 w-16 shrink-0 rounded-lg object-cover"
+                        />
                       ) : (
                         <div className="grid h-16 w-16 shrink-0 place-items-center rounded-lg bg-bone-100 text-ink-400 dark:bg-white/5">
                           <ShoppingBag size={18} />
