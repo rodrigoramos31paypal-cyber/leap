@@ -26,7 +26,7 @@ scope multi-trainer e a escapar separadores PostgREST.
 | ID | Severidade | CWE | Título | Exploitability | Status |
 |----|-----------|-----|-------|---------------|--------|
 | S-01 | High | CWE-639 / CWE-89 | Pesquisa admin `/admin/clientes?q=` sem scope + sem escape de separadores PostgREST → PII leakage cross-trainer e filter injection | Autenticado, trainer | FIXED |
-| S-02 | High | CWE-1395 | `next@14.2.33` tem várias CVEs (DoS via Image Optimizer, request smuggling em rewrites, DoS em RSC) — versão fixada bloqueia o upgrade | Anónimo, internet | OPEN (instruções fornecidas) |
+| S-02 | High | CWE-1395 | `next@14.2.33` tem várias CVEs (DoS via Image Optimizer, request smuggling em rewrites, DoS em RSC) — versão fixada bloqueia o upgrade | Anónimo, internet | ACCEPTED (mitigado em edge) |
 | S-03 | Medium | CWE-352 | `/api/notifications/read` aceita POST sem Origin check — defense-in-depth | Cross-site (SameSite=Lax mitiga) | FIXED |
 | S-04 | Medium | CWE-79 | Loja: `<a href={p.link_url}>` sem validação de scheme em `/app/loja/[categoria]` — `javascript:`/`data:` possíveis | Autenticado, trainer malicioso | FIXED |
 | S-05 | Medium | CWE-613 | Cache de claims no middleware (30s) pode servir auth stale após expiração do JWT dentro da janela | Necessita JWT a expirar dentro da janela | ACCEPTED (justificado em-código) |
@@ -155,54 +155,57 @@ confirmar que o servidor não devolve 400 nem 500 (rejeita o `)` por escape).
 
 ---
 
-### S-02 · Vulnerabilidades CVE no `next@14.2.33` `[High]`
+### S-02 · Vulnerabilidades CVE no `next@14.2.33` `[High → ACCEPTED com mitigação em edge]`
 
 **Ficheiro/linhas:** `package.json:18` (`"next": "^14.2.33"`)
 
-**Vulnerabilidade:** `npm audit` reporta múltiplas advisories activas:
+**Vulnerabilidade:** `npm audit` reporta múltiplas advisories activas,
+**todas DoS** (sem leak de dados, sem RCE, sem escalada de privilégios):
 
-- GHSA-9g9p-9gw9-jx7f · DoS via Image Optimizer remotePatterns (CVSS 5.9, moderate). Fixed em `<15.5.10`.
-- GHSA-h25m-26qc-wcjf · DoS por desserialização HTTP em RSC (CVSS 7.5, high). Fixed em `<15.0.8`.
-- GHSA-ggv3-7p47-pfv8 · HTTP request smuggling em rewrites (moderate). Fixed em `<15.5.13`.
-- GHSA-3x4c-7xq6-9pq8 · Crescimento ilimitado do disk cache do `next/image` (moderate). Fixed em `<15.5.14`.
-- GHSA-q4gf-8mx6-v5v3 · DoS em Server Components (CVSS 7.5, high). Fixed em `<15.5.15`.
-- GHSA-8h8q-6873-q5fj · DoS em Server Components (CVSS 7.5, high). Fixed em `<15.5.16`.
+- GHSA-9g9p-9gw9-jx7f · DoS via Image Optimizer remotePatterns (CVSS 5.9).
+- GHSA-h25m-26qc-wcjf · DoS por desserialização HTTP em RSC (CVSS 7.5).
+- GHSA-ggv3-7p47-pfv8 · HTTP request smuggling em rewrites.
+- GHSA-3x4c-7xq6-9pq8 · Crescimento ilimitado do disk cache `next/image`.
+- GHSA-q4gf-8mx6-v5v3 · DoS em Server Components (CVSS 7.5).
+- GHSA-8h8q-6873-q5fj · DoS em Server Components (CVSS 7.5).
 
-A combinação afecta um runtime servido na internet (Vercel). A maioria
-exige upgrade para a linha 15.x — major version bump.
+**Decisão (2026-06-17):** ACCEPTED. Tentativa de upgrade `next@latest`
+(branch `chore/next-15`, abortado) confirmou que o upgrade é major bump
+para Next 16 (e mesmo Next 15) com 32+ erros TS por `cookies()`/`headers()`
+síncrono→async, `revalidateTag` API change, deprecação de `middleware.ts`,
+e restrições novas em `dynamic({ ssr: false })`. Tempo estimado: 1-2 dias
+com testes manuais. Como todos os CVEs são DoS-only, o risco residual é
+degradação de disponibilidade — não compromisso de dados.
 
-**Ataque concreto:** atacante anónimo envia uma sequência de requests
-maliciosamente formados (RSC streaming, rewrites com headers especiais,
-URLs grandes para `/_next/image`) e provoca consumo descontrolado de
-CPU/memória/disco no edge. Não há leak de dados, mas há DoS.
+**Mitigação em edge (substitui o fix de código):**
 
-**Impacto:** Disponibilidade: Medium-High (depende do tráfego). Sem leak
-directo de PII.
+1. **Upstash configurado em produção** (`UPSTASH_REDIS_REST_URL` +
+   `UPSTASH_REDIS_REST_TOKEN` no Vercel) — rate-limit distribuído nos
+   buckets `auth` (5/min), `register` (3/min), `webhook` (60/min),
+   `export` (5/min), `generic` (30/min). Mata as amplificações DoS em
+   endpoints autenticados e tira o limiter do modo in-memory por
+   instância (ver `lib/rate-limit.ts:55-65`).
 
-**Fix recomendado (NÃO aplicado automaticamente neste run — major bump):**
+2. **Vercel WAF rules** (Firewall do projecto):
+   - Path `/_next/image*` → Rate Limit 60 req/min/IP. Mitiga
+     GHSA-9g9p-9gw9-jx7f e GHSA-3x4c-7xq6-9pq8.
+   - Header `next-action` exists → Rate Limit 30 req/min/IP. Mitiga
+     GHSA-h25m, GHSA-q4gf, GHSA-8h8q.
 
-```bash
-npm install next@latest react@latest react-dom@latest
-npm install -D eslint-config-next@latest
-npm audit
-npm run type-check
-npm run build
-```
+**Reavaliação programada:** Q3 2026 ou em janela de manutenção dedicada
+de 2 dias. Caminho recomendado nessa altura: pinar `next@15` (não
+`@latest`), correr `npx @next/codemod@latest next-async-request-api .
+--force`, fix manual de `revalidateTag` (9 calls em `lib/revalidate.ts`),
+renomear `serverComponentsExternalPackages` → `serverExternalPackages`
+no `next.config.mjs`. Testar manualmente login, MFA, marcar sessão,
+comprar pack, agenda drag-and-drop.
 
-Razão para não aplicar automaticamente: passar de Next 14 para 15 é
-**major version bump** — pode tocar em `async` headers/cookies, server
-actions API, ou tipagens. O CLAUDE.md pede explicitamente para não
-quebrar nada. A upgrade exige uma janela de teste manual.
-
-**Mitigação interim (zero código):** o middleware já corre `rateLimit`
-em endpoints sensíveis. Configura Upstash em produção para que o limiter
-deixe de ser in-memory por instância (ver `.env.example:43-61`).
-
-**Como verificar fechado:** correr `npm audit --omit=dev --audit-level=high`
-e confirmar 0 advisories *high*. As moderate de `glob`/`exceljs` podem
-ficar como ACCEPTED — `glob` é dev-dep, `exceljs` ataque exige uuid
-exploit em parse que não corre no nosso path (só geramos XLSX, não os
-lemos).
+**Como verificar a mitigação activa:**
+- Vercel → projecto → Settings → Environment Variables → confirmar
+  `UPSTASH_REDIS_REST_URL` e `UPSTASH_REDIS_REST_TOKEN` em Production.
+- Vercel → projecto → Firewall → ver as duas rules acima activas.
+- `lib/rate-limit.ts:55-65` deixa de logar "[rate-limit] UPSTASH_* em
+  falta" no log drain (sinal de que o limiter distribuído está em uso).
 
 ---
 
@@ -380,11 +383,11 @@ não vaza entre instâncias. ACCEPTED, sem fix.
 
 ## Ordem de remediação sugerida
 
-1. **S-02** — upgrade do Next (HIGH com CVEs internet-facing). Janela
-   de teste manual obrigatória.
-2. **S-01** — FIXED neste run; merge + deploy.
-3. **S-04** — FIXED neste run; merge + deploy.
-4. **S-03 / S-06 / S-07 / S-08** — FIXED neste run; defense-in-depth.
+1. **S-01** — FIXED, deployed 2026-06-17.
+2. **S-04** — FIXED, deployed 2026-06-17.
+3. **S-03 / S-06 / S-07 / S-08** — FIXED, deployed 2026-06-17 (defense-in-depth).
+4. **S-02** — ACCEPTED 2026-06-17 com mitigação em edge (Upstash + Vercel WAF).
+   Reavaliar Q3 2026 ou em janela de manutenção dedicada.
 5. **S-05 / S-09** — ACCEPTED, monitor.
 
 ## Como reproduzir o baseline determinístico
