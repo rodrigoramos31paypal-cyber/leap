@@ -22,21 +22,16 @@ const nextConfig = {
       ? [{ protocol: "https", hostname: supabaseHost, pathname: "/storage/v1/object/**" }]
       : [],
   },
-  // SEC (audit jun/2026): type-check VOLTA a bloquear o build. Era uma
-  // dívida perigosa — com `ignoreBuildErrors` o CI não apanhava erros de
-  // tipo, e tipagem correcta é uma camada de defesa real (ex.: uma action
-  // sem o guard `requireStaff`/`requireOwner`, ou um retorno mal tipado,
-  // seria óbvio em CI). `tsc --noEmit` está limpo, por isso reactivar não
-  // bloqueia nada legítimo. NÃO voltar a pôr ignoreBuildErrors.
+  // Next 16 (jun/2026): a key `eslint` no next.config foi descontinuada —
+  // ESLint passa a ser tarefa do CI/IDE, não do `next build`. O que era
+  // `ignoreDuringBuilds: true` (dívida histórica — erros a limpar primeiro:
+  // ~20× react/no-unescaped-entities e 1× react-hooks/rules-of-hooks)
+  // continua de facto ignorado, já que o build não corre ESLint. Mover
+  // para `npm run lint` num PR dedicado.
   //
-  // eslint: AINDA ignorado no build — há erros reais por limpar primeiro:
-  //   • ~20× react/no-unescaped-entities (aspas em strings PT, cosmético);
-  //   • 1× react-hooks/rules-of-hooks em components/promo-carousel.tsx
-  //     (useEffect condicional — bug real a corrigir).
-  // Depois de limpos, remover este bloco para fechar a dívida por completo.
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  // type-check continua a bloquear o build (`tsc --noEmit` em CI); essa
+  // camada não muda — uma action sem o guard `requireStaff`/`requireOwner`
+  // ou um retorno mal tipado continua a falhar o build.
   experimental: {
     serverActions: {
       bodySizeLimit: "2mb",
@@ -44,13 +39,16 @@ const nextConfig = {
     // PERF (Q1): garante imports por-ícone do lucide-react em vez de puxar
     // o módulo inteiro — bundle de cliente menor e builds mais rápidas.
     optimizePackageImports: ["lucide-react"],
-    // PERF (QW-12 audit jun/2026): mantém estas deps SERVER-only fora do
-    // bundle das funções serverless. exceljs (~1.2 MB) só é usado em
-    // /api/relatorios/export; web-push em /api/push/dispatch; o cliente
-    // Supabase tem dependências nativas que o webpack reempacotaria de
-    // outra forma. Externalizá-las acelera cold starts dos endpoints.
-    serverComponentsExternalPackages: ["exceljs", "web-push", "@supabase/supabase-js"],
   },
+  // PERF (QW-12 audit jun/2026): mantém estas deps SERVER-only fora do
+  // bundle das funções serverless. exceljs (~1.2 MB) só é usado em
+  // /api/relatorios/export; web-push em /api/push/dispatch; o cliente
+  // Supabase tem dependências nativas que o webpack reempacotaria de
+  // outra forma. Externalizá-las acelera cold starts dos endpoints.
+  //
+  // Next 16: renomeado de `experimental.serverComponentsExternalPackages`
+  // para `serverExternalPackages` (top-level, GA).
+  serverExternalPackages: ["exceljs", "web-push", "@supabase/supabase-js"],
   // ──────────────────────────────────────────────────────────────
   // H2 do audit · security headers
   //

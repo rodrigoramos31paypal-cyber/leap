@@ -1,5 +1,4 @@
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { formatTime, BOOKING_STATUS } from "@/lib/utils";
@@ -15,21 +14,11 @@ import { SlotClickLayer } from "./slot-click-layer";
 import { CardSkeleton } from "@/components/skeleton";
 import { AgendaScrollTo7am } from "./agenda-scroll-to-7am";
 import { WeekSwipeNav } from "./week-swipe-nav";
-
-// PERF (QW-11 audit jun/2026): BookingDialog (842 linhas + form state +
-// typeahead search) e RescheduleDialog (195 linhas + drag handlers) só
-// abrem em resposta a eventos do utilizador (click num slot, drag-end
-// num bloco). Carregar o JS deles no bundle inicial da agenda é puro
-// desperdício — saem do caminho crítico via dynamic ssr:false. Cap.
-// ~25 KB minified no bundle de /admin/agenda.
-const BookingDialog = dynamic(
-  () => import("./booking-dialog").then((m) => m.BookingDialog),
-  { ssr: false },
-);
-const RescheduleDialog = dynamic(
-  () => import("./reschedule-dialog").then((m) => m.RescheduleDialog),
-  { ssr: false },
-);
+// PERF (QW-11): lazy/no-SSR dos diálogos. Next 16 não deixa usar
+// `next/dynamic({ ssr: false })` em Server Components — vive num
+// Client Component dedicado (`agenda-dialogs.tsx`) que faz o mesmo
+// truque. Mesmo cap de ~25 KB minified retido.
+import { AgendaDialogs } from "./agenda-dialogs";
 
 type View = "day" | "week" | "month";
 
@@ -110,20 +99,18 @@ export default async function AdminAgendaPage({
         <CalendarView view={view} day={day} rangeStart={rangeStart} rangeEnd={rangeEnd} canBook={canBook} />
       </Suspense>
 
-      {/* BookingDialog "headless": invisível até o utilizador clicar num
-          slot da grelha. Mantém-se montado para apanhar o evento. */}
+      {/* BookingDialog "headless" + RescheduleDialog: invisíveis até o
+          utilizador interagir. Montados num Client Component wrapper
+          (Next 16 — ver agenda-dialogs.tsx). */}
       {canBook && (
-        <BookingDialog
+        <AgendaDialogs
           trainerId={trainerId}
           durations={durations}
           defaultDuration={defaultDuration}
           viewedDate={isoDate(day)}
           packs={packs}
-          hideTrigger
         />
       )}
-
-      {canBook && <RescheduleDialog />}
     </div>
   );
 }
