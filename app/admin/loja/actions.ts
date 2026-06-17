@@ -27,6 +27,24 @@ function validateFile(file: File | null): string | null {
   return null;
 }
 
+// SEC (S-04, audit jun/2026): igual ao safeHttpUrl das promocoes
+// (C-B). React renderiza <a href={...}> sem bloquear esquemas
+// perigosos (javascript:/data:/vbscript:). Sem este gate, um staff
+// podia injectar link_url=javascript:fetch(...) num produto da loja
+// e o JS corria no contexto de qualquer cliente do estudio.
+function safeHttpUrl(raw: string): string | null {
+  const s = raw.trim();
+  if (!s) return null;
+  try {
+    const u = new URL(s);
+    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+    if (!u.hostname) return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
 // Preço em euros (ex: "19,99" ou "19.99") → cêntimos. Vazio → null.
 function parsePriceCents(raw: string): number | null {
   const t = raw.trim().replace(",", ".");
@@ -68,7 +86,7 @@ export async function createProductAction(
   const category = String(formData.get("category") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
-  const linkUrl = String(formData.get("link_url") ?? "").trim();
+  const linkUrlRaw = String(formData.get("link_url") ?? "").trim();
   const priceCents = parsePriceCents(String(formData.get("price") ?? ""));
   const file = formData.get("file") as File | null;
 
@@ -79,6 +97,12 @@ export async function createProductAction(
   if (!name) {
     setFlash("Indica um nome", "error");
     return { ok: false, error: "Indica um nome" };
+  }
+  // S-04: rejeita URL nao http(s). null se vazio.
+  const linkUrl = linkUrlRaw ? safeHttpUrl(linkUrlRaw) : null;
+  if (linkUrlRaw && !linkUrl) {
+    setFlash("Link inválido — usa um URL https://… ou deixa em branco.", "error");
+    return { ok: false, error: "Link inválido." };
   }
   const fileErr = validateFile(file);
   if (fileErr) {
@@ -110,7 +134,7 @@ export async function createProductAction(
     description: description || null,
     price_cents: priceCents,
     image_url: imageUrl,
-    link_url: linkUrl || null,
+    link_url: linkUrl,
   });
   if (error) {
     logError("createProductAction", error);
@@ -129,7 +153,7 @@ export async function updateProductAction(formData: FormData) {
   const category = String(formData.get("category") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
-  const linkUrl = String(formData.get("link_url") ?? "").trim();
+  const linkUrlRaw = String(formData.get("link_url") ?? "").trim();
   const priceCents = parsePriceCents(String(formData.get("price") ?? ""));
   const file = formData.get("file") as File | null;
 
@@ -140,6 +164,12 @@ export async function updateProductAction(formData: FormData) {
   }
   if (!name) {
     setFlash("Indica um nome", "error");
+    return;
+  }
+  // S-04: rejeita URL nao http(s). null se vazio.
+  const linkUrl = linkUrlRaw ? safeHttpUrl(linkUrlRaw) : null;
+  if (linkUrlRaw && !linkUrl) {
+    setFlash("Link inválido — usa um URL https://… ou deixa em branco.", "error");
     return;
   }
   const fileErr = validateFile(file);
@@ -153,7 +183,7 @@ export async function updateProductAction(formData: FormData) {
     name,
     description: description || null,
     price_cents: priceCents,
-    link_url: linkUrl || null,
+    link_url: linkUrl,
     updated_at: new Date().toISOString(),
   };
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 
 // ════════════════════════════════════════════════════════════════
@@ -16,6 +17,25 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
+  // SEC (S-03, audit jun/2026): Origin check defense-in-depth contra
+  // CSRF. SameSite=Lax (default Supabase) ja mitiga a maior parte dos
+  // vectores cross-site para POSTs com JSON, mas alinhamos com o
+  // padrao usado em /api/integrations/[provider]/disconnect. O service
+  // worker chama sempre com Origin == proprio host.
+  const h = headers();
+  const origin = h.get("origin");
+  const host = h.get("host");
+  if (origin) {
+    try {
+      const o = new URL(origin);
+      if (host && o.host !== host) {
+        return NextResponse.json({ error: "forbidden" }, { status: 403 });
+      }
+    } catch {
+      return NextResponse.json({ error: "bad_origin" }, { status: 400 });
+    }
+  }
+
   let id: string | undefined;
   try {
     const body = await request.json();

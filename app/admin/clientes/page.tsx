@@ -91,16 +91,34 @@ async function ClientList({ q, tab, page }: { q: string; tab: Tab; page: number 
   let total = 0;
 
   if (q) {
-    const safe = q.replace(/[%_]/g, (m) => `\\${m}`);
-    const { data, count } = await supabase
-      .from("profiles")
-      .select("id, full_name, email, phone", { count: "exact" })
-      .eq("role", "client")
-      .or(`full_name.ilike.%${safe}%,email.ilike.%${safe}%,phone.ilike.%${safe}%`)
-      .order("full_name")
-      .range(from, to);
-    clients = (data ?? []) as ClientRow[];
-    total = count ?? clients.length;
+    // SEC (S-01, audit jun/2026): defesa em profundidade contra
+    // (a) PII leakage cross-trainer e (b) PostgREST filter injection
+    // na expressao .or(). A pesquisa antes nao filtrava por scope --
+    // RLS profiles (id = auth.uid() OR is_admin()) deixa qualquer staff
+    // ver qualquer cliente do estudio, e num studio multi-trainer o
+    // trainer A enumerava clientes do trainer B (nome+email+telefone)
+    // iterando ?q=<letra>. Fix igual ao C-A em search-action.ts:
+    // restringir aos clientes do scope via getClientIdsInScope.
+    // Tambem o escape de wildcards (%_) deixava de fora os separadores
+    // ,() da gramatica or() do PostgREST -- search-action.ts ja escapa
+    // [%_,()] e e replicado aqui.
+    const safe = q.replace(/[%_,()]/g, (m) => `\\${m}`);
+    const scopeIds = await getClientIdsInScope(trainerIds);
+    if (scopeIds.length === 0) {
+      clients = [];
+      total = 0;
+    } else {
+      const { data, count } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, phone", { count: "exact" })
+        .eq("role", "client")
+        .in("id", scopeIds)
+        .or(`full_name.ilike.%${safe}%,email.ilike.%${safe}%,phone.ilike.%${safe}%`)
+        .order("full_name")
+        .range(from, to);
+      clients = (data ?? []) as ClientRow[];
+      total = count ?? clients.length;
+    }
   } else if (tab === "todos") {
     ({ clients, total } = await loadAllClientsPage(trainerIds, from));
   } else if (tab === "upcoming" || tab === "past") {

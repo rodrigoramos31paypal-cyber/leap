@@ -90,10 +90,25 @@ export function EnrollCard({ returnTo }: { returnTo?: string }) {
       </div>
 
       <div className="rounded-lg border border-ink-900/10 bg-white p-3">
-        <div
-          className="mx-auto h-48 w-48"
-          dangerouslySetInnerHTML={{ __html: extractSvg(enrolling.qrCode) }}
-        />
+        {/* SEC (S-07, audit jun/2026): se o payload e SVG inline injectamos
+            via dangerouslySetInnerHTML (path quente: Supabase devolve SVG).
+            Senao renderizamos <img> com React (passa por escape nativo de
+            atributos) em vez do antigo template literal "<img src=${src}>"
+            que era vulneravel a attribute injection se `src` contivesse
+            aspas. Defense-in-depth contra mudancas do formato Supabase. */}
+        {qrIsSvg(enrolling.qrCode) ? (
+          <div
+            className="mx-auto h-48 w-48"
+            dangerouslySetInnerHTML={{ __html: extractSvgInline(enrolling.qrCode) }}
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={enrolling.qrCode}
+            alt="QR code 2FA"
+            className="mx-auto h-48 w-48"
+          />
+        )}
       </div>
 
       <div>
@@ -149,18 +164,25 @@ export function EnrollCard({ returnTo }: { returnTo?: string }) {
   );
 }
 
-function extractSvg(src: string): string {
+// SEC (S-07): predicado puro -- true se o payload e SVG inline ou
+// data:image/svg+xml (caminho dangerouslySetInnerHTML). Tudo o resto
+// vai por <img> React (escape nativo de atributos).
+function qrIsSvg(src: string): boolean {
+  return src.startsWith("<svg") || src.startsWith("data:image/svg+xml");
+}
+
+// Extrai o SVG bruto do payload (string que comeca por "<svg" ou um
+// data: URL de SVG). Usado SO quando qrIsSvg(src) === true.
+function extractSvgInline(src: string): string {
   if (src.startsWith("<svg")) return src;
-  if (src.startsWith("data:image/svg+xml")) {
-    const comma = src.indexOf(",");
-    if (comma > 0) {
-      const data = src.slice(comma + 1);
-      try {
-        return decodeURIComponent(data);
-      } catch {
-        return atob(data);
-      }
+  const comma = src.indexOf(",");
+  if (comma > 0) {
+    const data = src.slice(comma + 1);
+    try {
+      return decodeURIComponent(data);
+    } catch {
+      return atob(data);
     }
   }
-  return `<img src="${src}" alt="QR code 2FA" class="h-48 w-48" />`;
+  return "";
 }

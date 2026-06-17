@@ -6,8 +6,18 @@ import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
 
 export async function markReadAction(notifId: string) {
+  // SEC (S-06, audit jun/2026): defense-in-depth -- filtro explicito
+  // por user_id em vez de confiar so na RLS "notif: update own". Se a
+  // policy for relaxada/removida numa migration futura, esta action
+  // continua a recusar marcar notificacoes de outro user.
   const supabase = createClient();
-  await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", notifId);
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  await supabase
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("id", notifId)
+    .eq("user_id", user.id);
   revalidatePath("/app");
 }
 
@@ -16,7 +26,14 @@ export async function deleteNotificationAction(formData: FormData) {
   const scope = String(formData.get("scope") ?? "app");
   if (!id) return;
   const supabase = createClient();
-  const { error } = await supabase.from("notifications").delete().eq("id", id);
+  // S-06: defense-in-depth -- filtro explicito por user_id.
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  const { error } = await supabase
+    .from("notifications")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
   if (error) {
     logError("deleteNotificationAction", error);
     setFlash("Não foi possível eliminar", "error");

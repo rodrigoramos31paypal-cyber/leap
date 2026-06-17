@@ -208,13 +208,18 @@ export const emailTemplates = {
   },
   ratingPrompt(args: { clientName: string; when: string; bookingId: string; appUrl: string }) {
     const link = `${args.appUrl.replace(/\/$/, "")}/app/sessao/${args.bookingId}/avaliar`;
+    // SEC (S-08, audit jun/2026): defense-in-depth -- escapar `link` no
+    // atributo href. Hoje appUrl vem de env e bookingId e UUID server-
+    // gerado; o caso patologico (aspas no URL) so e possivel com env mal
+    // configurada. Custo zero, fecha a janela.
+    const linkAttr = escapeHtml(link);
     return {
       subject: "Como correu a tua sessão?",
       html: shell(
         "Como correu a tua sessão?",
         `<p style="margin:0 0 10px">Olá ${escapeHtml(args.clientName)},</p>
          <p style="margin:0 0 10px">A tua sessão de <strong>${escapeHtml(args.when)}</strong> já terminou. Avalia em 10 segundos — ajuda-nos a melhorar.</p>
-         <p style="margin:18px 0"><a href="${link}" style="display:inline-block;padding:10px 18px;background:#caa14a;color:#1a1a1a;border-radius:8px;text-decoration:none;font-weight:600">Avaliar sessão</a></p>
+         <p style="margin:18px 0"><a href="${linkAttr}" style="display:inline-block;padding:10px 18px;background:#caa14a;color:#1a1a1a;border-radius:8px;text-decoration:none;font-weight:600">Avaliar sessão</a></p>
          <p style="margin:0;color:#666;font-size:13px">É opcional. Podes ignorar este email sem problema.</p>`,
       ),
       text: `Avalia a tua sessão de ${args.when}: ${link}`,
