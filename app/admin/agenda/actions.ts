@@ -23,6 +23,7 @@ import { setFlash } from "@/lib/flash";
 import { logError, userFacingRpcError } from "@/lib/errors";
 import { logAudit } from "@/lib/audit";
 import { captureAlert, isAccessDenied } from "@/lib/alerts";
+import { requireStaff } from "@/lib/authz";
 
 // ────────────────────────────────────────────────────────────────
 // lisbonWallClockToUTC · interpreta um par (date, time) submetido
@@ -58,6 +59,12 @@ function lisbonWallClockToUTC(dateIso: string, timeHHMM: string): Date | null {
 }
 
 export async function confirmAttendanceAction(formData: FormData) {
+  // S-10 (audit jun/2026): defesa em profundidade no boundary, igual ao
+  // resto das actions admin. As RPCs SECURITY DEFINER (confirm_booking_
+  // attendance / mark_no_show / cancel_booking / etc.) já validam staff,
+  // mas confiar só nelas é frágil — uma RPC com guard mal escrito = bug
+  // de escalada silenciosa. requireStaff() torna a fronteira explícita.
+  await requireStaff();
   const id = String(formData.get("bookingId") ?? "");
   if (!id) return;
   try {
@@ -80,6 +87,8 @@ export async function confirmAttendanceAction(formData: FormData) {
 export async function updateBookingDurationAction(
   formData: FormData,
 ): Promise<{ ok?: true; conflict?: true; count?: number; error?: string }> {
+  // S-10: defense-in-depth no boundary.
+  await requireStaff();
   const id = String(formData.get("bookingId") ?? "");
   const durationMin = Math.round(Number(formData.get("durationMin") ?? 0));
   const force = formData.get("force") === "true";
@@ -121,6 +130,7 @@ export async function updateBookingDurationAction(
 }
 
 export async function markNoShowAction(formData: FormData) {
+  await requireStaff(); // S-10
   const id = String(formData.get("bookingId") ?? "");
   if (!id) return;
   try {
@@ -136,6 +146,7 @@ export async function markNoShowAction(formData: FormData) {
 // Reverte uma falta para "confirmada" ou "cancelada", com devolução
 // opcional do crédito (escolha do trainer no popover).
 export async function revertNoShowAction(formData: FormData) {
+  await requireStaff(); // S-10
   const id = String(formData.get("bookingId") ?? "");
   const newStatus = String(formData.get("newStatus") ?? "");
   const refundCredit = String(formData.get("refundCredit") ?? "") === "1";
@@ -156,6 +167,7 @@ export async function revertNoShowAction(formData: FormData) {
 }
 
 export async function cancelAdminAction(formData: FormData) {
+  await requireStaff(); // S-10
   const id = String(formData.get("bookingId") ?? "");
   if (!id) return;
   // Motivo opcional escolhido pelo admin (limitado por segurança).
@@ -183,6 +195,7 @@ export async function cancelAdminAction(formData: FormData) {
 }
 
 export async function deleteBlockAction(formData: FormData) {
+  await requireStaff(); // S-10
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   const supabase = createClient();
@@ -226,6 +239,7 @@ const NOEMAIL_DOMAIN = "sem-email.leap.local";
 export async function createAgendaBookingAction(
   formData: FormData,
 ): Promise<{ ok?: true; error?: string; pending?: boolean }> {
+  await requireStaff(); // S-10
   const trainerId = String(formData.get("trainerId") ?? "");
   const mode = String(formData.get("mode") ?? "existing"); // "existing" | "new"
   const date = String(formData.get("date") ?? "");
@@ -418,6 +432,7 @@ export async function rescheduleBookingAdminAction(args: {
   notify: boolean;
   force?: boolean;
 }): Promise<{ ok?: true; error?: string; conflict?: true }> {
+  await requireStaff(); // S-10
   const { bookingId, startsAtIso, durationMin, notify, force } = args;
   if (!bookingId || !startsAtIso || !durationMin) {
     return { error: "Dados em falta para reagendar." };
@@ -472,6 +487,7 @@ export async function rescheduleBookingAdminAction(args: {
 }
 
 export async function addBlockQuickAction(formData: FormData) {
+  await requireStaff(); // S-10
   const trainerId = String(formData.get("trainerId") ?? "");
   let startsAt = String(formData.get("starts_at") ?? "");
   let endsAt = String(formData.get("ends_at") ?? "");
@@ -533,6 +549,7 @@ export async function addBlockQuickAction(formData: FormData) {
 export async function createBusyAction(
   formData: FormData,
 ): Promise<{ ok?: true; error?: string }> {
+  await requireStaff(); // S-10
   const trainerId = String(formData.get("trainerId") ?? "");
   const mode = String(formData.get("mode") ?? "single"); // "single" | "recurring"
   const date = String(formData.get("date") ?? "");
@@ -642,6 +659,7 @@ export async function createBusyAction(
 // (todos os dias-da-semana criados juntos com esse intervalo); sem eles,
 // remove só a regra `id` (esse dia-da-semana).
 export async function deleteRecurringBlockAction(formData: FormData) {
+  await requireStaff(); // S-10
   const id = String(formData.get("id") ?? "");
   const oldFrom = String(formData.get("oldFrom") ?? "");
   const oldTo = String(formData.get("oldTo") ?? "");
@@ -678,6 +696,7 @@ export async function deleteRecurringBlockAction(formData: FormData) {
 export async function updateBlockAction(
   formData: FormData,
 ): Promise<{ ok?: true; error?: string }> {
+  await requireStaff(); // S-10
   const id = String(formData.get("id") ?? "");
   const date = String(formData.get("date") ?? "");
   const from = String(formData.get("from") ?? "");
@@ -724,6 +743,7 @@ export async function updateBlockAction(
 export async function updateRecurringBlockAction(
   formData: FormData,
 ): Promise<{ ok?: true; error?: string }> {
+  await requireStaff(); // S-10
   const id = String(formData.get("id") ?? "");
   const from = String(formData.get("from") ?? "");
   const to = String(formData.get("to") ?? "");
@@ -767,6 +787,7 @@ export async function updateRecurringBlockAction(
 
 // Limpa a recorrência só num dia concreto (cria um "skip" para a data).
 export async function skipRecurringDateAction(formData: FormData) {
+  await requireStaff(); // S-10
   const trainerId = String(formData.get("trainerId") ?? "");
   const date = String(formData.get("date") ?? "");
   if (!trainerId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
