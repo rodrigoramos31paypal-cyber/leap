@@ -8,7 +8,7 @@ export async function resetAction(formData: FormData) {
   if (password.length < 8) {
     redirect("/auth/reset?error=" + encodeURIComponent("Mínimo 8 caracteres."));
   }
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase.auth.updateUser({ password });
   if (error) {
     redirect("/auth/reset?error=" + encodeURIComponent("Não foi possível atualizar."));

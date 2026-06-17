@@ -6,15 +6,16 @@ import { BookingFlow } from "./booking-flow";
 import { getActiveTrainersPublic, getTrainerForClient } from "@/lib/trainer";
 import { formatDateTime } from "@/lib/utils";
 
-export default async function AgendaPage({
-  searchParams,
-}: {
-  searchParams: { rebook?: string; trainer?: string; reschedule?: string };
-}) {
+export default async function AgendaPage(
+  props: {
+    searchParams: Promise<{ rebook?: string; trainer?: string; reschedule?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Modo reagendamento: a marcação antiga só é cancelada ao confirmar o novo
   // horário. Força o trainer e a duração da sessão original.
@@ -164,4 +165,5 @@ export default async function AgendaPage({
         />
       )}
     </div>
-  );}
+  );
+}

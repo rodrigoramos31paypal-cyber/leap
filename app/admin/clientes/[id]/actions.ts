@@ -24,7 +24,7 @@ export async function adjustCreditsAction(formData: FormData) {
   const reason = String(formData.get("reason") ?? "").trim();
   const clientId = String(formData.get("clientId") ?? "");
   if (!purchaseId || !delta || !reason) {
-    setFlash("Faltam dados para ajustar sessões", "error");
+    await setFlash("Faltam dados para ajustar sessões", "error");
     return;
   }
 
@@ -35,13 +35,13 @@ export async function adjustCreditsAction(formData: FormData) {
       targetId: purchaseId,
       payload: { delta, reason },
     });
-    setFlash(
+    await setFlash(
       delta > 0 ? `Adicionadas ${delta} sessão(ões)` : `Removidas ${Math.abs(delta)} sessão(ões)`,
     );
   } catch (e) {
     logError("adjustCreditsAction", e);
     if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "adjustCredits", targetId: purchaseId });
-    setFlash("Não foi possível ajustar sessões", "error");
+    await setFlash("Não foi possível ajustar sessões", "error");
   }
   revalidateCreditsViews(clientId);
 }
@@ -57,30 +57,30 @@ export async function grantPackAction(formData: FormData): Promise<void> {
     | "complimentary";
 
   if (!clientId) {
-    setFlash("Cliente não identificado", "error");
+    await setFlash("Cliente não identificado", "error");
     return;
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: target } = await supabase
     .from("profiles")
     .select("email")
     .eq("id", clientId)
     .maybeSingle();
   if (((target?.email as string | null) ?? "").endsWith("@removido.invalid")) {
-    setFlash("Conta removida — não é possível atribuir sessões.", "error");
+    await setFlash("Conta removida — não é possível atribuir sessões.", "error");
     return;
   }
 
   if (mode === "remove") {
     const count = Number(formData.get("remove_sessions") ?? 0);
     if (!Number.isFinite(count) || count <= 0) {
-      setFlash("Indica um número de sessões válido", "error");
+      await setFlash("Indica um número de sessões válido", "error");
       return;
     }
     const trainerId = (await getCurrentTrainerId()) ?? (await getAccessibleTrainerIds())[0];
     if (!trainerId) {
-      setFlash("Sem trainer associado", "error");
+      await setFlash("Sem trainer associado", "error");
       return;
     }
     try {
@@ -91,16 +91,16 @@ export async function grantPackAction(formData: FormData): Promise<void> {
         payload: { action: "remove_sessions", requested: count, removed },
       });
       if (removed === 0) {
-        setFlash("O cliente não tinha sessões disponíveis para remover", "info");
+        await setFlash("O cliente não tinha sessões disponíveis para remover", "info");
       } else if (removed < count) {
-        setFlash(`Removidas ${removed} sessão(ões) — era o saldo disponível`);
+        await setFlash(`Removidas ${removed} sessão(ões) — era o saldo disponível`);
       } else {
-        setFlash(`Removidas ${removed} sessão(ões) do cliente`);
+        await setFlash(`Removidas ${removed} sessão(ões) do cliente`);
       }
     } catch (e) {
       logError("grantPackAction:remove", e);
       if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "removeClientSessions", clientId });
-      setFlash("Não foi possível remover as sessões", "error");
+      await setFlash("Não foi possível remover as sessões", "error");
     }
     revalidateCreditsViews(clientId);
     return;
@@ -114,14 +114,14 @@ export async function grantPackAction(formData: FormData): Promise<void> {
       const priceEuros = Number(formData.get("custom_price_euros") ?? 0);
       const name = String(formData.get("custom_name") ?? "").trim();
       if (sessions <= 0) {
-        setFlash("Indica um número de sessões válido", "error");
+        await setFlash("Indica um número de sessões válido", "error");
         return;
       }
       sessionsGranted = sessions;
 
       const trainerId = (await getCurrentTrainerId()) ?? (await getAccessibleTrainerIds())[0];
       if (!trainerId) {
-        setFlash("Sem trainer associado", "error");
+        await setFlash("Sem trainer associado", "error");
         return;
       }
 
@@ -137,14 +137,14 @@ export async function grantPackAction(formData: FormData): Promise<void> {
     } else {
       const packId = String(formData.get("packId") ?? "");
       if (!packId) {
-        setFlash("Escolhe um pack", "error");
+        await setFlash("Escolhe um pack", "error");
         return;
       }
       purchaseId = await createPurchase(packId, method, clientId);
     }
 
     await confirmPurchase(purchaseId);
-    setFlash(
+    await setFlash(
       sessionsGranted > 0
         ? `Atribuídas ${sessionsGranted} sessão(ões) ao cliente`
         : "Pack atribuído e confirmado",
@@ -163,7 +163,7 @@ export async function grantPackAction(formData: FormData): Promise<void> {
   } catch (e) {
     logError("grantPackAction", e);
     if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "grantPack", clientId });
-    setFlash("Não foi possível atribuir as sessões", "error");
+    await setFlash("Não foi possível atribuir as sessões", "error");
   }
   revalidateCreditsViews(clientId);
 }
@@ -188,7 +188,7 @@ export async function adminDeleteClientAction(
     return { ok: false, error: "Escreve APAGAR para confirmar." };
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { error: rpcErr } = await (supabase as any).rpc("anonymize_client_account", {
     p_client_id: clientId,
@@ -250,12 +250,12 @@ export async function setClientBannedAction(formData: FormData): Promise<void> {
   const clientId = String(formData.get("clientId") ?? "");
   const banned = formData.get("banned") === "true";
   if (!clientId) {
-    setFlash("Cliente não identificado", "error");
+    await setFlash("Cliente não identificado", "error");
     return;
   }
 
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { error } = await (supabase as any).rpc("set_client_banned", {
       p_client_id: clientId,
       p_banned: banned,
@@ -266,7 +266,7 @@ export async function setClientBannedAction(formData: FormData): Promise<void> {
       targetId: clientId,
       payload: { banned },
     });
-    setFlash(
+    await setFlash(
       banned
         ? "Conta suspensa — o cliente não consegue comprar packs."
         : "Conta reativada.",
@@ -274,7 +274,7 @@ export async function setClientBannedAction(formData: FormData): Promise<void> {
   } catch (e) {
     logError("setClientBannedAction", e);
     if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "setClientBanned", clientId });
-    setFlash("Não foi possível atualizar o estado da conta", "error");
+    await setFlash("Não foi possível atualizar o estado da conta", "error");
   }
   revalidateCreditsViews(clientId);
 }

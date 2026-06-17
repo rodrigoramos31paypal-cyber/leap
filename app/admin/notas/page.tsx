@@ -7,15 +7,16 @@ import { GeneralNoteEditor } from "@/components/general-note-editor";
 import { listMyNotes } from "@/lib/notes";
 import { formatDateTime } from "@/lib/utils";
 
-export default async function AdminNotasPage({
-  searchParams,
-}: {
-  searchParams: { client?: string; q?: string };
-}) {
+export default async function AdminNotasPage(
+  props: {
+    searchParams: Promise<{ client?: string; q?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // ── Vista de cliente específico ──────────────────────────────
   // PERF: aqui fazemos a query focada no cliente (com body completo).

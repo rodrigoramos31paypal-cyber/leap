@@ -65,12 +65,12 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const theme = getTheme();
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const theme = await getTheme();
   // H2: nonce CSP gerado por middleware e propagado via `x-nonce`.
   // Sem nonce (dev local sem middleware), o CSP no production-build
   // não permitiria este `<script>` correr.
-  const nonce = headers().get("x-nonce") ?? undefined;
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html lang="pt-PT" className={theme === "dark" ? "dark" : ""}>
       <body className="min-h-screen bg-bone-50 text-ink-900 antialiased dark:bg-ink-900 dark:text-bone-50">

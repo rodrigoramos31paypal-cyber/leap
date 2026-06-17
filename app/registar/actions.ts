@@ -38,7 +38,7 @@ export async function registerAction(formData: FormData) {
     if (data) trainer_id = trainerIdRaw;
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase.auth.signUp({
     email,
     password,

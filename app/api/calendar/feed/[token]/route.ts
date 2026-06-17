@@ -69,10 +69,8 @@ function eventToVevent(e: Event, now: Date) {
   ].join("\r\n");
 }
 
-export async function GET(
-  req: Request,
-  { params }: { params: { token: string } },
-) {
+export async function GET(req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   // O ficheiro pode chegar como `<uuid>.ics` (apps que requerem
   // extensão na URL) ou só `<uuid>`. Aceitamos ambos.
   const raw = params.token ?? "";

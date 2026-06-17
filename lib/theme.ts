@@ -12,9 +12,9 @@ export const THEME_COOKIE = "leap_theme";
 export const DEFAULT_THEME: Theme = "light";
 
 /** Lê a preferência do utilizador (server-side). */
-export function getTheme(): Theme {
+export async function getTheme(): Promise<Theme> {
   try {
-    const c = cookies().get(THEME_COOKIE)?.value;
+    const c = (await cookies()).get(THEME_COOKIE)?.value;
     return c === "light" || c === "dark" ? c : DEFAULT_THEME;
   } catch {
     return DEFAULT_THEME;

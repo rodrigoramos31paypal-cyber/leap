@@ -11,11 +11,12 @@ const PAGE_SIZE = 10;
 
 type Tab = "confirmados" | "rejeitados" | "pendentes";
 
-export default async function AdminPaymentsPage({
-  searchParams,
-}: {
-  searchParams: { tab?: string; page?: string; q?: string; client?: string };
-}) {
+export default async function AdminPaymentsPage(
+  props: {
+    searchParams: Promise<{ tab?: string; page?: string; q?: string; client?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const q = (searchParams.q ?? "").trim();
   const clientId = (searchParams.client ?? "").trim();
   const rawTab = searchParams.tab ?? "pendentes";
@@ -25,7 +26,7 @@ export default async function AdminPaymentsPage({
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const trainerIds = await getAccessibleTrainerIds();
   const trainerScope = trainerIds.length > 0 ? trainerIds : [""];
 

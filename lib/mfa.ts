@@ -24,7 +24,7 @@ function hashToken(token: string): string {
 /** Lê os factores TOTP do utilizador autenticado. Devolve apenas os já
  *  verificados (configurados com sucesso). */
 export async function listVerifiedFactors() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase.auth.mfa.listFactors();
   if (error || !data) return [];
   return (data.totp ?? []).filter((f) => f.status === "verified");
@@ -41,7 +41,7 @@ export async function listVerifiedFactors() {
 // Cached por request para deduplicar entre layout e páginas.
 export const getAalInfo = cache(
   async (): Promise<{ currentLevel: "aal1" | "aal2"; hasMfa: boolean }> => {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     return {
       currentLevel: (data?.currentLevel as "aal1" | "aal2") ?? "aal1",
@@ -57,7 +57,7 @@ export async function getAal(): Promise<"aal1" | "aal2"> {
 
 /** Verifica se há um cookie trusted-device VÁLIDO para o user dado. */
 export async function isDeviceTrusted(userId: string): Promise<boolean> {
-  const cookie = cookies().get(TRUSTED_DEVICE_COOKIE)?.value;
+  const cookie = (await cookies()).get(TRUSTED_DEVICE_COOKIE)?.value;
   if (!cookie) return false;
   const supabase = createAdminClient();
   const { data } = await (supabase as any)
@@ -92,7 +92,7 @@ export async function trustThisDevice(userId: string, userAgent?: string, ip?: s
     expires_at: expiresAt.toISOString(),
   });
 
-  cookies().set(TRUSTED_DEVICE_COOKIE, token, {
+  (await cookies()).set(TRUSTED_DEVICE_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -103,7 +103,7 @@ export async function trustThisDevice(userId: string, userAgent?: string, ip?: s
 
 /** Limpa cookie + apaga registo deste device da BD. */
 export async function clearTrustedDevice() {
-  const cookie = cookies().get(TRUSTED_DEVICE_COOKIE)?.value;
+  const cookie = (await cookies()).get(TRUSTED_DEVICE_COOKIE)?.value;
   if (cookie) {
     const supabase = createAdminClient();
     await (supabase as any)
@@ -111,5 +111,5 @@ export async function clearTrustedDevice() {
       .delete()
       .eq("token_hash", hashToken(cookie));
   }
-  cookies().delete(TRUSTED_DEVICE_COOKIE);
+  (await cookies()).delete(TRUSTED_DEVICE_COOKIE);
 }

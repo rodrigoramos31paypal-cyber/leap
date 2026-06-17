@@ -59,7 +59,7 @@ export async function searchClientsAction(q: string): Promise<ClientHit[]> {
   const scopeIds = await getClientIdsInScope(trainerIds);
   if (scopeIds.length === 0) return [];
 
-  const supabase = createClient();
+  const supabase = await createClient();
   // Escape de wildcards do ILIKE — mesmo padrão que admin/clientes/page.tsx.
   const safe = term.replace(/[%_,()]/g, (m) => `\\${m}`);
   const { data } = await supabase

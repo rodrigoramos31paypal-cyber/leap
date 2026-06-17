@@ -28,11 +28,11 @@ import { getCurrentTrainerId } from "@/lib/trainer";
 
 export async function savePackAction(formData: FormData) {
   const profile = await requireStaff();
-  const supabase = createClient();
+  const supabase = await createClient();
   const trainerId = String(formData.get("trainerId") ?? "");
   // C-C: owner pode criar para qualquer trainer; trainer só no próprio.
   if (profile.role !== "owner" && trainerId !== (await getCurrentTrainerId())) {
-    setFlash("Sem permissão.", "error");
+    await setFlash("Sem permissão.", "error");
     return;
   }
   const name = String(formData.get("name") ?? "").trim();
@@ -60,16 +60,16 @@ export async function savePackAction(formData: FormData) {
     const msg = (error as any).code === "23505"
       ? "Já existe um pack 'sessão avulsa' activo. Desactiva o existente antes de criar outro."
       : "Não foi possível criar o pack";
-    setFlash(msg, "error");
+    await setFlash(msg, "error");
   } else {
-    setFlash("Pack criado");
+    await setFlash("Pack criado");
   }
   revalidatePackViews();
 }
 
 export async function updatePackAction(formData: FormData) {
   const profile = await requireStaff();
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   // C-C: variante por id — fetch trainer_id da linha antes do update.
@@ -78,9 +78,9 @@ export async function updatePackAction(formData: FormData) {
     .select("trainer_id")
     .eq("id", id)
     .maybeSingle();
-  if (!row) { setFlash("Pack não encontrado", "error"); return; }
+  if (!row) { await setFlash("Pack não encontrado", "error"); return; }
   if (profile.role !== "owner" && row.trainer_id !== (await getCurrentTrainerId())) {
-    setFlash("Sem permissão.", "error");
+    await setFlash("Sem permissão.", "error");
     return;
   }
   const name = String(formData.get("name") ?? "").trim();
@@ -104,16 +104,16 @@ export async function updatePackAction(formData: FormData) {
     const msg = (error as any).code === "23505"
       ? "Já existe um pack 'sessão avulsa' activo. Desactiva o existente primeiro."
       : "Não foi possível guardar";
-    setFlash(msg, "error");
+    await setFlash(msg, "error");
   } else {
-    setFlash("Pack actualizado");
+    await setFlash("Pack actualizado");
   }
   revalidatePackViews();
 }
 
 export async function togglePackAction(formData: FormData) {
   const profile = await requireStaff();
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   // C-C: variante por id.
@@ -122,18 +122,18 @@ export async function togglePackAction(formData: FormData) {
     .select("trainer_id")
     .eq("id", id)
     .maybeSingle();
-  if (!row) { setFlash("Pack não encontrado", "error"); return; }
+  if (!row) { await setFlash("Pack não encontrado", "error"); return; }
   if (profile.role !== "owner" && row.trainer_id !== (await getCurrentTrainerId())) {
-    setFlash("Sem permissão.", "error");
+    await setFlash("Sem permissão.", "error");
     return;
   }
   const active = formData.get("active") === "true";
   const { error } = await supabase.from("packs").update({ active }).eq("id", id);
   if (error) {
     logError("togglePackAction", error);
-    setFlash("Não foi possível alterar o estado", "error");
+    await setFlash("Não foi possível alterar o estado", "error");
   } else {
-    setFlash(active ? "Pack activado" : "Pack desactivado");
+    await setFlash(active ? "Pack activado" : "Pack desactivado");
   }
   revalidatePackViews();
 }
@@ -142,24 +142,24 @@ export async function deletePackAction(formData: FormData) {
   const profile = await requireStaff();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   // C-C: variante por id — fetch trainer_id da linha antes do delete.
   const { data: row } = await supabase
     .from("packs")
     .select("trainer_id")
     .eq("id", id)
     .maybeSingle();
-  if (!row) { setFlash("Pack não encontrado", "error"); return; }
+  if (!row) { await setFlash("Pack não encontrado", "error"); return; }
   if (profile.role !== "owner" && row.trainer_id !== (await getCurrentTrainerId())) {
-    setFlash("Sem permissão.", "error");
+    await setFlash("Sem permissão.", "error");
     return;
   }
   const { error } = await supabase.from("packs").delete().eq("id", id);
   if (error) {
     logError("deletePackAction", error);
-    setFlash("Não foi possível eliminar", "error");
+    await setFlash("Não foi possível eliminar", "error");
   } else {
-    setFlash("Pack eliminado");
+    await setFlash("Pack eliminado");
   }
   revalidatePackViews();
 }

@@ -1,0 +1,277 @@
+"use server";
+
+import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
+import { revalidateCreditsViews } from "@/lib/revalidate";
+import {
+  adjustCredits,
+  createPurchase,
+  createCustomPurchase,
+  confirmPurchase,
+  removeClientSessions,
+} from "@/lib/credits";
+import { getCurrentTrainerId, getAccessibleTrainerIds } from "@/lib/trainer";
+import { createClient } from "@/lib/supabase/server";
+import { setFlash } from "@/lib/flash";
+import { logError } from "@/lib/errors";
+import { logAudit } from "@/lib/audit";
+import { captureAlert, isAccessDenied } from "@/lib/alerts";
+import { requireStaff, requireOwner } from "@/lib/authz";
+
+export async function adjustCreditsAction(formData: FormData) {
+  await requireStaff();
+  const purchaseId = String(formData.get("purchaseId") ?? "");
+  const delta = Number(formData.get("delta") ?? 0);
+  const reason = String(formData.get("reason") ?? "").trim();
+  const clientId = String(formData.get("clientId") ?? "");
+  if (!purchaseId || !delta || !reason) {
+    await setFlash("Faltam dados para ajustar sessões", "error");
+    return;
+  }
+
+  try {
+    await adjustCredits(purchaseId, delta, reason);
+    await logAudit("credits_adjust", {
+      targetTable: "purchases",
+      targetId: purchaseId,
+      payload: { delta, reason },
+    });
+    await setFlash(
+      delta > 0 ? `Adicionadas ${delta} sessão(ões)` : `Removidas ${Math.abs(delta)} sessão(ões)`,
+    );
+  } catch (e) {
+    logError("adjustCreditsAction", e);
+    if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "adjustCredits", targetId: purchaseId });
+    await setFlash("Não foi possível ajustar sessões", "error");
+  }
+  revalidateCreditsViews(clientId);
+}
+
+export async function grantPackAction(formData: FormData): Promise<void> {
+  await requireStaff();
+  const mode = String(formData.get("mode") ?? "pack");
+  const clientId = String(formData.get("clientId") ?? "");
+  const method = String(formData.get("method") ?? "manual_cash") as
+    | "manual_cash"
+    | "manual_mbway"
+    | "manual_revolut"
+    | "complimentary";
+
+  if (!clientId) {
+    await setFlash("Cliente não identificado", "error");
+    return;
+  }
+
+  const supabase = await createClient();
+  const { data: target } = await supabase
+    .from("profiles")
+    .select("email")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (((target?.email as string | null) ?? "").endsWith("@removido.invalid")) {
+    await setFlash("Conta removida — não é possível atribuir sessões.", "error");
+    return;
+  }
+
+  if (mode === "remove") {
+    const count = Number(formData.get("remove_sessions") ?? 0);
+    if (!Number.isFinite(count) || count <= 0) {
+      await setFlash("Indica um número de sessões válido", "error");
+      return;
+    }
+    const trainerId = (await getCurrentTrainerId()) ?? (await getAccessibleTrainerIds())[0];
+    if (!trainerId) {
+      await setFlash("Sem trainer associado", "error");
+      return;
+    }
+    try {
+      const removed = await removeClientSessions(clientId, trainerId, count);
+      await logAudit("credits_adjust", {
+        targetTable: "purchases",
+        targetId: clientId,
+        payload: { action: "remove_sessions", requested: count, removed },
+      });
+      if (removed === 0) {
+        await setFlash("O cliente não tinha sessões disponíveis para remover", "info");
+      } else if (removed < count) {
+        await setFlash(`Removidas ${removed} sessão(ões) — era o saldo disponível`);
+      } else {
+        await setFlash(`Removidas ${removed} sessão(ões) do cliente`);
+      }
+    } catch (e) {
+      logError("grantPackAction:remove", e);
+      if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "removeClientSessions", clientId });
+      await setFlash("Não foi possível remover as sessões", "error");
+    }
+    revalidateCreditsViews(clientId);
+    return;
+  }
+
+  let sessionsGranted = 0;
+  try {
+    let purchaseId: string;
+    if (mode === "custom") {
+      const sessions = Number(formData.get("custom_sessions") ?? 0);
+      const priceEuros = Number(formData.get("custom_price_euros") ?? 0);
+      const name = String(formData.get("custom_name") ?? "").trim();
+      if (sessions <= 0) {
+        await setFlash("Indica um número de sessões válido", "error");
+        return;
+      }
+      sessionsGranted = sessions;
+
+      const trainerId = (await getCurrentTrainerId()) ?? (await getAccessibleTrainerIds())[0];
+      if (!trainerId) {
+        await setFlash("Sem trainer associado", "error");
+        return;
+      }
+
+      purchaseId = await createCustomPurchase({
+        clientId,
+        trainerId,
+        sessions,
+        priceCents: Math.round(priceEuros * 100),
+        sessionType: "individual",
+        paymentMethod: method,
+        name: name || undefined,
+      });
+    } else {
+      const packId = String(formData.get("packId") ?? "");
+      if (!packId) {
+        await setFlash("Escolhe um pack", "error");
+        return;
+      }
+      purchaseId = await createPurchase(packId, method, clientId);
+    }
+
+    await confirmPurchase(purchaseId);
+    await setFlash(
+      sessionsGranted > 0
+        ? `Atribuídas ${sessionsGranted} sessão(ões) ao cliente`
+        : "Pack atribuído e confirmado",
+    );
+
+    await logAudit("pack_grant", {
+      targetTable: "purchases",
+      targetId: purchaseId,
+      payload: {
+        clientId,
+        mode,
+        method,
+        sessionsGranted: sessionsGranted || undefined,
+      },
+    });
+  } catch (e) {
+    logError("grantPackAction", e);
+    if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "grantPack", clientId });
+    await setFlash("Não foi possível atribuir as sessões", "error");
+  }
+  revalidateCreditsViews(clientId);
+}
+
+/**
+ * Apagar (anonimizar) a conta de um cliente como ADMIN. Mesmo
+ * comportamento RGPD do auto-delete: anonimiza profile + apaga PII
+ * sem retenção (compras/marcações ficam por razões contabilísticas).
+ * Type-to-confirm ("APAGAR") para evitar cliques acidentais.
+ */
+export async function adminDeleteClientAction(
+  formData: FormData,
+): Promise<{ ok: boolean; error?: string }> {
+  // H-2 (audit jun/2026): apagar a conta é irreversível e destrói PII.
+  // Restringido a owner — least privilege. (Trainer regular continua
+  // a poder ajustar sessões / atribuir packs.)
+  await requireOwner();
+  const clientId = String(formData.get("clientId") ?? "");
+  const confirm = String(formData.get("confirm") ?? "").trim();
+  if (!clientId) return { ok: false, error: "Cliente não identificado." };
+  if (confirm !== "APAGAR") {
+    return { ok: false, error: "Escreve APAGAR para confirmar." };
+  }
+
+  const supabase = await createClient();
+
+  const { error: rpcErr } = await (supabase as any).rpc("anonymize_client_account", {
+    p_client_id: clientId,
+  });
+  if (rpcErr) {
+    logError("adminDeleteClientAction:anonymize", rpcErr);
+    if (isAccessDenied(rpcErr)) {
+      await captureAlert("admin_access_denied", { action: "anonymizeClient", clientId });
+    }
+    // Surface the underlying cause to the admin so we can tell apart
+    // "missing migration" from "permission denied" from real DB errors.
+    const raw = String((rpcErr as any)?.message ?? "").toLowerCase();
+    if (raw.includes("does not exist") || raw.includes("não encontrado") || (rpcErr as any)?.code === "PGRST202") {
+      return {
+        ok: false,
+        error:
+          "RPC anonymize_client_account em falta na base de dados. Aplica a migration 0081_admin_client_management.sql (Supabase Dashboard → SQL Editor → cola o ficheiro → Run).",
+      };
+    }
+    if (isAccessDenied(rpcErr)) {
+      return { ok: false, error: "Sem permissão para apagar este cliente." };
+    }
+    return {
+      ok: false,
+      error: `Não foi possível apagar a conta: ${(rpcErr as any)?.message ?? "erro desconhecido"}`,
+    };
+  }
+
+  try {
+    const admin = createSupabaseAdmin(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { persistSession: false, autoRefreshToken: false } },
+    );
+    const { error: banErr } = await admin.auth.admin.updateUserById(clientId, {
+      email: `apagado+${clientId}@removido.invalid`,
+      ban_duration: "876000h",
+      user_metadata: {},
+    });
+    if (banErr) logError("adminDeleteClientAction:ban", banErr);
+  } catch (e) {
+    logError("adminDeleteClientAction:ban", e);
+  }
+
+  await logAudit("client_delete_admin", {
+    targetTable: "profiles",
+    targetId: clientId,
+  });
+
+  revalidateCreditsViews(clientId);
+  return { ok: true };
+}
+
+export async function setClientBannedAction(formData: FormData): Promise<void> {
+  // H-2 (audit jun/2026): suspender/reactivar conta é destrutivo
+  // (bloqueia o cliente de comprar packs) e owner-grade. Restringido
+  // a owner para evitar abuso por trainers.
+  await requireOwner();
+  const clientId = String(formData.get("clientId") ?? "");
+  const banned = formData.get("banned") === "true";
+  if (!clientId) {
+    await setFlash("Cliente não identificado", "error");
+    return;
+  }
+
+  try {
+    const supabase = await createClient();
+    const { error } = await (supabase as any).rpc("set_client_banned", {
+      p_client_id: clientId,
+      p_banned: banned,
+    });
+    if (error) throw error;
+    await logAudit(banned ? "client_ban" : "client_unban", {
+      targetTable: "profiles",
+      targetId: clientId,
+      payload: { banned },
+    });
+    await setFlash(
+      banned
+        ? "Conta suspensa — o cliente não consegue comprar packs."
+        : "Conta reativada.",
+    );
+  } catch (e) {
+    logError("setClientBannedAction", e);
+    if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "setClientBanned", clientId });
+    awa

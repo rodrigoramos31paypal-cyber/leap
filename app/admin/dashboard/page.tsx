@@ -28,7 +28,8 @@ function monthParam(year: number, month: number) {
 // de hoje) sao streamed em <Suspense>, cada um com fallback proprio
 // que cabe na mesma "shape" final - sem layout shift.
 // ════════════════════════════════════════════════════════════════
-export default function AdminDashboard({ searchParams }: { searchParams: { m?: string } }) {
+export default async function AdminDashboard(props: { searchParams: Promise<{ m?: string }> }) {
+  const searchParams = await props.searchParams;
   const { year, month } = parseMonth(searchParams.m);
   const prev = new Date(year, month - 1, 1);
   const next = new Date(year, month + 1, 1);
@@ -102,7 +103,7 @@ async function Kpis({ year, month }: { year: number; month: number }) {
   const monthStart = new Date(year, month, 1);
   const monthEnd = new Date(year, month + 1, 1);
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const trainerIds = await getAccessibleTrainerIds();
   const trainerScope = trainerIds.length > 0 ? trainerIds : [""];
 
@@ -217,7 +218,7 @@ async function Kpis({ year, month }: { year: number; month: number }) {
 }
 
 async function TodaySessions() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const trainerIds = await getAccessibleTrainerIds();
   const trainerScope = trainerIds.length > 0 ? trainerIds : [""];
 

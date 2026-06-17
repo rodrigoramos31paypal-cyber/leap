@@ -29,11 +29,10 @@ type View = "day" | "week" | "month";
 // streamed dentro de Suspense para que o utilizador veja a estrutura
 // da pagina de imediato ao mudar para Agenda.
 // ════════════════════════════════════════════════════════════════
-export default async function AdminAgendaPage({
-  searchParams,
-}: {
-  searchParams: { d?: string; view?: string };
+export default async function AdminAgendaPage(props: {
+  searchParams: Promise<{ d?: string; view?: string }>;
 }) {
+  const searchParams = await props.searchParams;
   const view: View = (["day", "week", "month"].includes(searchParams.view ?? "") ? searchParams.view : "week") as View;
   const dayParam = searchParams.d;
   const day = dayParam ? new Date(dayParam + "T00:00:00") : new Date();
@@ -48,7 +47,7 @@ export default async function AdminAgendaPage({
   let defaultDuration = 45;
   let packs: { id: string; name: string; sessions: number; price_cents: number }[] = [];
   if (trainerId) {
-    const sb = createClient();
+    const sb = await createClient();
     const [{ data: st }, { data: pk }] = await Promise.all([
       sb
         .from("trainer_settings")
@@ -120,7 +119,7 @@ async function CalendarView({
 }: {
   view: View; day: Date; rangeStart: Date; rangeEnd: Date; canBook: boolean;
 }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   // PERF (Q5): trainerIds + myTrainerId são independentes (e cached) —
   // corremo-los em paralelo em vez de em série antes do calendário.
   const [trainerIds, myTrainerId] = await Promise.all([

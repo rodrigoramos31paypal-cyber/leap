@@ -5,11 +5,12 @@ import { recoverAction } from "./actions";
 import type { Metadata } from "next";
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
-export default function RecoverPage({
-  searchParams,
-}: {
-  searchParams: { error?: string; success?: string };
-}) {
+export default async function RecoverPage(
+  props: {
+    searchParams: Promise<{ error?: string; success?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   return (
     // Padding-top fixo em vez de justify-center: assim o logo
     // aterra na mesma coordenada Y em /login, /recuperar e /registar
@@ -25,7 +26,6 @@ export default function RecoverPage({
           className="h-auto w-80 dark:invert sm:w-[22rem]"
         />
       </Link>
-
       <div className="w-full max-w-sm">
         <div className="card p-6">
           <h1 className="text-xl font-bold">Recuperar password</h1>

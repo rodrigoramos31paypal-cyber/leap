@@ -1,0 +1,64 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { createClient, getSessionUser } from "@/lib/supabase/server";
+import { setFlash } from "@/lib/flash";
+import { logError } from "@/lib/errors";
+
+// Submete (ou actualiza) a avaliação 1-5⭐ + comentário opcional.
+// Idempotente via unique(booking_id) — upsert.
+export async function submitRatingAction(formData: FormData) {
+  const bookingId = String(formData.get("bookingId") ?? "");
+  const stars = Number(formData.get("stars") ?? 0);
+  const comment = String(formData.get("comment") ?? "").trim() || null;
+
+  if (!bookingId || !Number.isFinite(stars) || stars < 1 || stars > 5) {
+    await setFlash("Avaliação inválida.", "error");
+    return;
+  }
+
+  const user = await getSessionUser();
+  if (!user) redirect("/login");
+
+  const supabase = await createClient();
+  // Carrega a marcação para sabermos o trainer_id (e validar ownership/estado).
+  const { data: b } = await supabase
+    .from("bookings")
+    .select("id, client_id, trainer_id, status, ends_at")
+    .eq("id", bookingId)
+    .eq("client_id", user.id)
+    .maybeSingle();
+
+  if (!b) {
+    await setFlash("Sessão não encontrada.", "error");
+    return;
+  }
+  if (b.status !== "confirmed" || new Date(b.ends_at).getTime() > Date.now()) {
+    await setFlash("Só podes avaliar sessões que já realizaste.", "error");
+    return;
+  }
+
+  // Upsert (a unique constraint em booking_id garante 1 por sessão).
+  const { error } = await (supabase as any)
+    .from("session_ratings")
+    .upsert(
+      {
+        booking_id: b.id,
+        client_id: user.id,
+        trainer_id: b.trainer_id,
+        stars,
+        comment,
+      },
+      { onConflict: "booking_id" },
+    );
+
+  if (error) {
+    logError("submitRatingAction", error);
+    await setFlash("Não foi possível guardar a avaliação.", "error");
+    return;
+  }
+
+  await setFlash("Obrigado pela tua avaliação!");
+  revalidatePath(`/app/sessao/${bookingId}`);
+  redi

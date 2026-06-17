@@ -18,7 +18,7 @@ export async function startPurchaseAction({
   packId: string;
   method: PaymentMethod;
 }): Promise<{ error?: string; redirect?: string }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Sessão expirada." };
 

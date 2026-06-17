@@ -21,7 +21,7 @@ function priceToInput(cents: number | null): string {
 }
 
 export default async function AdminLojaPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const trainerIds = await getAccessibleTrainerIds();
   const scope = trainerIds.length > 0 ? trainerIds : [""];
 

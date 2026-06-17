@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
   // vectores cross-site para POSTs com JSON, mas alinhamos com o
   // padrao usado em /api/integrations/[provider]/disconnect. O service
   // worker chama sempre com Origin == proprio host.
-  const h = headers();
+  const h = await headers();
   const origin = h.get("origin");
   const host = h.get("host");
   if (origin) {
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
   }
   if (!id) return NextResponse.json({ ok: true, skipped: "no_id" });
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 

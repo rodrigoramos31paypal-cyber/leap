@@ -41,11 +41,12 @@ function labelFor(tab: Tab, q: string): string {
 // A lista - que faz varias queries pesadas (bookings, profiles,
 // purchases para chips de sessoes) - e streamed em Suspense.
 // ════════════════════════════════════════════════════════════════
-export default function ClientesPage({
-  searchParams,
-}: {
-  searchParams: { q?: string; tab?: string; page?: string };
-}) {
+export default async function ClientesPage(
+  props: {
+    searchParams: Promise<{ q?: string; tab?: string; page?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const q = (searchParams.q ?? "").trim();
   const tab = resolveTab(searchParams.tab);
   const page = Math.max(1, Number(searchParams.page ?? "1") || 1);
@@ -80,7 +81,7 @@ export default function ClientesPage({
 }
 
 async function ClientList({ q, tab, page }: { q: string; tab: Tab; page: number }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const trainerIds = await getAccessibleTrainerIds();
   const trainerScope = trainerIds.length > 0 ? trainerIds : [""];
 
@@ -210,7 +211,7 @@ async function loadAllClientsPage(
   trainerIds: string[],
   from: number,
 ): Promise<{ clients: ClientRow[]; total: number }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const ids = await getClientIdsInScope(trainerIds);
   if (ids.length === 0) return { clients: [], total: 0 };
   const { data, count } = await supabase
@@ -229,7 +230,7 @@ async function loadScopedClientPage(
   trainerScope: string[],
   from: number,
 ): Promise<{ clients: ClientRow[]; total: number }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { pageIds, total } = await getScopedPageIds(tab, trainerIds, trainerScope, from);
 
   let clients: ClientRow[] = [];
@@ -250,7 +251,7 @@ async function getScopedPageIds(
   trainerScope: string[],
   from: number,
 ): Promise<{ pageIds: string[]; total: number }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   try {
     // `as any`: estas RPCs ainda não estão nos tipos gerados do Supabase.
     // O runtime é correcto; evitamos só novos erros de `tsc`.
@@ -284,7 +285,7 @@ async function getScopedPageIdsFallback(
   trainerScope: string[],
   from: number,
 ): Promise<{ pageIds: string[]; total: number }> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   if (tab === "upcoming" || tab === "past") {
     const nowIso = new Date().toISOString();

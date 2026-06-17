@@ -5,11 +5,12 @@ import { registerAction } from "./actions";
 import type { Metadata } from "next";
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
-export default function RegisterPage({
-  searchParams,
-}: {
-  searchParams: { error?: string; success?: string; trainer?: string };
-}) {
+export default async function RegisterPage(
+  props: {
+    searchParams: Promise<{ error?: string; success?: string; trainer?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const trainerId = searchParams.trainer?.trim() || null;
   return (
     // Padding-top fixo em vez de justify-center: assim o logo
@@ -26,7 +27,6 @@ export default function RegisterPage({
           className="h-auto w-80 dark:invert sm:w-[22rem]"
         />
       </Link>
-
       <div className="w-full max-w-sm">
         <div className="card p-6">
           <h1 className="text-xl font-bold">Criar conta</h1>

@@ -18,10 +18,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // se esta na pagina de notificacoes, marca tudo como lido ANTES de contar
-  const path = headers().get("x-pathname") ?? "";
+  const path = (await headers()).get("x-pathname") ?? "";
   if (path.startsWith("/admin/notificacoes")) {
     await supabase
       .from("notifications")
@@ -55,7 +55,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     redirect(`/login/2fa?next=${encodeURIComponent(target)}`);
   }
 
-  const flash = consumeFlash();
+  const flash = await consumeFlash();
 
   return (
     <div className="min-h-screen bg-bone-50 pb-20 dark:bg-ink-900 md:pb-0">

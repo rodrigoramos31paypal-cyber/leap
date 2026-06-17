@@ -71,10 +71,10 @@ export async function confirmAttendanceAction(formData: FormData) {
     await confirmAttendance(id);
     // Email de "presença confirmada" removido — a notificação in-app
     // ("Marcação aceite") é suficiente para avisar o cliente.
-    setFlash("Marcação aceite");
+    await setFlash("Marcação aceite");
   } catch (e) {
     logError("confirmAttendanceAction", e);
-    setFlash("Não foi possível confirmar", "error");
+    await setFlash("Não foi possível confirmar", "error");
   }
   revalidateBookingViews();
 }
@@ -97,7 +97,7 @@ export async function updateBookingDurationAction(
     return { error: "Duração inválida (5–600 min)." };
   }
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data, error } = await (supabase as any).rpc("update_booking_duration", {
       p_booking_id: id,
       p_duration_min: durationMin,
@@ -117,14 +117,14 @@ export async function updateBookingDurationAction(
     // sozinho INSERE sempre — duplicaria o evento.)
     await removeBookingFromCalendars(id).catch(() => {});
     await pushBookingToCalendars(id).catch(() => {});
-    setFlash(`Duração atualizada para ${durationMin} min.`);
+    await setFlash(`Duração atualizada para ${durationMin} min.`);
     revalidateBookingViews();
     return { ok: true };
   } catch (e) {
     logError("updateBookingDurationAction", e);
     const friendly = userFacingRpcError(e);
     const msg = friendly ?? "Não foi possível alterar a duração.";
-    setFlash(msg, "error");
+    await setFlash(msg, "error");
     return { error: msg };
   }
 }
@@ -135,10 +135,10 @@ export async function markNoShowAction(formData: FormData) {
   if (!id) return;
   try {
     await markNoShow(id);
-    setFlash("Marcado como falta");
+    await setFlash("Marcado como falta");
   } catch (e) {
     logError("markNoShowAction", e);
-    setFlash("Não foi possível marcar como falta", "error");
+    await setFlash("Não foi possível marcar como falta", "error");
   }
   revalidateBookingViews();
 }
@@ -153,14 +153,14 @@ export async function revertNoShowAction(formData: FormData) {
   if (!id || (newStatus !== "confirmed" && newStatus !== "cancelled")) return;
   try {
     await revertNoShow(id, newStatus, refundCredit);
-    setFlash(
+    await setFlash(
       newStatus === "confirmed"
         ? "Falta revertida para confirmada"
         : "Falta revertida e sessão cancelada",
     );
   } catch (e) {
     logError("revertNoShowAction", e);
-    setFlash("Não foi possível reverter a falta", "error");
+    await setFlash("Não foi possível reverter a falta", "error");
   }
   revalidateBookingViews();
   revalidateCreditsViews();
@@ -185,11 +185,11 @@ export async function cancelAdminAction(formData: FormData) {
     });
     await dispatchBookingCancelled(id, true).catch(() => {});
     await removeBookingFromCalendars(id).catch(() => {});
-    setFlash("Sessão cancelada");
+    await setFlash("Sessão cancelada");
   } catch (e) {
     logError("cancelAdminAction", e);
     if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "cancelBooking", targetId: id });
-    setFlash("Não foi possível cancelar", "error");
+    await setFlash("Não foi possível cancelar", "error");
   }
   revalidateBookingViews();
 }
@@ -198,7 +198,7 @@ export async function deleteBlockAction(formData: FormData) {
   await requireStaff(); // S-10
   const id = String(formData.get("id") ?? "");
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // SEC (C4): trainer_blocked_times não passa por RPC com scope check
   // — a RLS de admin write deixa qualquer trainer/owner apagar
@@ -211,17 +211,17 @@ export async function deleteBlockAction(formData: FormData) {
     .eq("id", id)
     .maybeSingle();
   if (!blk) {
-    setFlash("Bloqueio não encontrado", "error");
+    await setFlash("Bloqueio não encontrado", "error");
     return;
   }
   const accessible = await getAccessibleTrainerIds();
   if (!accessible.includes((blk as any).trainer_id)) {
-    setFlash("Sem permissão para remover este bloqueio", "error");
+    await setFlash("Sem permissão para remover este bloqueio", "error");
     return;
   }
 
   await supabase.from("trainer_blocked_times").delete().eq("id", id);
-  setFlash("Bloqueio removido");
+  await setFlash("Bloqueio removido");
   revalidateAvailabilityViews();
 }
 
@@ -376,7 +376,7 @@ export async function createAgendaBookingAction(
     });
 
     // Best-effort: email só faz sentido se o cliente tiver email real.
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: b } = await supabase
       .from("bookings")
       .select("status, profiles:client_id(email)")
@@ -398,7 +398,7 @@ export async function createAgendaBookingAction(
     });
 
     const pending = (b as any)?.status === "booked";
-    setFlash(pending ? "Marcação criada — a aguardar aceitação" : "Marcação criada");
+    await setFlash(pending ? "Marcação criada — a aguardar aceitação" : "Marcação criada");
     revalidateBookingViews(clientId);
     if (grant) revalidateCreditsViews(clientId);
     return { ok: true, pending };
@@ -464,7 +464,7 @@ export async function rescheduleBookingAdminAction(args: {
       targetId: newId,
       payload: { from: bookingId, notify },
     });
-    setFlash("Sessão reagendada");
+    await setFlash("Sessão reagendada");
     revalidateBookingViews();
     return { ok: true };
   } catch (e: any) {
@@ -522,14 +522,14 @@ export async function addBlockQuickAction(formData: FormData) {
   const accessible = await getAccessibleTrainerIds();
   if (!accessible.includes(trainerId)) return;
 
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("trainer_blocked_times").insert({
     trainer_id: trainerId,
     starts_at: start.toISOString(),
     ends_at: end.toISOString(),
     reason,
   });
-  setFlash("Bloqueio criado");
+  await setFlash("Bloqueio criado");
   revalidateAvailabilityViews();
 }
 
@@ -570,7 +570,7 @@ export async function createBusyAction(
     return { error: "Sem permissão para este treinador." };
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   if (mode === "recurring") {
     // Dias-da-semana (0=domingo … 6=sábado). Default: o dia clicado.
@@ -618,7 +618,7 @@ export async function createBusyAction(
         .in("id", skipIdsToClear);
     }
 
-    setFlash("Horário ocupado (recorrente) criado");
+    await setFlash("Horário ocupado (recorrente) criado");
     revalidateAvailabilityViews();
     return { ok: true };
   }
@@ -650,7 +650,7 @@ export async function createBusyAction(
       .upsert({ trainer_id: trainerId, skip_date: date }, { onConflict: "trainer_id,skip_date" });
   }
 
-  setFlash("Horário ocupado criado");
+  await setFlash("Horário ocupado criado");
   revalidateAvailabilityViews();
   return { ok: true };
 }
@@ -664,19 +664,19 @@ export async function deleteRecurringBlockAction(formData: FormData) {
   const oldFrom = String(formData.get("oldFrom") ?? "");
   const oldTo = String(formData.get("oldTo") ?? "");
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: rb } = await (supabase as any)
     .from("trainer_recurring_blocks")
     .select("trainer_id")
     .eq("id", id)
     .maybeSingle();
   if (!rb) {
-    setFlash("Recorrência não encontrada", "error");
+    await setFlash("Recorrência não encontrada", "error");
     return;
   }
   const accessible = await getAccessibleTrainerIds();
   if (!accessible.includes((rb as any).trainer_id)) {
-    setFlash("Sem permissão para remover esta recorrência", "error");
+    await setFlash("Sem permissão para remover esta recorrência", "error");
     return;
   }
   const groupMode = /^\d{2}:\d{2}$/.test(oldFrom) && /^\d{2}:\d{2}$/.test(oldTo);
@@ -688,7 +688,7 @@ export async function deleteRecurringBlockAction(formData: FormData) {
         .eq("end_time", oldTo)
     : q.eq("id", id);
   await q;
-  setFlash("Recorrência removida");
+  await setFlash("Recorrência removida");
   revalidateAvailabilityViews();
 }
 
@@ -707,7 +707,7 @@ export async function updateBlockAction(
     return { error: "Dados inválidos." };
   }
   if (to <= from) return { error: "A hora de fim tem de ser depois do início." };
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: blk } = await supabase
     .from("trainer_blocked_times")
     .select("trainer_id")
@@ -727,7 +727,7 @@ export async function updateBlockAction(
     logError("updateBlockAction", error);
     return { error: "Não foi possível atualizar." };
   }
-  setFlash("Horário ocupado atualizado");
+  await setFlash("Horário ocupado atualizado");
   revalidateAvailabilityViews();
   return { ok: true };
 }
@@ -755,7 +755,7 @@ export async function updateRecurringBlockAction(
     return { error: "Dados inválidos." };
   }
   if (to <= from) return { error: "A hora de fim tem de ser depois do início." };
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: rb } = await (supabase as any)
     .from("trainer_recurring_blocks")
     .select("trainer_id")
@@ -780,7 +780,7 @@ export async function updateRecurringBlockAction(
     logError("updateRecurringBlockAction", error);
     return { error: "Não foi possível atualizar." };
   }
-  setFlash("Recorrência atualizada");
+  await setFlash("Recorrência atualizada");
   revalidateAvailabilityViews();
   return { ok: true };
 }
@@ -793,13 +793,13 @@ export async function skipRecurringDateAction(formData: FormData) {
   if (!trainerId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
   const accessible = await getAccessibleTrainerIds();
   if (!accessible.includes(trainerId)) {
-    setFlash("Sem permissão", "error");
+    await setFlash("Sem permissão", "error");
     return;
   }
-  const supabase = createClient();
+  const supabase = await createClient();
   await (supabase as any)
     .from("trainer_recurring_block_skips")
     .upsert({ trainer_id: trainerId, skip_date: date }, { onConflict: "trainer_id,skip_date" });
-  setFlash("Recorrência limpa neste dia");
+  await setFlash("Recorrência limpa neste dia");
   revalidateAvailabilityViews();
 }

@@ -21,7 +21,7 @@ export default async function ClientDashboard() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const nowIso = new Date().toISOString();
 
   // PERF (audit #3): só a 1ª vaga (above-the-fold: saldo, CTAs, promo,
@@ -212,7 +212,7 @@ async function BelowFold({
   nowIso: string;
   latestPackRows: any[];
 }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const nowMs = Date.now();
 
   const latestPack = (latestPackRows as any[]).find(

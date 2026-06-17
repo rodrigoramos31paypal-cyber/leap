@@ -5,11 +5,12 @@ import { getSessionUser } from "@/lib/supabase/server";
 import { listVerifiedFactors, isMfaSatisfied } from "@/lib/mfa";
 import { verifyChallengeAction } from "./actions";
 
-export default async function TwoFaChallengePage({
-  searchParams,
-}: {
-  searchParams: { error?: string; next?: string };
-}) {
+export default async function TwoFaChallengePage(
+  props: {
+    searchParams: Promise<{ error?: string; next?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const user = await getSessionUser();
   if (!user) redirect("/login");
 

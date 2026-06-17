@@ -69,11 +69,11 @@ export async function addTrainerAction(formData: FormData): Promise<{ error?: st
     ]);
 
     revalidateTeamViews();
-    setFlash("Trainer criado");
+    await setFlash("Trainer criado");
     return { ok: true };
   } catch (e) {
     logError("addTrainerAction", e);
-    setFlash("Não foi possível criar trainer", "error");
+    await setFlash("Não foi possível criar trainer", "error");
     return { error: "Não foi possível criar o trainer." };
   }
 }
@@ -94,7 +94,7 @@ export async function grantAdminByEmailAction(
     await requireOwner();
     const email = String(formData.get("email") ?? "").trim().toLowerCase();
     if (!email) {
-      setFlash("Indica um email.", "error");
+      await setFlash("Indica um email.", "error");
       return { error: "Indica um email." };
     }
 
@@ -108,17 +108,17 @@ export async function grantAdminByEmailAction(
       .maybeSingle();
     if (findErr) {
       logError("grantAdminByEmailAction:find", findErr);
-      setFlash("Não foi possível procurar a conta.", "error");
+      await setFlash("Não foi possível procurar a conta.", "error");
       return { error: "Não foi possível procurar a conta." };
     }
     if (!prof) {
-      setFlash("Não existe nenhuma conta registada com esse email.", "error");
+      await setFlash("Não existe nenhuma conta registada com esse email.", "error");
       return { error: "Conta não registada." };
     }
     const target = prof as { id: string; full_name: string | null; role: string };
 
     if (target.role === "owner") {
-      setFlash(`${target.full_name || email} já é admin.`);
+      await setFlash(`${target.full_name || email} já é admin.`);
       return { ok: true };
     }
 
@@ -130,16 +130,16 @@ export async function grantAdminByEmailAction(
       .eq("id", target.id);
     if (roleErr) {
       logError("grantAdminByEmailAction:promote", roleErr);
-      setFlash("Não foi possível promover a conta.", "error");
+      await setFlash("Não foi possível promover a conta.", "error");
       return { error: "Não foi possível promover a conta." };
     }
 
     revalidateTeamViews();
-    setFlash(`${target.full_name || email} é agora admin.`);
+    await setFlash(`${target.full_name || email} é agora admin.`);
     return { ok: true };
   } catch (e) {
     logError("grantAdminByEmailAction", e);
-    setFlash("Não foi possível conceder admin.", "error");
+    await setFlash("Não foi possível conceder admin.", "error");
     return { error: "Não foi possível conceder admin." };
   }
 }
@@ -157,7 +157,7 @@ export async function makeOwnerOnlyAction(formData: FormData) {
   try {
     await requireOwner();
     const id = String(formData.get("id") ?? "");
-    if (!id) { setFlash("Trainer inválido.", "error"); return; }
+    if (!id) { await setFlash("Trainer inválido.", "error"); return; }
 
     const admin = createAdminClient();
 
@@ -165,7 +165,7 @@ export async function makeOwnerOnlyAction(formData: FormData) {
       .from("trainers")
       .select("id", { count: "exact", head: true });
     if ((total ?? 0) <= 1) {
-      setFlash("É o único trainer do estúdio — não pode ficar sem calendário.", "error");
+      await setFlash("É o único trainer do estúdio — não pode ficar sem calendário.", "error");
       return;
     }
 
@@ -175,7 +175,7 @@ export async function makeOwnerOnlyAction(formData: FormData) {
       .eq("id", id)
       .maybeSingle();
     const t = tr as { id: string; profile_id: string; profiles: { full_name: string | null } | null } | null;
-    if (!t) { setFlash("Trainer não encontrado.", "error"); return; }
+    if (!t) { await setFlash("Trainer não encontrado.", "error"); return; }
 
     const [{ count: bk }, { count: pu }, { count: se }] = await Promise.all([
       admin.from("bookings").select("id", { count: "exact", head: true }).eq("trainer_id", id),
@@ -183,7 +183,7 @@ export async function makeOwnerOnlyAction(formData: FormData) {
       admin.from("booking_series").select("id", { count: "exact", head: true }).eq("trainer_id", id),
     ]);
     if ((bk ?? 0) > 0 || (pu ?? 0) > 0 || (se ?? 0) > 0) {
-      setFlash("Este trainer tem histórico. Transfere o calendário para outra conta primeiro.", "error");
+      await setFlash("Este trainer tem histórico. Transfere o calendário para outra conta primeiro.", "error");
       return;
     }
 
@@ -191,15 +191,15 @@ export async function makeOwnerOnlyAction(formData: FormData) {
     const { error: delErr } = await admin.from("trainers").delete().eq("id", id);
     if (delErr) {
       logError("makeOwnerOnlyAction:del", delErr);
-      setFlash("Não foi possível remover o calendário.", "error");
+      await setFlash("Não foi possível remover o calendário.", "error");
       return;
     }
 
     revalidateTeamViews();
-    setFlash(`${t.profiles?.full_name || "Conta"} é agora só admin (partilha o calendário do estúdio).`);
+    await setFlash(`${t.profiles?.full_name || "Conta"} é agora só admin (partilha o calendário do estúdio).`);
   } catch (e) {
     logError("makeOwnerOnlyAction", e);
-    setFlash("Não foi possível tornar só admin.", "error");
+    await setFlash("Não foi possível tornar só admin.", "error");
   }
 }
 
@@ -208,23 +208,23 @@ export async function revokeAdminByProfileAction(formData: FormData) {
   try {
     const { id: ownerId } = await requireOwner();
     const profileId = String(formData.get("profileId") ?? "");
-    if (!profileId) { setFlash("Conta inválida.", "error"); return; }
+    if (!profileId) { await setFlash("Conta inválida.", "error"); return; }
     if (profileId === ownerId) {
-      setFlash("Não podes revogar a tua própria conta.", "error");
+      await setFlash("Não podes revogar a tua própria conta.", "error");
       return;
     }
     const admin = createAdminClient();
     const { error } = await admin.from("profiles").update({ role: "client" }).eq("id", profileId);
     if (error) {
       logError("revokeAdminByProfileAction", error);
-      setFlash("Não foi possível revogar.", "error");
+      await setFlash("Não foi possível revogar.", "error");
       return;
     }
     revalidateTeamViews();
-    setFlash("Admin revogado — a conta passou a cliente.");
+    await setFlash("Admin revogado — a conta passou a cliente.");
   } catch (e) {
     logError("revokeAdminByProfileAction", e);
-    setFlash("Não foi possível revogar.", "error");
+    await setFlash("Não foi possível revogar.", "error");
   }
 }
 
@@ -240,18 +240,18 @@ export async function makeStudioTrainerAction(formData: FormData) {
   try {
     await requireOwner();
     const profileId = String(formData.get("profileId") ?? "");
-    if (!profileId) { setFlash("Conta inválida.", "error"); return; }
+    if (!profileId) { await setFlash("Conta inválida.", "error"); return; }
 
     const admin = createAdminClient();
 
     const { data: trainers } = await admin.from("trainers").select("id, profile_id");
     const list = (trainers ?? []) as { id: string; profile_id: string }[];
     if (list.length !== 1) {
-      setFlash("Só é possível com um único trainer no estúdio.", "error");
+      await setFlash("Só é possível com um único trainer no estúdio.", "error");
       return;
     }
     if (list[0].profile_id === profileId) {
-      setFlash("Esta conta já é o treinador.", "error");
+      await setFlash("Esta conta já é o treinador.", "error");
       return;
     }
 
@@ -262,15 +262,15 @@ export async function makeStudioTrainerAction(formData: FormData) {
       .eq("id", list[0].id);
     if (movErr) {
       logError("makeStudioTrainerAction:move", movErr);
-      setFlash("Não foi possível transferir o calendário.", "error");
+      await setFlash("Não foi possível transferir o calendário.", "error");
       return;
     }
 
     revalidateTeamViews();
-    setFlash("Calendário transferido — esta conta é agora o treinador.");
+    await setFlash("Calendário transferido — esta conta é agora o treinador.");
   } catch (e) {
     logError("makeStudioTrainerAction", e);
-    setFlash("Não foi possível transferir.", "error");
+    await setFlash("Não foi possível transferir.", "error");
   }
 }
 
@@ -280,8 +280,8 @@ export async function toggleTrainerActiveAction(formData: FormData) {
   const active = formData.get("active") === "true";
   const admin = createAdminClient();
   const { error } = await admin.from("trainers").update({ active }).eq("id", id);
-  if (error) { logError("toggleTrainerActiveAction", error); setFlash("Não foi possível alterar o estado", "error"); }
-  else setFlash(active ? "Trainer activado" : "Trainer desactivado");
+  if (error) { logError("toggleTrainerActiveAction", error); await setFlash("Não foi possível alterar o estado", "error"); }
+  else await setFlash(active ? "Trainer activado" : "Trainer desactivado");
   revalidateTeamViews();
 }
 
@@ -304,7 +304,7 @@ export async function demoteTrainerAction(formData: FormData) {
   try {
     const { id: ownerId } = await requireOwner();
     const id = String(formData.get("id") ?? "");
-    if (!id) { setFlash("Trainer inválido.", "error"); return; }
+    if (!id) { await setFlash("Trainer inválido.", "error"); return; }
 
     const admin = createAdminClient();
 
@@ -316,7 +316,7 @@ export async function demoteTrainerAction(formData: FormData) {
       .maybeSingle();
     if (trErr || !tr) {
       logError("demoteTrainerAction:load", trErr);
-      setFlash("Trainer não encontrado.", "error");
+      await setFlash("Trainer não encontrado.", "error");
       return;
     }
     const t = tr as { id: string; profile_id: string; profiles: { full_name: string | null; role: string } | null };
@@ -327,7 +327,7 @@ export async function demoteTrainerAction(formData: FormData) {
 
     // Nunca despromover a própria conta.
     if (profileId === ownerId) {
-      setFlash("Não podes remover a tua própria conta.", "error");
+      await setFlash("Não podes remover a tua própria conta.", "error");
       return;
     }
 
@@ -340,7 +340,7 @@ export async function demoteTrainerAction(formData: FormData) {
       .in("status", ["booked", "confirmed"])
       .gte("starts_at", nowIso);
     if ((scheduled ?? 0) > 0) {
-      setFlash(
+      await setFlash(
         `Tem ${scheduled} sessão(ões) agendada(s). Cancela-as ou conclui antes de ${isOwner ? "revogar" : "remover"}.`,
         "error",
       );
@@ -354,7 +354,7 @@ export async function demoteTrainerAction(formData: FormData) {
       .eq("id", profileId);
     if (roleErr) {
       logError("demoteTrainerAction:demote", roleErr);
-      setFlash("Não foi possível remover.", "error");
+      await setFlash("Não foi possível remover.", "error");
       return;
     }
 
@@ -375,13 +375,13 @@ export async function demoteTrainerAction(formData: FormData) {
     }
 
     revalidateTeamViews();
-    setFlash(
+    await setFlash(
       isOwner
         ? `Admin revogado — ${name ?? "a conta"} passou a cliente.`
         : `Trainer removido — ${name ?? "a conta"} passou a cliente.`,
     );
   } catch (e) {
     logError("demoteTrainerAction", e);
-    setFlash("Não foi possível remover.", "error");
+    await setFlash("Não foi possível remover.", "error");
   }
 }

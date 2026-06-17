@@ -15,7 +15,7 @@ export type SessionNote = {
 
 /** Obtém a nota do autor para um booking (ou null). */
 export async function getMyNoteForBooking(bookingId: string): Promise<SessionNote | null> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("session_notes")
     .select("*")
@@ -39,7 +39,7 @@ export async function listMyNotes(opts?: {
   include?: "meta" | "full";
 }) {
   const include = opts?.include ?? "full";
-  const supabase = createClient();
+  const supabase = await createClient();
   const cols =
     include === "meta"
       ? "id, booking_id, subject_id, created_at, updated_at, bookings:booking_id(id, starts_at, client_id, profiles:client_id(full_name, email, phone)), subject:subject_id(id, full_name, email, phone)"
@@ -94,7 +94,7 @@ export async function getRecentSessionsBetween(
   trainerId: string,
   limit = 3,
 ) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("bookings")
     .select("id, starts_at, session_type, status")
@@ -112,7 +112,7 @@ export async function getRecentSessionsForClient(
   limit = 3,
 ) {
   if (trainerIds.length === 0) return [];
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("bookings")
     .select("id, starts_at, session_type, status, trainer_id")
@@ -137,7 +137,7 @@ export async function getClientNotesMapForBookings(
 ): Promise<Map<string, SessionNote>> {
   const map = new Map<string, SessionNote>();
   if (bookingIds.length === 0) return map;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("session_notes")
     .select("booking_id, body")
@@ -152,7 +152,7 @@ export async function getClientNotesMapForBookings(
 export async function getMyNotesMapForBookings(bookingIds: string[]): Promise<Map<string, SessionNote>> {
   const map = new Map<string, SessionNote>();
   if (bookingIds.length === 0) return map;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("session_notes")
     .select("booking_id, body")

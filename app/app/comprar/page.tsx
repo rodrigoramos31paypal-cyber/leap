@@ -6,11 +6,12 @@ import { SingleSessionCard } from "./single-session-card";
 import { BackLink } from "@/components/back-link";
 import { getActiveTrainersPublic, getTrainerForClient } from "@/lib/trainer";
 
-export default async function BuyPackPage({ searchParams }: { searchParams: { trainer?: string } }) {
+export default async function BuyPackPage(props: { searchParams: Promise<{ trainer?: string }> }) {
+  const searchParams = await props.searchParams;
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const actives = await getActiveTrainersPublic();
   const preselected = searchParams.trainer ?? (await getTrainerForClient(user.id));

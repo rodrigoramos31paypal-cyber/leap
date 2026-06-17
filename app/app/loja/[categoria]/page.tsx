@@ -20,14 +20,15 @@ function safeHref(url: string | null | undefined): string | undefined {
   return /^https?:\/\//i.test(url) ? url : undefined;
 }
 
-export default async function LojaCategoriaPage({ params }: { params: { categoria: string } }) {
+export default async function LojaCategoriaPage(props: { params: Promise<{ categoria: string }> }) {
+  const params = await props.params;
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
   const meta = CATS[params.categoria];
   if (!meta) notFound();
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: products } = await (supabase as any)
     .from("store_products")
     .select("id, name, description, price_cents, image_url, link_url")

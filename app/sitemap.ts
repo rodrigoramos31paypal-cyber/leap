@@ -30,7 +30,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Trainers activos · usa o cliente Supabase normal (RLS de 0045
   // permite anon ler `trainers` activos).
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data } = await supabase
       .from("trainers")
       .select("slug, updated_at")

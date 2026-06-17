@@ -14,14 +14,14 @@ export async function submitRatingAction(formData: FormData) {
   const comment = String(formData.get("comment") ?? "").trim() || null;
 
   if (!bookingId || !Number.isFinite(stars) || stars < 1 || stars > 5) {
-    setFlash("Avaliação inválida.", "error");
+    await setFlash("Avaliação inválida.", "error");
     return;
   }
 
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   // Carrega a marcação para sabermos o trainer_id (e validar ownership/estado).
   const { data: b } = await supabase
     .from("bookings")
@@ -31,11 +31,11 @@ export async function submitRatingAction(formData: FormData) {
     .maybeSingle();
 
   if (!b) {
-    setFlash("Sessão não encontrada.", "error");
+    await setFlash("Sessão não encontrada.", "error");
     return;
   }
   if (b.status !== "confirmed" || new Date(b.ends_at).getTime() > Date.now()) {
-    setFlash("Só podes avaliar sessões que já realizaste.", "error");
+    await setFlash("Só podes avaliar sessões que já realizaste.", "error");
     return;
   }
 
@@ -55,11 +55,11 @@ export async function submitRatingAction(formData: FormData) {
 
   if (error) {
     logError("submitRatingAction", error);
-    setFlash("Não foi possível guardar a avaliação.", "error");
+    await setFlash("Não foi possível guardar a avaliação.", "error");
     return;
   }
 
-  setFlash("Obrigado pela tua avaliação!");
+  await setFlash("Obrigado pela tua avaliação!");
   revalidatePath(`/app/sessao/${bookingId}`);
   redirect(`/app/sessao/${bookingId}`);
 }

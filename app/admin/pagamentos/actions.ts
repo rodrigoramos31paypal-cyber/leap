@@ -17,11 +17,11 @@ export async function confirmPurchaseAction(formData: FormData) {
     await confirmPurchase(id);
     await logAudit("purchase_confirm", { targetTable: "purchases", targetId: id });
     await dispatchPurchaseConfirmed(id).catch(() => {});
-    setFlash("Pagamento confirmado");
+    await setFlash("Pagamento confirmado");
   } catch (e) {
     logError("confirmPurchaseAction", e);
     if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "confirmPurchase", targetId: id });
-    setFlash("Não foi possível confirmar o pagamento", "error");
+    await setFlash("Não foi possível confirmar o pagamento", "error");
   }
   revalidateCreditsViews();
 }
@@ -38,11 +38,11 @@ export async function rejectPurchaseAction(formData: FormData) {
       targetId: id,
       payload: reason ? { reason } : undefined,
     });
-    setFlash("Pagamento rejeitado");
+    await setFlash("Pagamento rejeitado");
   } catch (e) {
     logError("rejectPurchaseAction", e);
     if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "rejectPurchase", targetId: id });
-    setFlash("Não foi possível rejeitar", "error");
+    await setFlash("Não foi possível rejeitar", "error");
   }
   revalidateCreditsViews();
 }
@@ -62,11 +62,11 @@ export async function cancelConfirmedPurchaseAction(formData: FormData) {
       targetId: id,
       payload: reason ? { reason } : undefined,
     });
-    setFlash("Pagamento cancelado");
+    await setFlash("Pagamento cancelado");
   } catch (e) {
     logError("cancelConfirmedPurchaseAction", e);
     if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "cancelConfirmedPurchase", targetId: id });
-    setFlash("Não foi possível cancelar o pagamento", "error");
+    await setFlash("Não foi possível cancelar o pagamento", "error");
   }
   revalidateCreditsViews();
 }

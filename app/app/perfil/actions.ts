@@ -12,33 +12,33 @@ import { revalidateProfileViews } from "@/lib/revalidate";
 // pedimos confirmação para evitar erros e exigimos um mínimo de 8 chars
 // — igual ao fluxo de reset.
 export async function changePasswordAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
   const password = String(formData.get("password") ?? "");
   const confirm = String(formData.get("confirm") ?? "");
   if (password.length < 8) {
-    setFlash("A palavra-passe tem de ter pelo menos 8 caracteres.", "error");
+    await setFlash("A palavra-passe tem de ter pelo menos 8 caracteres.", "error");
     redirect("/app/perfil?tab=perfil");
   }
   if (password !== confirm) {
-    setFlash("As palavras-passe não coincidem.", "error");
+    await setFlash("As palavras-passe não coincidem.", "error");
     redirect("/app/perfil?tab=perfil");
   }
 
   const { error } = await supabase.auth.updateUser({ password });
   if (error) {
     logError("changePasswordAction", error);
-    setFlash("Não foi possível atualizar a palavra-passe.", "error");
+    await setFlash("Não foi possível atualizar a palavra-passe.", "error");
     redirect("/app/perfil?tab=perfil");
   }
-  setFlash("Palavra-passe atualizada");
+  await setFlash("Palavra-passe atualizada");
   redirect("/app/perfil?tab=perfil");
 }
 
 export async function updateProfileAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
@@ -52,9 +52,9 @@ export async function updateProfileAction(formData: FormData) {
 
   if (error) {
     logError("updateProfileAction", error);
-    setFlash("Não foi possível guardar o perfil", "error");
+    await setFlash("Não foi possível guardar o perfil", "error");
   } else {
-    setFlash("Perfil actualizado");
+    await setFlash("Perfil actualizado");
   }
   revalidateProfileViews(user.id);
   redirect("/app/perfil?ok=1");
@@ -72,7 +72,7 @@ export async function deleteAccountAction(
     return { ok: false, error: "Escreve APAGAR para confirmar." };
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Sessão expirada. Volta a entrar." };
   const uid = user.id;

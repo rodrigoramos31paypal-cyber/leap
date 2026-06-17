@@ -88,31 +88,31 @@ export async function createBannerAction(formData: FormData) {
   // C-B: rejeita URLs não http(s). null se vazio.
   const linkUrl = linkUrlRaw ? safeHttpUrl(linkUrlRaw) : null;
   if (linkUrlRaw && !linkUrl) {
-    setFlash("Link inválido — usa um URL https://… ou deixa em branco.", "error");
+    await setFlash("Link inválido — usa um URL https://… ou deixa em branco.", "error");
     return;
   }
 
   const fileErr = validateFile(file);
   if (fileErr) {
-    setFlash(fileErr, "error");
+    await setFlash(fileErr, "error");
     return;
   }
 
   const scope = await getAccessibleTrainerIds();
   const trainerId = (await getCurrentTrainerId()) ?? scope[0];
   if (!trainerId) {
-    setFlash("Sem trainer associado", "error");
+    await setFlash("Sem trainer associado", "error");
     return;
   }
 
   // Limite de 3 slides (defesa em profundidade — a UI também esconde o form).
-  const supabase = createClient();
+  const supabase = await createClient();
   const { count } = await (supabase as any)
     .from("promo_banners")
     .select("id", { count: "exact", head: true })
     .in("trainer_id", scope.length ? scope : [""]);
   if ((count ?? 0) >= MAX_SLIDES) {
-    setFlash(`Máximo de ${MAX_SLIDES} slides. Remove um para adicionar outro.`, "error");
+    await setFlash(`Máximo de ${MAX_SLIDES} slides. Remove um para adicionar outro.`, "error");
     return;
   }
 
@@ -120,7 +120,7 @@ export async function createBannerAction(formData: FormData) {
   if (file && file.size > 0) {
     imageUrl = await uploadSlideImage(trainerId, file);
     if (!imageUrl) {
-      setFlash("Não foi possível carregar a imagem", "error");
+      await setFlash("Não foi possível carregar a imagem", "error");
       return;
     }
   }
@@ -135,9 +135,9 @@ export async function createBannerAction(formData: FormData) {
   });
   if (error) {
     logError("createBannerAction", error);
-    setFlash("Não foi possível criar o slide", "error");
+    await setFlash("Não foi possível criar o slide", "error");
   } else {
-    setFlash("Slide criado");
+    await setFlash("Slide criado");
   }
   revalidate();
 }
@@ -156,13 +156,13 @@ export async function updateBannerAction(formData: FormData) {
   // C-B: rejeita URLs não http(s). null se vazio.
   const linkUrl = linkUrlRaw ? safeHttpUrl(linkUrlRaw) : null;
   if (linkUrlRaw && !linkUrl) {
-    setFlash("Link inválido — usa um URL https://… ou deixa em branco.", "error");
+    await setFlash("Link inválido — usa um URL https://… ou deixa em branco.", "error");
     return;
   }
 
   const fileErr = validateFile(file);
   if (fileErr) {
-    setFlash(fileErr, "error");
+    await setFlash(fileErr, "error");
     return;
   }
 
@@ -180,20 +180,20 @@ export async function updateBannerAction(formData: FormData) {
     if (trainerId) {
       const url = await uploadSlideImage(trainerId, file);
       if (!url) {
-        setFlash("Não foi possível carregar a imagem", "error");
+        await setFlash("Não foi possível carregar a imagem", "error");
         return;
       }
       patch.image_url = url;
     }
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await (supabase as any).from("promo_banners").update(patch).eq("id", id);
   if (error) {
     logError("updateBannerAction", error);
-    setFlash("Não foi possível guardar", "error");
+    await setFlash("Não foi possível guardar", "error");
   } else {
-    setFlash("Slide actualizado");
+    await setFlash("Slide actualizado");
   }
   revalidate();
 }
@@ -203,16 +203,16 @@ export async function toggleBannerAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const active = String(formData.get("active") ?? "") === "1";
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await (supabase as any)
     .from("promo_banners")
     .update({ active, updated_at: new Date().toISOString() })
     .eq("id", id);
   if (error) {
     logError("toggleBannerAction", error);
-    setFlash("Não foi possível atualizar", "error");
+    await setFlash("Não foi possível atualizar", "error");
   } else {
-    setFlash(active ? "Slide activado" : "Slide desactivado");
+    await setFlash(active ? "Slide activado" : "Slide desactivado");
   }
   revalidate();
 }
@@ -221,7 +221,7 @@ export async function deleteBannerAction(formData: FormData) {
   await requireStaff();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Buscamos a imagem antes de apagar a linha para limpar o storage.
   const { data: row } = await (supabase as any)
@@ -233,7 +233,7 @@ export async function deleteBannerAction(formData: FormData) {
   const { error } = await (supabase as any).from("promo_banners").delete().eq("id", id);
   if (error) {
     logError("deleteBannerAction", error);
-    setFlash("Não foi possível remover", "error");
+    await setFlash("Não foi possível remover", "error");
     revalidate();
     return;
   }
@@ -246,6 +246,6 @@ export async function deleteBannerAction(formData: FormData) {
     if (rmErr) logError("deleteBannerAction:storage", rmErr);
   }
 
-  setFlash("Slide removido");
+  await setFlash("Slide removido");
   revalidate();
 }

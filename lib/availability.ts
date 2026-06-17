@@ -48,7 +48,7 @@ export async function getAvailableSlots(args: {
   durationMin: number;
 }): Promise<Slot[]> {
   const { trainerId, date, durationMin } = args;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Componentes do dia-calendário (date = meia-noite UTC de "YYYY-MM-DD").
   const y = date.getUTCFullYear();

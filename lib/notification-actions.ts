@@ -13,7 +13,7 @@ export async function setNotificationPref(
   kind: string,
   enabled: boolean,
 ): Promise<{ ok: boolean }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false };
 
@@ -29,7 +29,7 @@ export async function setNotificationPref(
 }
 
 export async function syncSessionReminders(): Promise<number> {
-  const supabase = createClient();
+  const supabase = await createClient();
   // RPC SECURITY DEFINER, limitada a auth.uid(); idempotente via dedup.
   const { data, error } = await (supabase as any).rpc("claim_due_session_reminders");
   if (error) return 0;
@@ -41,7 +41,7 @@ export async function savePushSubscription(sub: {
   p256dh: string;
   auth: string;
 }): Promise<{ ok: boolean }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user || !sub.endpoint) return { ok: false };
 

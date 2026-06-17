@@ -11,8 +11,9 @@ import { GrantPackForm } from "./grant-pack-form";
 import { setClientBannedAction } from "./actions";
 import { DeleteClientSection } from "./delete-client-section";
 
-export default async function ClientDetail({ params }: { params: { id: string } }) {
-  const supabase = createClient();
+export default async function ClientDetail(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const supabase = await createClient();
   const { data: profile } = await (supabase as any)
     .from("profiles")
     .select("id, full_name, email, phone, banned")

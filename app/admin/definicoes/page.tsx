@@ -37,17 +37,18 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode; ownerOnly?: boole
   { id: "equipa",     label: "Equipa",     icon: <UserCog size={14} />, ownerOnly: true },
 ];
 
-export default async function DefinicoesPage({
-  searchParams,
-}: {
-  searchParams: {
-    tab?: string;
-    integration_ok?: string;
-    integration_error?: string;
-    integration_removed?: string;
-  };
-}) {
-  const supabase = createClient();
+export default async function DefinicoesPage(
+  props: {
+    searchParams: Promise<{
+      tab?: string;
+      integration_ok?: string;
+      integration_error?: string;
+      integration_removed?: string;
+    }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const supabase = await createClient();
   const [trainer, { data: { user } }, profile] = await Promise.all([
     getCurrentTrainer(),
     supabase.auth.getUser(),
@@ -150,7 +151,7 @@ function TabNav({ active, isOwner }: { active: TabId; isOwner: boolean }) {
 // ════════════════════════════════════════════════════════════════
 async function loadTabData(
   tab: TabId,
-  supabase: ReturnType<typeof createClient>,
+  supabase: Awaited<ReturnType<typeof createClient>>,
   trainer: NonNullable<Awaited<ReturnType<typeof getCurrentTrainer>>>,
   userId: string | undefined,
 ) {

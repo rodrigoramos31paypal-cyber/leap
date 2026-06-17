@@ -6,11 +6,12 @@ import { BackLink } from "@/components/back-link";
 import { submitRatingAction } from "./actions";
 import { StarPicker } from "./star-picker";
 
-export default async function AvaliarSessaoPage({ params }: { params: { id: string } }) {
+export default async function AvaliarSessaoPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: b } = await supabase
     .from("bookings")
     .select("id, starts_at, ends_at, session_type, status, client_id, trainer_id")

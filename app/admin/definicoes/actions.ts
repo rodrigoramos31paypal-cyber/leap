@@ -10,12 +10,12 @@ import { requireStaff } from "@/lib/authz";
 
 export async function saveTrainerBioAction(formData: FormData) {
   const profile = await requireStaff();
-  const supabase = createClient();
+  const supabase = await createClient();
   const trainerId = String(formData.get("trainerId") ?? "");
   // H1: nunca confiar no trainerId do form. Owner edita qualquer trainer;
   // um trainer só a si próprio.
   if (profile.role !== "owner" && trainerId !== (await getCurrentTrainerId())) {
-    setFlash("Sem permissão.", "error");
+    await setFlash("Sem permissão.", "error");
     return;
   }
   // SECURITY (C1): defesa em profundidade — remove <,> a entrada para que
@@ -24,18 +24,18 @@ export async function saveTrainerBioAction(formData: FormData) {
   const bio = String(formData.get("bio") ?? "").trim().slice(0, 500).replace(/[<>]/g, "");
   if (!trainerId) return;
   const { error } = await supabase.from("trainers").update({ bio }).eq("id", trainerId);
-  if (error) { logError("saveTrainerBioAction", error); setFlash("Não foi possível guardar a biografia", "error"); }
-  else setFlash("Biografia guardada");
+  if (error) { logError("saveTrainerBioAction", error); await setFlash("Não foi possível guardar a biografia", "error"); }
+  else await setFlash("Biografia guardada");
   revalidatePath("/admin/definicoes");
 }
 
 export async function saveSettingsAction(formData: FormData) {
   const profile = await requireStaff();
-  const supabase = createClient();
+  const supabase = await createClient();
   const trainerId = String(formData.get("trainerId") ?? "");
   // H1: ownership — owner edita qualquer trainer; trainer só a si próprio.
   if (profile.role !== "owner" && trainerId !== (await getCurrentTrainerId())) {
-    setFlash("Sem permissão.", "error");
+    await setFlash("Sem permissão.", "error");
     return;
   }
   const durations = String(formData.get("slot_durations") ?? "")
@@ -60,20 +60,20 @@ export async function saveSettingsAction(formData: FormData) {
       auto_confirm_bookings: formData.get("auto_confirm_bookings") === "on",
       show_cancelled_in_calendar: formData.get("show_cancelled_in_calendar") === "on",
     });
-  if (error) { logError("saveSettingsAction", error); setFlash("Não foi possível guardar definições", "error"); }
-  else setFlash("Definições guardadas");
+  if (error) { logError("saveSettingsAction", error); await setFlash("Não foi possível guardar definições", "error"); }
+  else await setFlash("Definições guardadas");
   revalidatePath("/admin/definicoes");
 }
 
 export async function addAvailabilityAction(formData: FormData) {
   const profile = await requireStaff();
-  const supabase = createClient();
+  const supabase = await createClient();
   const trainerId = String(formData.get("trainerId") ?? "");
   // H-4 (audit jun/2026): defesa em profundidade. RLS já filtra por
   // _trainer_is_accessible(trainer_id), mas espelhamos o cheque ao
   // nível da app para não dependermos de a policy continuar perfeita.
   if (profile.role !== "owner" && trainerId !== (await getCurrentTrainerId())) {
-    setFlash("Sem permissão.", "error");
+    await setFlash("Sem permissão.", "error");
     return;
   }
   const dayOfWeek = Number(formData.get("day_of_week") ?? 1);
@@ -83,7 +83,7 @@ export async function addAvailabilityAction(formData: FormData) {
   // Validação de intervalo: início < fim. Comparar como strings "HH:MM"
   // funciona porque o formato é fixo e lexicograficamente ordenável.
   if (startTime >= endTime) {
-    setFlash("A hora de início tem de ser anterior à hora de fim", "error");
+    await setFlash("A hora de início tem de ser anterior à hora de fim", "error");
     revalidatePath("/admin/definicoes");
     return;
   }
@@ -100,7 +100,7 @@ export async function addAvailabilityAction(formData: FormData) {
 
   if (existing) {
     const DAYS_PT = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
-    setFlash(
+    await setFlash(
       `Já existe um horário para ${DAYS_PT[dayOfWeek] ?? "este dia"}. Elimina o atual antes de adicionar outro.`,
       "error",
     );
@@ -114,14 +114,14 @@ export async function addAvailabilityAction(formData: FormData) {
     start_time: startTime,
     end_time: endTime,
   });
-  if (error) { logError("addAvailabilityAction", error); setFlash("Não foi possível adicionar disponibilidade", "error"); }
-  else setFlash("Disponibilidade adicionada");
+  if (error) { logError("addAvailabilityAction", error); await setFlash("Não foi possível adicionar disponibilidade", "error"); }
+  else await setFlash("Disponibilidade adicionada");
   revalidateAvailabilityViews();
 }
 
 export async function updateAvailabilityAction(formData: FormData) {
   const profile = await requireStaff();
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") ?? "");
   const startTime = String(formData.get("start_time") ?? "07:00");
   const endTime = String(formData.get("end_time") ?? "21:00");
@@ -132,13 +132,13 @@ export async function updateAvailabilityAction(formData: FormData) {
     .select("trainer_id")
     .eq("id", id)
     .maybeSingle();
-  if (!row) { setFlash("Horário não encontrado", "error"); return; }
+  if (!row) { await setFlash("Horário não encontrado", "error"); return; }
   if (profile.role !== "owner" && row.trainer_id !== (await getCurrentTrainerId())) {
-    setFlash("Sem permissão.", "error");
+    await setFlash("Sem permissão.", "error");
     return;
   }
   if (startTime >= endTime) {
-    setFlash("A hora de início tem de ser anterior à hora de fim", "error");
+    await setFlash("A hora de início tem de ser anterior à hora de fim", "error");
     revalidatePath("/admin/definicoes");
     return;
   }
@@ -146,14 +146,14 @@ export async function updateAvailabilityAction(formData: FormData) {
     .from("trainer_availability")
     .update({ start_time: startTime, end_time: endTime })
     .eq("id", id);
-  if (error) { logError("updateAvailabilityAction", error); setFlash("Não foi possível guardar o horário", "error"); }
-  else setFlash("Horário actualizado");
+  if (error) { logError("updateAvailabilityAction", error); await setFlash("Não foi possível guardar o horário", "error"); }
+  else await setFlash("Horário actualizado");
   revalidateAvailabilityViews();
 }
 
 export async function deleteAvailabilityAction(formData: FormData) {
   const profile = await requireStaff();
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   // H-4: variante por `id`.
@@ -162,14 +162,14 @@ export async function deleteAvailabilityAction(formData: FormData) {
     .select("trainer_id")
     .eq("id", id)
     .maybeSingle();
-  if (!row) { setFlash("Horário não encontrado", "error"); return; }
+  if (!row) { await setFlash("Horário não encontrado", "error"); return; }
   if (profile.role !== "owner" && row.trainer_id !== (await getCurrentTrainerId())) {
-    setFlash("Sem permissão.", "error");
+    await setFlash("Sem permissão.", "error");
     return;
   }
   const { error } = await supabase.from("trainer_availability").delete().eq("id", id);
-  if (error) { logError("deleteAvailabilityAction", error); setFlash("Não foi possível remover", "error"); }
-  else setFlash("Disponibilidade removida");
+  if (error) { logError("deleteAvailabilityAction", error); await setFlash("Não foi possível remover", "error"); }
+  else await setFlash("Disponibilidade removida");
   revalidateAvailabilityViews();
 }
 
@@ -177,31 +177,31 @@ export async function deleteBlockAction(formData: FormData) {
   const profile = await requireStaff();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   // H-4: variante por `id`.
   const { data: row } = await supabase
     .from("trainer_blocked_times")
     .select("trainer_id")
     .eq("id", id)
     .maybeSingle();
-  if (!row) { setFlash("Bloqueio não encontrado", "error"); return; }
+  if (!row) { await setFlash("Bloqueio não encontrado", "error"); return; }
   if (profile.role !== "owner" && row.trainer_id !== (await getCurrentTrainerId())) {
-    setFlash("Sem permissão.", "error");
+    await setFlash("Sem permissão.", "error");
     return;
   }
   const { error } = await supabase.from("trainer_blocked_times").delete().eq("id", id);
-  if (error) { logError("deleteBlockAction", error); setFlash("Não foi possível remover bloqueio", "error"); }
-  else setFlash("Bloqueio removido");
+  if (error) { logError("deleteBlockAction", error); await setFlash("Não foi possível remover bloqueio", "error"); }
+  else await setFlash("Bloqueio removido");
   revalidateAvailabilityViews();
 }
 
 export async function addBlockAction(formData: FormData) {
   const profile = await requireStaff();
-  const supabase = createClient();
+  const supabase = await createClient();
   const trainerId = String(formData.get("trainerId") ?? "");
   // H-4: ownership check explícito ao nível da app.
   if (profile.role !== "owner" && trainerId !== (await getCurrentTrainerId())) {
-    setFlash("Sem permissão.", "error");
+    await setFlash("Sem permissão.", "error");
     return;
   }
   const { error } = await supabase.from("trainer_blocked_times").insert({
@@ -210,8 +210,8 @@ export async function addBlockAction(formData: FormData) {
     ends_at: new Date(String(formData.get("ends_at"))).toISOString(),
     reason: String(formData.get("reason") ?? "") || null,
   });
-  if (error) { logError("addBlockAction", error); setFlash("Não foi possível criar bloqueio", "error"); }
-  else setFlash("Bloqueio criado");
+  if (error) { logError("addBlockAction", error); await setFlash("Não foi possível criar bloqueio", "error"); }
+  else await setFlash("Bloqueio criado");
   revalidateAvailabilityViews();
 }
 
@@ -228,7 +228,7 @@ export async function saveTrainerAvatarAction(formData: FormData) {
   const trainerId = String(formData.get("trainerId") ?? "");
   const file = formData.get("file") as File | null;
   if (!trainerId || !file || file.size === 0) {
-    setFlash("Escolhe uma imagem primeiro", "error");
+    await setFlash("Escolhe uma imagem primeiro", "error");
     return;
   }
 
@@ -237,22 +237,22 @@ export async function saveTrainerAvatarAction(formData: FormData) {
   // amigável em vez do erro cru do storage.
   const MAX = 2 * 1024 * 1024;
   if (file.size > MAX) {
-    setFlash("Imagem demasiado grande (máx. 2 MB)", "error");
+    await setFlash("Imagem demasiado grande (máx. 2 MB)", "error");
     return;
   }
   const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
   if (!ALLOWED.includes(file.type)) {
-    setFlash("Formato não suportado (usa JPG, PNG ou WEBP)", "error");
+    await setFlash("Formato não suportado (usa JPG, PNG ou WEBP)", "error");
     return;
   }
 
   // Confirma que o caller é mesmo o dono do trainer (defesa em
   // profundidade — RLS já enforça o update, mas evitamos chamadas
   // ao Storage à conta de outro user).
-  const userClient = createClient();
+  const userClient = await createClient();
   const { data: { user } } = await userClient.auth.getUser();
   if (!user) {
-    setFlash("Sessão expirada", "error");
+    await setFlash("Sessão expirada", "error");
     return;
   }
   const { data: ownedTrainer } = await userClient
@@ -261,7 +261,7 @@ export async function saveTrainerAvatarAction(formData: FormData) {
     .eq("id", trainerId)
     .maybeSingle();
   if (!ownedTrainer || ownedTrainer.profile_id !== user.id) {
-    setFlash("Sem permissão", "error");
+    await setFlash("Sem permissão", "error");
     return;
   }
 
@@ -278,7 +278,7 @@ export async function saveTrainerAvatarAction(formData: FormData) {
   });
   if (upErr) {
     logError("saveTrainerAvatarAction:upload", upErr);
-    setFlash("Não foi possível guardar a foto", "error");
+    await setFlash("Não foi possível guardar a foto", "error");
     return;
   }
 
@@ -292,11 +292,11 @@ export async function saveTrainerAvatarAction(formData: FormData) {
     .eq("id", trainerId);
   if (updErr) {
     logError("saveTrainerAvatarAction:update", updErr);
-    setFlash("Foto carregada mas não associada — tenta de novo", "error");
+    await setFlash("Foto carregada mas não associada — tenta de novo", "error");
     return;
   }
 
-  setFlash("Foto de perfil actualizada");
+  await setFlash("Foto de perfil actualizada");
   revalidatePath("/admin/definicoes");
   revalidatePath(`/t/[slug]`, "page");
 }
@@ -306,7 +306,7 @@ export async function removeTrainerAvatarAction(formData: FormData) {
   const trainerId = String(formData.get("trainerId") ?? "");
   if (!trainerId) return;
 
-  const userClient = createClient();
+  const userClient = await createClient();
   const { data: { user } } = await userClient.auth.getUser();
   if (!user) return;
   const { data: ownedTrainer } = await userClient
@@ -325,7 +325,7 @@ export async function removeTrainerAvatarAction(formData: FormData) {
   ]);
   await admin.from("trainers").update({ avatar_url: null }).eq("id", trainerId);
 
-  setFlash("Foto de perfil removida");
+  await setFlash("Foto de perfil removida");
   revalidatePath("/admin/definicoes");
   revalidatePath(`/t/[slug]`, "page");
 }

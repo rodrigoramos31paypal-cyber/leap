@@ -20,7 +20,7 @@ export async function verifyChallengeAction(formData: FormData) {
   const next = formData.get("next");
 
   if (!/^\d{6}$/.test(code)) {
-    setFlash("Código inválido (6 dígitos).", "error");
+    await setFlash("Código inválido (6 dígitos).", "error");
     redirect("/login/2fa" + (typeof next === "string" ? `?next=${encodeURIComponent(next)}` : ""));
   }
 
@@ -31,20 +31,20 @@ export async function verifyChallengeAction(formData: FormData) {
   }
   const factorId = factors[0].id;
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await (supabase.auth.mfa as any).challengeAndVerify({
     factorId,
     code,
   });
   if (error) {
     logError("verifyChallengeAction", error);
-    setFlash("Código inválido. Tenta de novo.", "error");
+    await setFlash("Código inválido. Tenta de novo.", "error");
     redirect("/login/2fa" + (typeof next === "string" ? `?next=${encodeURIComponent(next)}` : ""));
   }
 
   // "Confiar neste dispositivo 30 dias"
   if (trust) {
-    const h = headers();
+    const h = await headers();
     await trustThisDevice(
       user.id,
       h.get("user-agent") ?? undefined,

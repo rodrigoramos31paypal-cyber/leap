@@ -24,7 +24,7 @@ type AuditOpts = {
 /** Regista uma acção administrativa sensível em audit_log. */
 export async function logAudit(action: string, opts: AuditOpts = {}): Promise<void> {
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { error } = await supabase.rpc("log_audit_event", {
       p_action: action,
       p_target_table: opts.targetTable ?? undefined,

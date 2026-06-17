@@ -12,7 +12,7 @@ export default async function ClientNotasPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const notes = await listMyNotes({ clientId: user.id, limit: 100 });
 
