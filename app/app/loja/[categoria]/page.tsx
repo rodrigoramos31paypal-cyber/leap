@@ -10,6 +10,16 @@ const CATS: Record<string, { title: string; sub: string }> = {
   suplementos: { title: "Suplementos", sub: "Nutrição e performance" },
 };
 
+// SEC (S-04, audit jun/2026): defesa em profundidade contra
+// javascript:/data: em link_url. O server action valida ANTES de gravar
+// (safeHttpUrl), mas dados antigos podem existir e React nao bloqueia
+// esquemas perigosos em <a href>. So renderizamos <a> quando a string
+// comeca por http(s):.
+function safeHref(url: string | null | undefined): string | undefined {
+  if (!url) return undefined;
+  return /^https?:\/\//i.test(url) ? url : undefined;
+}
+
 export default async function LojaCategoriaPage({ params }: { params: { categoria: string } }) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
@@ -44,6 +54,7 @@ export default async function LojaCategoriaPage({ params }: { params: { categori
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
           {list.map((p) => {
+            const href = safeHref(p.link_url);
             const card = (
               <div className="card flex h-full flex-col overflow-hidden transition hover:border-gold-400">
                 {p.image_url ? (
@@ -68,15 +79,15 @@ export default async function LojaCategoriaPage({ params }: { params: { categori
                     <span className="font-display text-sm font-bold text-gold-600">
                       {typeof p.price_cents === "number" ? eur(p.price_cents) : ""}
                     </span>
-                    {p.link_url && <span className="text-xs font-medium text-gold-600">Ver →</span>}
+                    {href && <span className="text-xs font-medium text-gold-600">Ver →</span>}
                   </div>
                 </div>
               </div>
             );
             return (
               <li key={p.id}>
-                {p.link_url ? (
-                  <a href={p.link_url} target="_blank" rel="noopener noreferrer" className="block h-full">
+                {href ? (
+                  <a href={href} target="_blank" rel="noopener noreferrer" className="block h-full">
                     {card}
                   </a>
                 ) : (
