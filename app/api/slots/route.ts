@@ -56,8 +56,19 @@ export async function GET(request: NextRequest) {
       // 30 s por (trainer, date, duration). `create_booking` continua
       // a validar atomicamente: se um slot for ocupado na janela de
       // staleness, o servidor rejeita com mensagem clara.
+      //
+      // SEC (S-12, audit jun/2026): a rota está fora de `isPublic` →
+      // middleware redirecciona unauth. Mas `Cache-Control: public`
+      // permitia ao Vercel Edge servir o cached body antes do
+      // middleware correr → utilizador unauth via slots. Trocamos
+      // `Cache-Control` por `private` (browser-only) e mantemos o
+      // edge cache via `CDN-Cache-Control` + `s-maxage` no Cache-
+      // Control sem `public`. O `s-maxage` instrui apenas shared
+      // caches; a directiva `private` impede que proxies/browsers
+      // não-Vercel armazenem; e o middleware continua a correr antes
+      // de o edge cache responder a um miss.
       headers: {
-        "Cache-Control": "public, s-maxage=30, stale-while-revalidate=300",
+        "Cache-Control": "private, s-maxage=30, stale-while-revalidate=300",
         "CDN-Cache-Control": "public, s-maxage=30",
       },
     },
