@@ -15,11 +15,12 @@ import { ReviewsPopup } from "./reviews-popup";
 // structured data (Person + AggregateRating) vale a troca.
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata({
-  params,
-}: {
-  params: { slug: string };
-}): Promise<Metadata> {
+export async function generateMetadata(
+  props: {
+    params: Promise<{ slug: string }>;
+  }
+): Promise<Metadata> {
+  const params = await props.params;
   const t = await getPublicTrainerBySlug(params.slug);
   if (!t) {
     return { title: "Treinador não encontrado" };
@@ -50,16 +51,17 @@ function jsonLdSafe(obj: unknown): string {
   );
 }
 
-export default async function PublicTrainerPage({
-  params,
-}: {
-  params: { slug: string };
-}) {
+export default async function PublicTrainerPage(
+  props: {
+    params: Promise<{ slug: string }>;
+  }
+) {
+  const params = await props.params;
   const t = await getPublicTrainerBySlug(params.slug);
   if (!t) notFound();
 
   // CSP nonce — required because o app usa script-src strict-dynamic.
-  const nonce = headers().get("x-nonce") ?? undefined;
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
 
   // ── Structured data (schema.org) ─────────────────────────────
   //   Tipo Person (o trainer) + ProfilePage. Em conjunto com a meta

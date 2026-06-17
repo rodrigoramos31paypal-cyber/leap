@@ -34,7 +34,7 @@ async function verifyPasswordSudo(password: string): Promise<boolean> {
   if (!password) return false;
   const user = await getAuthUser();
   if (!user?.email) return false;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({
     email: user.email,
     password,
@@ -52,7 +52,7 @@ export async function startEnrollAction(formData: FormData) {
     return { error: "Password incorrecta. Confirma a tua password para activar a 2FA." };
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase.auth.mfa.enroll({
     factorType: "totp",
     friendlyName: "LEAP-FITNESS",
@@ -75,11 +75,11 @@ export async function confirmEnrollAction(formData: FormData) {
   const factorId = String(formData.get("factorId") ?? "");
   const code = String(formData.get("code") ?? "").trim();
   if (!factorId || !/^\d{6}$/.test(code)) {
-    setFlash("Código inválido.", "error");
+    await setFlash("Código inválido.", "error");
     redirect(safeReturn(formData) ?? "/app/perfil?tab=perfil");
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await (supabase.auth.mfa as any).challengeAndVerify({
     factorId,
     code,
@@ -87,11 +87,11 @@ export async function confirmEnrollAction(formData: FormData) {
   if (error) {
     logError("confirmEnrollAction", error);
     await supabase.auth.mfa.unenroll({ factorId }).catch(() => {});
-    setFlash("Código inválido. Tenta de novo.", "error");
+    await setFlash("Código inválido. Tenta de novo.", "error");
     redirect(safeReturn(formData) ?? "/app/perfil?tab=perfil");
   }
 
-  setFlash("2FA activada com sucesso");
+  await setFlash("2FA activada com sucesso");
   revalidatePath("/app/perfil");
   revalidatePath("/admin/seguranca");
   redirect(safeReturn(formData) ?? "/app/perfil?tab=perfil");
@@ -103,11 +103,11 @@ export async function unenrollAction(formData: FormData) {
 
   const factorId = String(formData.get("factorId") ?? "");
   if (!factorId) {
-    setFlash("Factor não encontrado.", "error");
+    await setFlash("Factor não encontrado.", "error");
     redirect(safeReturn(formData) ?? "/app/perfil?tab=perfil");
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // H-A: exige challenge MFA ACTUAL — um código TOTP fresco — antes de
   // desactivar. challengeAndVerify valida o código contra o factor (e
@@ -115,7 +115,7 @@ export async function unenrollAction(formData: FormData) {
   // mesmo que a sessão venha de um cookie roubado ou de um device confiado.
   const code = String(formData.get("code") ?? "").trim();
   if (!/^\d{6}$/.test(code)) {
-    setFlash("Introduz o código 2FA actual para desactivar.", "error");
+    await setFlash("Introduz o código 2FA actual para desactivar.", "error");
     redirect(safeReturn(formData) ?? "/app/perfil?tab=perfil");
   }
   const { error: verifyError } = await (supabase.auth.mfa as any).challengeAndVerify({
@@ -124,16 +124,16 @@ export async function unenrollAction(formData: FormData) {
   });
   if (verifyError) {
     logError("unenrollAction:verify", verifyError);
-    setFlash("Código inválido. A 2FA não foi desactivada.", "error");
+    await setFlash("Código inválido. A 2FA não foi desactivada.", "error");
     redirect(safeReturn(formData) ?? "/app/perfil?tab=perfil");
   }
 
   const { error } = await supabase.auth.mfa.unenroll({ factorId });
   if (error) {
     logError("unenrollAction", error);
-    setFlash("Não foi possível desactivar 2FA.", "error");
+    await setFlash("Não foi possível desactivar 2FA.", "error");
   } else {
-    setFlash("2FA desactivada");
+    await setFlash("2FA desactivada");
   }
   revalidatePath("/app/perfil");
   revalidatePath("/admin/seguranca");

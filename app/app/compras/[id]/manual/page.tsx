@@ -6,8 +6,9 @@ import { Clock, CheckCircle2 } from "lucide-react";
 import { BackLink } from "@/components/back-link";
 import { PaymentSteps } from "./payment-steps";
 
-export default async function ManualPaymentPage({ params }: { params: { id: string } }) {
-  const supabase = createClient();
+export default async function ManualPaymentPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 

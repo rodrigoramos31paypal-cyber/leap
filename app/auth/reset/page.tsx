@@ -5,11 +5,12 @@ import { resetAction } from "./actions";
 import type { Metadata } from "next";
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
-export default function ResetPage({
-  searchParams,
-}: {
-  searchParams: { error?: string };
-}) {
+export default async function ResetPage(
+  props: {
+    searchParams: Promise<{ error?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   return (
     <main className="flex min-h-screen flex-col items-center bg-bone-50 p-6 pt-16 sm:pt-24 dark:bg-ink-900">
       <Link href="/" className="mb-10 flex flex-col items-center gap-2">

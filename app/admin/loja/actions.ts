@@ -91,29 +91,29 @@ export async function createProductAction(
   const file = formData.get("file") as File | null;
 
   if (!CATEGORIES.includes(category)) {
-    setFlash("Categoria inválida", "error");
+    await setFlash("Categoria inválida", "error");
     return { ok: false, error: "Categoria inválida" };
   }
   if (!name) {
-    setFlash("Indica um nome", "error");
+    await setFlash("Indica um nome", "error");
     return { ok: false, error: "Indica um nome" };
   }
   // S-04: rejeita URL nao http(s). null se vazio.
   const linkUrl = linkUrlRaw ? safeHttpUrl(linkUrlRaw) : null;
   if (linkUrlRaw && !linkUrl) {
-    setFlash("Link inválido — usa um URL https://… ou deixa em branco.", "error");
+    await setFlash("Link inválido — usa um URL https://… ou deixa em branco.", "error");
     return { ok: false, error: "Link inválido." };
   }
   const fileErr = validateFile(file);
   if (fileErr) {
-    setFlash(fileErr, "error");
+    await setFlash(fileErr, "error");
     return { ok: false, error: fileErr };
   }
 
   const scope = await getAccessibleTrainerIds();
   const trainerId = (await getCurrentTrainerId()) ?? scope[0];
   if (!trainerId) {
-    setFlash("Sem trainer associado", "error");
+    await setFlash("Sem trainer associado", "error");
     return { ok: false, error: "Sem trainer associado" };
   }
 
@@ -121,12 +121,12 @@ export async function createProductAction(
   if (file && file.size > 0) {
     imageUrl = await uploadImage(trainerId, file);
     if (!imageUrl) {
-      setFlash("Não foi possível carregar a imagem", "error");
+      await setFlash("Não foi possível carregar a imagem", "error");
       return { ok: false, error: "Não foi possível carregar a imagem" };
     }
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await (supabase as any).from("store_products").insert({
     trainer_id: trainerId,
     category,
@@ -138,11 +138,11 @@ export async function createProductAction(
   });
   if (error) {
     logError("createProductAction", error);
-    setFlash("Não foi possível criar o produto", "error");
+    await setFlash("Não foi possível criar o produto", "error");
     revalidate();
     return { ok: false, error: "Não foi possível criar o produto" };
   }
-  setFlash("Produto criado");
+  await setFlash("Produto criado");
   revalidate();
   return { ok: true };
 }
@@ -159,22 +159,22 @@ export async function updateProductAction(formData: FormData) {
 
   if (!id) return;
   if (!CATEGORIES.includes(category)) {
-    setFlash("Categoria inválida", "error");
+    await setFlash("Categoria inválida", "error");
     return;
   }
   if (!name) {
-    setFlash("Indica um nome", "error");
+    await setFlash("Indica um nome", "error");
     return;
   }
   // S-04: rejeita URL nao http(s). null se vazio.
   const linkUrl = linkUrlRaw ? safeHttpUrl(linkUrlRaw) : null;
   if (linkUrlRaw && !linkUrl) {
-    setFlash("Link inválido — usa um URL https://… ou deixa em branco.", "error");
+    await setFlash("Link inválido — usa um URL https://… ou deixa em branco.", "error");
     return;
   }
   const fileErr = validateFile(file);
   if (fileErr) {
-    setFlash(fileErr, "error");
+    await setFlash(fileErr, "error");
     return;
   }
 
@@ -193,20 +193,20 @@ export async function updateProductAction(formData: FormData) {
     if (trainerId) {
       const url = await uploadImage(trainerId, file);
       if (!url) {
-        setFlash("Não foi possível carregar a imagem", "error");
+        await setFlash("Não foi possível carregar a imagem", "error");
         return;
       }
       patch.image_url = url;
     }
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await (supabase as any).from("store_products").update(patch).eq("id", id);
   if (error) {
     logError("updateProductAction", error);
-    setFlash("Não foi possível guardar", "error");
+    await setFlash("Não foi possível guardar", "error");
   } else {
-    setFlash("Produto actualizado");
+    await setFlash("Produto actualizado");
   }
   revalidate();
 }
@@ -216,16 +216,16 @@ export async function toggleProductAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const active = String(formData.get("active") ?? "") === "1";
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await (supabase as any)
     .from("store_products")
     .update({ active, updated_at: new Date().toISOString() })
     .eq("id", id);
   if (error) {
     logError("toggleProductAction", error);
-    setFlash("Não foi possível atualizar", "error");
+    await setFlash("Não foi possível atualizar", "error");
   } else {
-    setFlash(active ? "Produto activado" : "Produto desactivado");
+    await setFlash(active ? "Produto activado" : "Produto desactivado");
   }
   revalidate();
 }
@@ -234,7 +234,7 @@ export async function deleteProductAction(formData: FormData) {
   await requireStaff();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: row } = await (supabase as any)
     .from("store_products")
@@ -245,7 +245,7 @@ export async function deleteProductAction(formData: FormData) {
   const { error } = await (supabase as any).from("store_products").delete().eq("id", id);
   if (error) {
     logError("deleteProductAction", error);
-    setFlash("Não foi possível remover", "error");
+    await setFlash("Não foi possível remover", "error");
     revalidate();
     return;
   }
@@ -257,6 +257,6 @@ export async function deleteProductAction(formData: FormData) {
     if (rmErr) logError("deleteProductAction:storage", rmErr);
   }
 
-  setFlash("Produto removido");
+  await setFlash("Produto removido");
   revalidate();
 }

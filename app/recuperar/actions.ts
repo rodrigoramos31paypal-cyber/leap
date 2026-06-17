@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export async function recoverAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/auth/reset`,
   });

@@ -19,7 +19,7 @@ export type TrainerLite = {
 export const getCurrentTrainer = cache(async (): Promise<TrainerLite | null> => {
   const user = await getSessionUser();
   if (!user) return null;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data } = await supabase
     .from("trainers")
@@ -62,7 +62,7 @@ export const getAccessibleTrainerIds = cache(async (): Promise<string[]> => {
   if (!profile) return [];
 
   if (profile.role === "owner") {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: all } = await supabase.from("trainers").select("id");
     return (all ?? []).map((t: any) => t.id);
   }
@@ -117,7 +117,7 @@ export const getActiveTrainersPublic = cache(
  */
 export const getClientIdsInScope = cache(async (trainerIds: string[]): Promise<string[]> => {
   if (trainerIds.length === 0) return [];
-  const supabase = createClient();
+  const supabase = await createClient();
   // PERF (audit): a exclusão de contas anonimizadas (@removido.invalid) era
   // um 4º round-trip SERIAL — re-fetch dos profiles dos ids candidatos só
   // para filtrar emails. Passa a correr EM PARALELO com os 3 reads de
@@ -153,7 +153,7 @@ export const getClientIdsInScope = cache(async (trainerIds: string[]): Promise<s
 
 export const getClientCountInScope = cache(async (trainerIds: string[]): Promise<number> => {
   if (trainerIds.length === 0) return 0;
-  const supabase = createClient();
+  const supabase = await createClient();
   try {
     const { data, error } = await (supabase as any).rpc("count_clients_in_scope", {
       p_trainer_ids: trainerIds,
@@ -167,7 +167,7 @@ export const getClientCountInScope = cache(async (trainerIds: string[]): Promise
 });
 
 export const getTrainerForClient = cache(async (clientUserId: string): Promise<string | null> => {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: profile } = await supabase
     .from("profiles")
     .select("trainer_id")

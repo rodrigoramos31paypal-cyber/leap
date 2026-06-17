@@ -11,7 +11,7 @@ import { Images, Plus, Pencil, Upload } from "lucide-react";
 const MAX_SLIDES = 3;
 
 export default async function AdminSlideshowPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const trainerIds = await getAccessibleTrainerIds();
   const scope = trainerIds.length > 0 ? trainerIds : [""];
 

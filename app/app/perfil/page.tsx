@@ -23,15 +23,16 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: "notificacoes", label: "Notificações", icon: <Bell size={14} /> },
 ];
 
-export default async function PerfilPage({
-  searchParams,
-}: {
-  searchParams: { ok?: string; tab?: string };
-}) {
+export default async function PerfilPage(
+  props: {
+    searchParams: Promise<{ ok?: string; tab?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const activeTab: TabId = ((): TabId => {
     const t = searchParams.tab;
@@ -92,7 +93,7 @@ function TabNav({ active }: { active: TabId }) {
 
 async function loadTabData(
   tab: TabId,
-  supabase: ReturnType<typeof createClient>,
+  supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
 ) {
   const data: any = {};

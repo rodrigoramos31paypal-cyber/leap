@@ -46,7 +46,7 @@ export async function bookAction({
     ]);
 
     // Verifica o status final para a UI mostrar mensagem correcta
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: b } = await supabase
       .from("bookings")
       .select("status")
@@ -56,13 +56,13 @@ export async function bookAction({
     await sideEffects;
 
     const pending = (b as any)?.status === "booked";
-    setFlash(pending ? "Marcação criada — a aguardar aprovação" : "Marcação confirmada");
+    await setFlash(pending ? "Marcação criada — a aguardar aprovação" : "Marcação confirmada");
     revalidateBookingViews();
     return { ok: true, pending };
   } catch (err) {
     logError("bookAction", err);
     const friendly = userFacingRpcError(err);
-    setFlash(friendly ?? "Não foi possível marcar", "error");
+    await setFlash(friendly ?? "Não foi possível marcar", "error");
     return { error: friendly ?? "Não foi possível marcar. Tenta novamente." };
   }
 }
@@ -76,7 +76,7 @@ export async function rescheduleAction({
   startsAtIso: string;
   durationMin: number;
 }): Promise<{ ok?: true; error?: string; pending?: boolean }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   // RPC atómica: devolve crédito da antiga, cancela-a e cria a nova.
   const { data: newId, error } = await (supabase as any).rpc("reschedule_booking", {
     p_old_booking_id: oldBookingId,
@@ -149,11 +149,11 @@ export async function bookRecurringAction({
     // Nenhuma semana disponível → nada marcado (devolvemos os conflitos
     // na mesma para a UI poder sugerir alternativas).
     if (result.booked_count === 0) {
-      setFlash("Nenhuma semana disponível para a série", "error");
+      await setFlash("Nenhuma semana disponível para a série", "error");
       return { error: "Nenhuma semana disponível.", result };
     }
 
-    setFlash(
+    await setFlash(
       result.conflicts.length > 0
         ? `Marcadas ${result.booked_count} de ${result.requested_count} sessões`
         : `Criadas ${result.booked_count} marcações`,
@@ -162,7 +162,7 @@ export async function bookRecurringAction({
   } catch (err) {
     logError("bookRecurringAction", err);
     const friendly = userFacingRpcError(err);
-    setFlash(friendly ?? "Não foi possível marcar a série", "error");
+    await setFlash(friendly ?? "Não foi possível marcar a série", "error");
     return { error: friendly ?? "Não foi possível marcar a série. Tenta novamente." };
   }
 }

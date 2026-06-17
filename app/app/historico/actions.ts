@@ -10,7 +10,7 @@ import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
 
 async function wasRefunded(bookingId: string): Promise<boolean> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("bookings")
     .select("credit_charged")
@@ -31,12 +31,12 @@ export async function cancelBookingAction(formData: FormData) {
     const refunded = await wasRefunded(bookingId);
     await dispatchBookingCancelled(bookingId, refunded).catch(() => {});
     await removeBookingFromCalendars(bookingId).catch(() => {});
-    setFlash(
+    await setFlash(
       refunded ? "Sessão cancelada e devolvida" : "Sessão cancelada (cancelamento tardio)",
     );
   } catch (e) {
     logError("cancelBookingAction", e);
-    setFlash("Não foi possível cancelar", "error");
+    await setFlash("Não foi possível cancelar", "error");
   }
   revalidateBookingViews();
 }

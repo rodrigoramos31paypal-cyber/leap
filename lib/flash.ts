@@ -16,10 +16,10 @@ export type { Flash, FlashKind } from "./flash-types";
 
 const COOKIE_NAME = "leap_flash";
 
-export function setFlash(title: string, kind: FlashKind = "success", body?: string) {
+export async function setFlash(title: string, kind: FlashKind = "success", body?: string) {
   try {
     const payload: Flash = { title, kind, ...(body ? { body } : {}) };
-    cookies().set(COOKIE_NAME, encodeURIComponent(JSON.stringify(payload)), {
+    (await cookies()).set(COOKIE_NAME, encodeURIComponent(JSON.stringify(payload)), {
       // muito curto — só sobrevive ao próximo render do layout
       maxAge: 30,
       path: "/",
@@ -31,9 +31,10 @@ export function setFlash(title: string, kind: FlashKind = "success", body?: stri
   }
 }
 
-export function consumeFlash(): Flash | null {
+export async function consumeFlash(): Promise<Flash | null> {
   try {
-    const c = cookies().get(COOKIE_NAME);
+    const store = await cookies();
+    const c = store.get(COOKIE_NAME);
     if (!c?.value) return null;
     let parsed: Flash | null = null;
     try {
@@ -42,7 +43,7 @@ export function consumeFlash(): Flash | null {
       parsed = null;
     }
     // apaga já — só queremos mostrar uma vez
-    cookies().set(COOKIE_NAME, "", { maxAge: 0, path: "/" });
+    store.set(COOKIE_NAME, "", { maxAge: 0, path: "/" });
     return parsed;
   } catch {
     return null;

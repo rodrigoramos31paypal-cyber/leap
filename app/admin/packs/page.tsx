@@ -5,7 +5,7 @@ import { getCurrentTrainerId, getAccessibleTrainerIds } from "@/lib/trainer";
 import { PacksDisplay, type PackRow } from "./packs-grid";
 
 export default async function AdminPacksPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   // PERF: paralelizar — getCurrentTrainerId e getAccessibleTrainerIds partilham auth.getUser via cache
   const [trainerId, trainerIds] = await Promise.all([
     getCurrentTrainerId(),

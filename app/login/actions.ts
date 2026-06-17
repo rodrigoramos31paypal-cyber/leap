@@ -10,7 +10,7 @@ export async function loginAction(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   const next = formData.get("next");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error, data } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
     redirect(`/login?error=${encodeURIComponent("Email ou password inválidos.")}`);

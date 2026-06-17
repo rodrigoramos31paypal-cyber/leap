@@ -3,8 +3,8 @@ import { cookies } from "next/headers";
 import { cache } from "react";
 import type { Database } from "@/types/database";
 
-export function createClient() {
-  const cookieStore = cookies();
+export async function createClient() {
+  const cookieStore = await cookies();
   return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -37,7 +37,7 @@ export function createClient() {
 
 /** Sessão do request actual. Lê apenas cookie — sem round-trip ao auth server. */
 export const getSessionUser = cache(async () => {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { session } } = await supabase.auth.getSession();
   return session?.user ?? null;
 });
@@ -46,7 +46,7 @@ export const getSessionUser = cache(async () => {
  *  GoTrue). Apanha REVOGAÇÃO server-side (sign-out noutro device, ban) de
  *  imediato. Usar quando a revogação instantânea importa mesmo (ex.: MFA). */
 export const getAuthUser = cache(async () => {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   return user ?? null;
 });
@@ -58,7 +58,7 @@ export const getAuthUser = cache(async () => {
  *  a chave pública (cacheada), SEM round-trip ao auth server. Mesma
  *  estratégia que o middleware já corre em produção. `sub` = user id. */
 export const getClaimsUser = cache(async () => {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase.auth.getClaims();
   return data?.claims ?? null;
 });
@@ -79,7 +79,7 @@ export const getCurrentProfile = cache(async () => {
   const claims = await getClaimsUser();
   const userId = claims?.sub;
   if (!userId) return null;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("profiles")
     .select("id, role, full_name")

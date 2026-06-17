@@ -17,7 +17,8 @@ function parseRange(searchParams: { from?: string; to?: string }) {
 // queries pesadas sobre purchases/bookings) são streamed em <Suspense>.
 // Antes, o TTFB da rota inteira esperava por ambas as queries.
 // ════════════════════════════════════════════════════════════════
-export default function RelatoriosPage({ searchParams }: { searchParams: { from?: string; to?: string } }) {
+export default async function RelatoriosPage(props: { searchParams: Promise<{ from?: string; to?: string }> }) {
+  const searchParams = await props.searchParams;
   const { from, to } = parseRange(searchParams);
 
   return (
@@ -68,7 +69,7 @@ export default function RelatoriosPage({ searchParams }: { searchParams: { from?
 }
 
 async function ReportStats({ from, to }: { from: Date; to: Date }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   // PERF: pedimos só as colunas consumidas pelos reduces/filtros (antes `*`).
   // purchases → amount_cents + sessions_total; bookings → status. As colunas
   // de filtro (confirmed_at/starts_at/status) não precisam de vir no payload.

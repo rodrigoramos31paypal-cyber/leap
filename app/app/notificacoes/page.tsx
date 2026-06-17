@@ -4,7 +4,7 @@ import { BackLink } from "@/components/back-link";
 import { NotificationsList } from "@/components/notifications-list";
 
 export default async function NotificationsPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 

@@ -10,7 +10,7 @@ export async function markReadAction(notifId: string) {
   // por user_id em vez de confiar so na RLS "notif: update own". Se a
   // policy for relaxada/removida numa migration futura, esta action
   // continua a recusar marcar notificacoes de outro user.
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
   await supabase
@@ -25,7 +25,7 @@ export async function deleteNotificationAction(formData: FormData) {
   const id = String(formData.get("notifId") ?? "");
   const scope = String(formData.get("scope") ?? "app");
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   // S-06: defense-in-depth -- filtro explicito por user_id.
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
@@ -36,9 +36,9 @@ export async function deleteNotificationAction(formData: FormData) {
     .eq("user_id", user.id);
   if (error) {
     logError("deleteNotificationAction", error);
-    setFlash("Não foi possível eliminar", "error");
+    await setFlash("Não foi possível eliminar", "error");
   } else {
-    setFlash("Notificação eliminada");
+    await setFlash("Notificação eliminada");
   }
   // Revalida a página correcta consoante o lado (cliente vs admin).
   revalidatePath(scope === "admin" ? "/admin/notificacoes" : "/app/notificacoes");
@@ -46,15 +46,15 @@ export async function deleteNotificationAction(formData: FormData) {
 
 export async function deleteAllNotificationsAction(formData: FormData) {
   const scope = String(formData.get("scope") ?? "app");
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
   const { error } = await supabase.from("notifications").delete().eq("user_id", user.id);
   if (error) {
     logError("deleteAllNotificationsAction", error);
-    setFlash("Não foi possível limpar as notificações", "error");
+    await setFlash("Não foi possível limpar as notificações", "error");
   } else {
-    setFlash("Notificações eliminadas");
+    await setFlash("Notificações eliminadas");
   }
   revalidatePath(scope === "admin" ? "/admin/notificacoes" : "/app/notificacoes");
 }

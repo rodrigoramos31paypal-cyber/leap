@@ -7,12 +7,13 @@ import { createGeneralNoteAction, createBookingNoteAction } from "@/app/api/note
 import { formatDateTime, BOOKING_STATUS } from "@/lib/utils";
 import { ArrowLeft, Search, NotebookPen, Sparkles } from "lucide-react";
 
-export default async function NewAdminNotePage({
-  searchParams,
-}: {
-  searchParams: { q?: string; client?: string; booking?: string; general?: string };
-}) {
-  const supabase = createClient();
+export default async function NewAdminNotePage(
+  props: {
+    searchParams: Promise<{ q?: string; client?: string; booking?: string; general?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 

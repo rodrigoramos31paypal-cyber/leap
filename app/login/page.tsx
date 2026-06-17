@@ -7,12 +7,13 @@ import { loginAction } from "./actions";
 import type { Metadata } from "next";
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams: { next?: string; error?: string };
-}) {
-  const supabase = createClient();
+export default async function LoginPage(
+  props: {
+    searchParams: Promise<{ next?: string; error?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (user) {
     const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
@@ -36,7 +37,6 @@ export default async function LoginPage({
           className="h-auto w-80 dark:invert sm:w-[22rem]"
         />
       </Link>
-
       <div className="w-full max-w-sm">
         <div className="card p-6">
           <h1 className="text-xl font-bold">Entrar</h1>

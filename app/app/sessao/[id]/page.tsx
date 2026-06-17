@@ -10,11 +10,12 @@ import { getMyRatingForBooking } from "@/lib/ratings";
 
 // Página de uma sessão específica (cliente). Opções: adicionar ao
 // calendário, reagendar, cancelar, avaliar e as minhas notas.
-export default async function SessaoPage({ params }: { params: { id: string } }) {
+export default async function SessaoPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: b } = await supabase
     .from("bookings")
     .select("id, starts_at, ends_at, session_type, status, client_id, trainer_id")

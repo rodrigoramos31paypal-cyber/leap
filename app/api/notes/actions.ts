@@ -11,7 +11,7 @@ export async function createGeneralNoteAction(formData: FormData): Promise<{ err
   const redirectTo = String(formData.get("redirectTo") ?? "");
   if (!subjectId || !body) return { error: "Preenche a nota." };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Não autenticado." };
 
@@ -50,7 +50,7 @@ export async function createBookingNoteAction(formData: FormData): Promise<{ err
   const redirectTo = String(formData.get("redirectTo") ?? "");
   if (!bookingId || !body) return { error: "Preenche a nota." };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Não autenticado." };
 
@@ -81,7 +81,7 @@ export async function updateNoteByIdAction(formData: FormData): Promise<{ error?
   const body = String(formData.get("body") ?? "").trim().slice(0, 5000);
   if (!noteId || !body) return { error: "Preenche a nota." };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Não autenticado." };
 
@@ -104,7 +104,7 @@ export async function updateNoteByIdAction(formData: FormData): Promise<{ error?
 export async function deleteNoteByIdAction(formData: FormData) {
   const noteId = String(formData.get("noteId") ?? "");
   if (!noteId) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
   await supabase
@@ -123,7 +123,7 @@ export async function upsertNoteAction(formData: FormData): Promise<{ error?: st
   const body = String(formData.get("body") ?? "").trim().slice(0, 5000);
   if (!bookingId) return { error: "Sessão não encontrada." };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Não autenticado." };
 
@@ -182,7 +182,7 @@ export async function upsertNoteAction(formData: FormData): Promise<{ error?: st
 export async function deleteNoteAction(formData: FormData) {
   const bookingId = String(formData.get("bookingId") ?? "");
   if (!bookingId) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
   await supabase

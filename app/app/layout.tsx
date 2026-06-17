@@ -17,10 +17,10 @@ export default async function ClientLayout({ children }: { children: React.React
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // se esta na pagina de notificacoes, marca tudo como lido ANTES de contar
-  const path = headers().get("x-pathname") ?? "";
+  const path = (await headers()).get("x-pathname") ?? "";
   if (path.startsWith("/app/notificacoes")) {
     await supabase
       .from("notifications")
@@ -39,7 +39,7 @@ export default async function ClientLayout({ children }: { children: React.React
     redirect("/admin/dashboard");
   }
 
-  const flash = consumeFlash();
+  const flash = await consumeFlash();
 
   return (
     <div className="min-h-screen bg-bone-50 pb-20 dark:bg-ink-900 md:pb-0">

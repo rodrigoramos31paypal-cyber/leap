@@ -1,0 +1,183 @@
+// ════════════════════════════════════════════════════════════════
+// Helpers para descobrir o trainer associado ao user logado, e
+// outras queries comuns ao schema multi-trainer.
+// ════════════════════════════════════════════════════════════════
+import { cache } from "react";
+import { unstable_cache } from "next/cache";
+import { createClient, createPublicClient, getSessionUser, getCurrentProfile } from "@/lib/supabase/server";
+
+export type TrainerLite = {
+  id: string;
+  profile_id: string;
+  slug: string;
+  active: boolean;
+  full_name: string;
+  bio?: string | null;
+  avatar_url?: string | null;
+};
+
+export const getCurrentTrainer = cache(async (): Promise<TrainerLite | null> => {
+  const user = await getSessionUser();
+  if (!user) return null;
+  const supabase = await createClient();
+
+  const { data } = await supabase
+    .from("trainers")
+    .select("id, profile_id, slug, active, bio, avatar_url, profiles:profile_id(full_name)")
+    .eq("profile_id", user.id)
+    .maybeSingle();
+
+  if (data) return toTrainerLite(data);
+
+  const profile = await getCurrentProfile();
+  if (profile?.role === "owner") {
+    const { data: actives } = await supabase
+      .from("trainers")
+      .select("id, profile_id, slug, active, bio, avatar_url, profiles:profile_id(full_name)")
+      .eq("active", true);
+    if (actives && actives.length === 1) return toTrainerLite(actives[0]);
+  }
+  return null;
+});
+
+function toTrainerLite(data: any): TrainerLite {
+  return {
+    id: data.id,
+    profile_id: data.profile_id,
+    slug: data.slug,
+    active: data.active,
+    bio: data.bio,
+    avatar_url: data.avatar_url ?? null,
+    full_name: data.profiles?.full_name ?? "",
+  };
+}
+
+export const getCurrentTrainerId = cache(async (): Promise<string | null> => {
+  const t = await getCurrentTrainer();
+  return t?.id ?? null;
+});
+
+export const getAccessibleTrainerIds = cache(async (): Promise<string[]> => {
+  const profile = await getCurrentProfile();
+  if (!profile) return [];
+
+  if (profile.role === "owner") {
+    const supabase = await createClient();
+    const { data: all } = await supabase.from("trainers").select("id");
+    return (all ?? []).map((t: any) => t.id);
+  }
+  const t = await getCurrentTrainer();
+  return t ? [t.id] : [];
+});
+
+// PERF (QW-7 audit jun/2026): a lista de trainers activos muda muito
+// raramente (admin adiciona/remove ~1× por mês) mas era lida em quase
+// todas as páginas autenticadas (/app/agenda, /app/comprar, /app/loja
+// indiretamente). Em vez de uma query Supabase por navegação, fica em
+// `unstable_cache` com TTL 5 min + tag `active-trainers`; o
+// revalidateTeamViews invalida quando há alterações de equipa.
+//
+// IMPORTANTE: usa createPublicClient (sem cookies) — `unstable_cache`
+// não pode aceder a `cookies()` no callback. A query é à tabela
+// `trainers` com `active=true`, dados público-equivalentes via RLS
+// (qualquer authenticated vê o nome/slug/avatar dos trainers).
+const _loadActiveTrainersPublic = unstable_cache(
+  async (): Promise<TrainerLite[]> => {
+    const supabase = createPublicClient();
+    const { data } = await supabase
+      .from("trainers")
+      .select("id, profile_id, slug, active, bio, avatar_url, profiles:profile_id(full_name)")
+      .eq("active", true)
+      .order("slug");
+    return (data ?? []).map((t: any) => ({
+      id: t.id,
+      profile_id: t.profile_id,
+      slug: t.slug,
+      active: t.active,
+      bio: (t as any).bio ?? null,
+      avatar_url: (t as any).avatar_url ?? null,
+      full_name: (t as any).profiles?.full_name ?? "",
+    }));
+  },
+  ["active-trainers"],
+  { revalidate: 300, tags: ["active-trainers"] },
+);
+
+// React.cache wrap exterior para dedup dentro do mesmo request.
+export const getActiveTrainersPublic = cache(
+  async (): Promise<TrainerLite[]> => _loadActiveTrainersPublic(),
+);
+
+/**
+ * IDs de clientes dentro do scope de um trainer. Inclui:
+ *  • clientes com compras ou marcações com algum dos trainers do scope;
+ *  • clientes que se REGISTARAM associados ao trainer (profiles.trainer_id)
+ *    mesmo antes de comprarem/marcarem.
+ * Exclui contas anonimizadas (`@removido.invalid`).
+ */
+export const getClientIdsInScope = cache(async (trainerIds: string[]): Promise<string[]> => {
+  if (trainerIds.length === 0) return [];
+  const supabase = await createClient();
+  // PERF (audit): a exclusão de contas anonimizadas (@removido.invalid) era
+  // um 4º round-trip SERIAL — re-fetch dos profiles dos ids candidatos só
+  // para filtrar emails. Passa a correr EM PARALELO com os 3 reads de
+  // candidatos: buscamos o conjunto de ids removidos e subtraímo-lo. O
+  // comportamento mantém-se idêntico ao filtro JS anterior — clientes com
+  // email NULL continuam incluídos (NULL não faz match a @removido.invalid).
+  const [{ data: purs }, { data: books }, { data: profs }, { data: removed }] =
+    await Promise.all([
+      supabase.from("purchases").select("client_id").in("trainer_id", trainerIds),
+      supabase.from("bookings").select("client_id").in("trainer_id", trainerIds),
+      (supabase as any)
+        .from("profiles")
+        .select("id")
+        .eq("role", "client")
+        .in("trainer_id", trainerIds),
+      (supabase as any)
+        .from("profiles")
+        .select("id")
+        .ilike("email", "%@removido.invalid"),
+    ]);
+  const removedSet = new Set<string>(
+    ((removed ?? []) as any[]).map((r: any) => r.id),
+  );
+  const set = new Set<string>();
+  for (const r of (purs ?? []) as any[])
+    if (r.client_id && !removedSet.has(r.client_id)) set.add(r.client_id);
+  for (const r of (books ?? []) as any[])
+    if (r.client_id && !removedSet.has(r.client_id)) set.add(r.client_id);
+  for (const r of (profs ?? []) as any[])
+    if (r.id && !removedSet.has(r.id)) set.add(r.id);
+  return Array.from(set);
+});
+
+export const getClientCountInScope = cache(async (trainerIds: string[]): Promise<number> => {
+  if (trainerIds.length === 0) return 0;
+  const supabase = await createClient();
+  try {
+    const { data, error } = await (supabase as any).rpc("count_clients_in_scope", {
+      p_trainer_ids: trainerIds,
+    });
+    if (error) throw error;
+    return Number(data ?? 0);
+  } catch {
+    const ids = await getClientIdsInScope(trainerIds);
+    return ids.length;
+  }
+});
+
+export const getTrainerForClient = cache(async (clientUserId: string): Promise<string | null> => {
+  const supabase = await createClient();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("trainer_id")
+    .eq("id", clientUserId)
+    .maybeSingle();
+  if ((profile as any)?.trainer_id) return (profile as any).trainer_id;
+
+  const { data: actives } = await supabase
+    .from("trainers")
+    .select("id")
+    .eq("active", true)
+    .limit(2);
+  if (actives && actives.length === 1) return (actives[0] a

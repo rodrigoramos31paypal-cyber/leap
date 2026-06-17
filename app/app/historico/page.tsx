@@ -7,11 +7,12 @@ import { CalendarPlus, RefreshCcw, NotebookPen } from "lucide-react";
 import { NoteEditor } from "@/components/note-editor";
 import { getMyNotesMapForBookings } from "@/lib/notes";
 
-export default async function HistoricoPage({
-  searchParams,
-}: {
-  searchParams: { tab?: string; ok?: string; f?: string; c?: string };
-}) {
+export default async function HistoricoPage(
+  props: {
+    searchParams: Promise<{ tab?: string; ok?: string; f?: string; c?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const tab = searchParams.tab === "compras" ? "compras" : "sessoes";
   const sessFilter: "todas" | "futuras" | "passadas" =
     searchParams.f === "futuras" || searchParams.f === "passadas" ? searchParams.f : "todas";
@@ -20,7 +21,7 @@ export default async function HistoricoPage({
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   return (
     <div className="space-y-5">
@@ -102,7 +103,7 @@ function FilterChip({ label, href, active }: { label: string; href: string; acti
 }
 
 async function SessoesTab({ userId, filter }: { userId: string; filter: "todas" | "futuras" | "passadas" }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const nowIso = new Date().toISOString();
   // PERF (CB-5 audit jun/2026): antes era select("*") — trazia 15+
   // colunas (cancellation_reason, confirmed_by/at, cancelled_by/at,
@@ -181,7 +182,7 @@ async function SessoesTab({ userId, filter }: { userId: string; filter: "todas" 
 }
 
 async function ComprasTab({ userId, filter }: { userId: string; filter: "todas" | "confirmadas" | "rejeitadas" }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   // PERF: limita explicitamente — antes era sem limite e podia trazer
   // o histórico todo do cliente. Os campos pedidos também foram
   // restringidos aos que a UI usa.

@@ -14,7 +14,8 @@ function safeEqual(a: string, b: string): boolean {
   return timingSafeEqual(ab, bb);
 }
 
-export async function GET(req: Request, { params }: { params: { provider: string } }) {
+export async function GET(req: Request, props: { params: Promise<{ provider: string }> }) {
+  const params = await props.params;
   const provider = params.provider as "google" | "microsoft";
   if (provider !== "google" && provider !== "microsoft") {
     return new NextResponse("Bad provider", { status: 400 });
@@ -31,7 +32,7 @@ export async function GET(req: Request, { params }: { params: { provider: string
   if (!code || !state) return new NextResponse("Missing code/state", { status: 400 });
 
   // SEC: valida nonce contra o cookie set no /connect (CSRF).
-  const cookieJar = cookies();
+  const cookieJar = await cookies();
   const stored = cookieJar.get(STATE_COOKIE)?.value;
   if (!stored) {
     return NextResponse.redirect(new URL("/admin/definicoes?integration_error=state_missing", req.url));
@@ -51,7 +52,7 @@ export async function GET(req: Request, { params }: { params: { provider: string
   }
 
   // valida que o user logado é o mesmo que iniciou o fluxo
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user || user.id !== storedUserId) {
     return NextResponse.redirect(new URL("/login", req.url));

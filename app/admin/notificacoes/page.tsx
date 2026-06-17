@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NotificationsList } from "@/components/notifications-list";
 
 export default async function AdminNotificationsPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 

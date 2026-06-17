@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 
-export async function POST(req: Request, { params }: { params: { provider: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ provider: string }> }) {
+  const params = await props.params;
   const provider = params.provider as "google" | "microsoft";
   if (provider !== "google" && provider !== "microsoft") {
     return new NextResponse("Bad provider", { status: 400 });
@@ -11,7 +12,7 @@ export async function POST(req: Request, { params }: { params: { provider: strin
   // SEC: bloqueia CSRF — só aceita POSTs cuja Origin coincide com o
   // próprio host. Antes, um site malicioso podia desligar a integração
   // de calendário de um trainer logado.
-  const h = headers();
+  const h = await headers();
   const origin = h.get("origin");
   const host = h.get("host");
   if (!origin) return new NextResponse("Missing origin", { status: 403 });
@@ -24,7 +25,7 @@ export async function POST(req: Request, { params }: { params: { provider: strin
     return new NextResponse("Bad origin", { status: 400 });
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return new NextResponse("Unauthorized", { status: 401 });
 
