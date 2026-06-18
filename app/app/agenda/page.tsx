@@ -5,6 +5,15 @@ import { getClientCredits } from "@/lib/credits";
 import { BookingFlow } from "./booking-flow";
 import { getActiveTrainersPublic, getTrainerForClient } from "@/lib/trainer";
 import { formatDateTime } from "@/lib/utils";
+import {
+  UserPlus,
+  Dumbbell,
+  Calendar as CalendarIcon,
+  BarChart3,
+  ShoppingBag,
+  Package,
+  ChevronRight,
+} from "lucide-react";
 
 export default async function AgendaPage(
   props: {
@@ -48,10 +57,9 @@ export default async function AgendaPage(
     }
   }
 
-  // PERF (Q6): getActiveTrainersPublic + o fallback getTrainerForClient são
+  // PERF (Q6): getActiveTrainersPublic + getTrainerForClient são
   // independentes — corremo-los em paralelo. Só pedimos o fallback quando
-  // não há preferência explícita (reschedule/searchParams), para não gastar
-  // uma query quando o trainer já vem no URL.
+  // não há preferência explícita (reschedule/searchParams).
   const explicitTrainer = reschedule?.trainerId ?? searchParams.trainer;
   const [actives, fallbackTrainer] = await Promise.all([
     getActiveTrainersPublic(),
@@ -104,14 +112,25 @@ export default async function AgendaPage(
     );
   }
 
-  const [{ data: settings }, credits] = await Promise.all([
+  // PERF: hasAnyPurchase corre em paralelo com settings+credits. count:
+  // 'exact', head: true devolve só a contagem (0 bytes de body).
+  const [{ data: settings }, credits, { count: purchaseCount }] = await Promise.all([
     supabase
       .from("trainer_settings")
       .select("slot_durations_min, default_slot_duration_min")
       .eq("trainer_id", trainerId)
       .single(),
     getClientCredits(user.id, trainerId),
+    supabase
+      .from("purchases")
+      .select("id", { count: "exact", head: true })
+      .eq("client_id", user.id),
   ]);
+  // "Cliente novo" = nunca comprou pack nenhum (qualquer status, qualquer
+  // trainer). Esses vêem o ecrã de boas-vindas em vez da mensagem
+  // genérica "sem sessões". Clientes que já compraram mas ficaram a zero
+  // continuam a ver a mensagem original.
+  const isNewClient = (purchaseCount ?? 0) === 0;
 
   const currentTrainer = actives.find((t) => t.id === trainerId);
   const trainerName = currentTrainer?.full_name?.trim();
@@ -145,16 +164,20 @@ export default async function AgendaPage(
       )}
 
       {credits.total === 0 && !reschedule ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-800">
-          Sem sessões disponíveis {currentTrainer ? `com ${currentTrainer.full_name}` : ""}.{" "}
-          <a
-            href={`/app/comprar${currentTrainer ? `?trainer=${currentTrainer.id}` : ""}`}
-            className="font-semibold underline"
-          >
-            Compra um pack
-          </a>{" "}
-          para marcares sessões.
-        </div>
+        isNewClient ? (
+          <NewClientWelcome trainerName={trainerName} trainerId={currentTrainer?.id} />
+        ) : (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+            Sem sessões disponíveis {currentTrainer ? `com ${currentTrainer.full_name}` : ""}.{" "}
+            <a
+              href={`/app/comprar${currentTrainer ? `?trainer=${currentTrainer.id}` : ""}`}
+              className="font-semibold underline"
+            >
+              Compra um pack
+            </a>{" "}
+            para marcares sessões.
+          </div>
+        )
       ) : (
         <BookingFlow
           trainerId={trainerId}
@@ -164,6 +187,97 @@ export default async function AgendaPage(
           rescheduleBookingId={reschedule?.id}
         />
       )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════
+// Ecrã de boas-vindas — só para clientes que nunca compraram nada.
+// Funciona em light e dark (usa cores do design system: gold, ink, bone).
+// ════════════════════════════════════════════════════════════════
+function NewClientWelcome({
+  trainerName,
+  trainerId,
+}: {
+  trainerName?: string | null;
+  trainerId?: string;
+}) {
+  const buyHref = `/app/comprar${trainerId ? `?trainer=${trainerId}` : ""}`;
+  const name = trainerName?.trim() || "o teu trainer";
+  return (
+    <div className="card p-6 text-center sm:p-8">
+      {/* Ícone decorativo: avatar dourado + "raios" à volta. */}
+      <div className="relative mx-auto h-24 w-24">
+        <div className="absolute inset-0 grid place-items-center rounded-full border-2 border-gold-400/50">
+          <UserPlus className="h-10 w-10 text-gold-500" strokeWidth={1.75} />
+        </div>
+        <span aria-hidden className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 -translate-y-4 text-gold-500">✦</span>
+        <span aria-hidden className="pointer-events-none absolute right-0 top-2 translate-x-2 text-gold-500/80">✧</span>
+        <span aria-hidden className="pointer-events-none absolute left-0 top-2 -translate-x-2 text-gold-500/80">✧</span>
+        <span aria-hidden className="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-4 text-gold-500/80">✦</span>
+      </div>
+
+      <h2 className="mt-5 font-display text-2xl font-bold tracking-tight sm:text-3xl">
+        <span className="text-gold-500">Começa</span> a tua jornada
+      </h2>
+      <div aria-hidden className="mx-auto mt-2 h-0.5 w-16 rounded-full bg-gold-400" />
+      <p className="mx-auto mt-3 max-w-xs text-sm text-ink-600 dark:text-bone-100/80">
+        Para marcares sessões com {name}, precisas de um pack.
+      </p>
+
+      <div className="mt-6 grid grid-cols-3 gap-2 sm:gap-4">
+        <Feature
+          icon={<Dumbbell size={20} className="text-gold-500" strokeWidth={1.75} />}
+          title="Treinos personalizados"
+          desc="Feitos à tua medida."
+        />
+        <Feature
+          icon={<CalendarIcon size={20} className="text-gold-500" strokeWidth={1.75} />}
+          title="Acompanhamento contínuo"
+          desc={trainerName ? `Evolui com ${trainerName.split(" ")[0]}.` : "Evolui com o trainer."}
+        />
+        <Feature
+          icon={<BarChart3 size={20} className="text-gold-500" strokeWidth={1.75} />}
+          title="Resultados reais"
+          desc="Mais foco, mais consistência."
+        />
+      </div>
+
+      <div className="mt-6 border-t border-ink-900/10 pt-5 dark:border-white/10">
+        <Link
+          href={buyHref}
+          className="btn-gold inline-flex w-full items-center justify-center gap-2 uppercase tracking-wide"
+        >
+          <ShoppingBag size={16} /> Escolher pack
+        </Link>
+        <Link
+          href={buyHref}
+          className="mt-3 inline-flex items-center justify-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-900 dark:text-bone-100/80 dark:hover:text-bone-50"
+        >
+          <Package size={14} className="text-gold-500" /> Ver packs disponíveis
+          <ChevronRight size={14} />
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function Feature({
+  icon,
+  title,
+  desc,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  desc: string;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <div className="grid h-11 w-11 place-items-center rounded-full border border-gold-400/50">
+        {icon}
+      </div>
+      <div className="text-[11px] font-semibold leading-tight sm:text-xs">{title}</div>
+      <div className="text-[10px] leading-tight text-ink-500 dark:text-bone-100/70 sm:text-[11px]">{desc}</div>
     </div>
   );
 }
