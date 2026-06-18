@@ -154,6 +154,23 @@ export const getClientIdsInScope = cache(async (trainerIds: string[]): Promise<s
 export const getClientCountInScope = cache(async (trainerIds: string[]): Promise<number> => {
   if (trainerIds.length === 0) return 0;
   const supabase = await createClient();
+
+  // OWNER: "Total de clientes" = TODOS os clientes da plataforma (sem filtro
+  // de mês e incluindo "órfãos" sem trainer/actividade), para bater certo
+  // com a lista "Todos os clientes". O count_clients_in_scope (scoped) deixa
+  // de fora os órfãos, pelo que o KPI ficava ABAIXO da lista. Exclui
+  // anonimizados (@removido.invalid).
+  const profile = await getCurrentProfile();
+  if (profile?.role === "owner") {
+    const { count } = await (supabase as any)
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("role", "client")
+      .not("email", "ilike", "%@removido.invalid");
+    return Number(count ?? 0);
+  }
+
+  // TRAINER: mantém-se scoped (só os seus clientes).
   try {
     const { data, error } = await (supabase as any).rpc("count_clients_in_scope", {
       p_trainer_ids: trainerIds,

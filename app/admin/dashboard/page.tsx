@@ -172,16 +172,22 @@ async function Kpis({ year, month }: { year: number; month: number }) {
     revenue = ((monthPurchases ?? []) as any[]).reduce((acc: number, r: any) => acc + r.amount_cents, 0);
     packsSold = (monthPurchases ?? []).length;
     pendingPaymentsCount = pendingCount ?? 0;
-    // Conjunto candidato de client_ids (qualquer status que apareça na
-    // agenda) — filtrado a seguir contra profiles para excluir staff.
+    // Conjunto candidato de client_ids para "Clientes ativos no mês":
+    // SÓ sessões CONFIRMADAS (status = 'confirmed'), distinto, filtrado a
+    // seguir contra profiles para excluir staff/anonimizados. Paridade com
+    // get_dashboard_kpis (0095). "Sessões marcadas no mês" continua a
+    // espelhar a agenda (qualquer status excepto cancelled).
     const candidateClientIds = new Set<string>();
     for (const b of ((monthBookings ?? []) as any[])) {
       if (b.status !== "cancelled") {
         sessionsBooked++;
-        if (b.client_id) candidateClientIds.add(b.client_id);
       }
-      if (b.status === "confirmed") sessionsConfirmed++;
-      else if (b.status === "no_show") sessionsNoShow++;
+      if (b.status === "confirmed") {
+        sessionsConfirmed++;
+        if (b.client_id) candidateClientIds.add(b.client_id);
+      } else if (b.status === "no_show") {
+        sessionsNoShow++;
+      }
     }
     if (candidateClientIds.size > 0) {
       const { data: clientProfiles } = await supabase
