@@ -1,5 +1,6 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { revalidateAvailabilityViews } from "@/lib/revalidate";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
@@ -7,6 +8,36 @@ import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
 import { getCurrentTrainerId } from "@/lib/trainer";
 import { requireStaff } from "@/lib/authz";
+
+// ════════════════════════════════════════════════════════════════
+// Mudança de palavra-passe do trainer/admin autenticado.
+// A sessão prova a identidade — Supabase Auth não exige a password
+// actual no `updateUser`. Pedimos confirmação só por UX.
+// ════════════════════════════════════════════════════════════════
+export async function changeStaffPasswordAction(formData: FormData) {
+  await requireStaff();
+  const supabase = await createClient();
+  const password = String(formData.get("password") ?? "");
+  const confirm = String(formData.get("confirm") ?? "");
+
+  if (password.length < 8) {
+    await setFlash("A palavra-passe tem de ter pelo menos 8 caracteres.", "error");
+    redirect("/admin/definicoes?tab=perfil");
+  }
+  if (password !== confirm) {
+    await setFlash("As palavras-passe não coincidem.", "error");
+    redirect("/admin/definicoes?tab=perfil");
+  }
+
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) {
+    logError("changeStaffPasswordAction", error);
+    await setFlash("Não foi possível actualizar a palavra-passe.", "error");
+    redirect("/admin/definicoes?tab=perfil");
+  }
+  await setFlash("Palavra-passe actualizada");
+  redirect("/admin/definicoes?tab=perfil");
+}
 
 export async function saveTrainerBioAction(formData: FormData) {
   const profile = await requireStaff();
@@ -22,10 +53,47 @@ export async function saveTrainerBioAction(formData: FormData) {
   // o conteudo do trainer nunca contenha markup. O output JSON-LD em
   // /t/[slug] ja e escapado; isto e a 2a camada.
   const bio = String(formData.get("bio") ?? "").trim().slice(0, 500).replace(/[<>]/g, "");
+  const fullNameRaw = String(formData.get("full_name") ?? "").trim().slice(0, 120);
+  const fullName = fullNameRaw.replace(/[<>]/g, "");
   if (!trainerId) return;
-  const { error } = await supabase.from("trainers").update({ bio }).eq("id", trainerId);
-  if (error) { logError("saveTrainerBioAction", error); await setFlash("Não foi possível guardar a biografia", "error"); }
-  else await setFlash("Biografia guardada");
+
+  // 1) Bio fica no `trainers` (já existia).
+  const { error: bioErr } = await supabase
+    .from("trainers")
+    .update({ bio })
+    .eq("id", trainerId);
+  if (bioErr) {
+    logError("saveTrainerBioAction:bio", bioErr);
+    await setFlash("Não foi possível guardar a biografia", "error");
+    return;
+  }
+
+  // 2) Nome fica em `profiles.full_name` (do dono do trainer). Self-edits
+  // passam pela policy "profiles: self update"; cross-account requer
+  // owner. Vamos buscar o profile_id do trainer alvo para suportar
+  // ambos os caminhos.
+  if (fullName) {
+    const { data: tr } = await supabase
+      .from("trainers")
+      .select("profile_id")
+      .eq("id", trainerId)
+      .maybeSingle();
+    const targetProfileId = (tr as any)?.profile_id as string | undefined;
+    if (targetProfileId) {
+      const { error: nameErr } = await supabase
+        .from("profiles")
+        .update({ full_name: fullName })
+        .eq("id", targetProfileId);
+      if (nameErr) {
+        logError("saveTrainerBioAction:name", nameErr);
+        await setFlash("Biografia guardada, mas o nome não foi actualizado", "error");
+        revalidatePath("/admin/definicoes");
+        return;
+      }
+    }
+  }
+
+  await setFlash("Perfil guardado");
   revalidatePath("/admin/definicoes");
 }
 
