@@ -135,12 +135,33 @@ export async function rateLimit(kind: RateLimitKind, key: string): Promise<Limit
 
 /**
  * Devolve o IP do request a partir de headers que o Vercel define.
- * Fallback "anon" para dev local. `x-forwarded-for` pode ter múltiplos
- * IPs — o primeiro é o cliente real na convenção do Vercel.
+ *
+ * S-14 (audit jun/2026): `x-vercel-forwarded-for` é definido pelo proxy do
+ * Vercel e NÃO é forjável pelo cliente — é a única fonte de confiança em
+ * produção. `x-forwarded-for` / `x-real-ip` são enviáveis pelo cliente;
+ * usá-los como chave de rate-limit permitiria a um atacante rodar a chave a
+ * cada request (`x-forwarded-for: <aleatório>`) e contornar o limite de
+ * brute-force em /login,/registar.
+ *
+ * Política:
+ *   • Sempre que houver `x-vercel-forwarded-for`, é esse o IP (comportamento
+ *     idêntico ao anterior — no Vercel está SEMPRE presente, logo zero
+ *     mudança em produção).
+ *   • Em produção SEM esse header (cenário que não ocorre no Vercel), NÃO
+ *     confiamos em headers do cliente: devolvemos uma chave fixa. Isto faz
+ *     o limiter degradar para um bucket global mais apertado — falha
+ *     SEGURO (nunca ABRE o brute-force), em vez de confiar em input forjável.
+ *   • Em dev/local (sem proxy) mantemos o fallback para os headers comuns
+ *     para o limiter continuar funcional ao testar.
  */
 export function getRequestIp(headers: Headers): string {
+  const vercel = headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim();
+  if (vercel) return vercel;
+  if (process.env.NODE_ENV === "production") {
+    // Sem header de confiança em produção → fail-closed (chave fixa).
+    return "no-trusted-ip";
+  }
   return (
-    headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() ||
     headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     headers.get("x-real-ip")?.trim() ||
     "anon"
