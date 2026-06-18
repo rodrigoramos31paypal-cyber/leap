@@ -18,7 +18,10 @@
 // caem em /offline em falha. As públicas (/, /login, /registar)
 // continuam com cache, agora com event.waitUntil para garantir
 // que a escrita conclui.
-const CACHE_NAME = "leap-v11";
+// v12 (jun/2026): bump para invalidar ícones PWA cacheados (cache-first
+// em /icons/) — devices que tinham um ícone antigo/placeholder em cache
+// passam a re-fetch dos ícones corretos no próximo arranque.
+const CACHE_NAME = "leap-v12";
 const APP_SHELL = [
   "/",
   "/login",
