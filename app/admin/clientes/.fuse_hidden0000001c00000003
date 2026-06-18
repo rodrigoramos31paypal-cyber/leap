@@ -81,7 +81,7 @@ export default async function ClientesPage(
 }
 
 async function ClientList({ q, tab, page }: { q: string; tab: Tab; page: number }) {
-  const supabase = await createClient();
+  const supabase = createClient();
   const trainerIds = await getAccessibleTrainerIds();
   const trainerScope = trainerIds.length > 0 ? trainerIds : [""];
 
@@ -211,7 +211,7 @@ async function loadAllClientsPage(
   trainerIds: string[],
   from: number,
 ): Promise<{ clients: ClientRow[]; total: number }> {
-  const supabase = await createClient();
+  const supabase = createClient();
   const ids = await getClientIdsInScope(trainerIds);
   if (ids.length === 0) return { clients: [], total: 0 };
   const { data, count } = await supabase
@@ -230,7 +230,7 @@ async function loadScopedClientPage(
   trainerScope: string[],
   from: number,
 ): Promise<{ clients: ClientRow[]; total: number }> {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { pageIds, total } = await getScopedPageIds(tab, trainerIds, trainerScope, from);
 
   let clients: ClientRow[] = [];
@@ -251,7 +251,7 @@ async function getScopedPageIds(
   trainerScope: string[],
   from: number,
 ): Promise<{ pageIds: string[]; total: number }> {
-  const supabase = await createClient();
+  const supabase = createClient();
   try {
     // `as any`: estas RPCs ainda não estão nos tipos gerados do Supabase.
     // O runtime é correcto; evitamos só novos erros de `tsc`.
@@ -285,7 +285,7 @@ async function getScopedPageIdsFallback(
   trainerScope: string[],
   from: number,
 ): Promise<{ pageIds: string[]; total: number }> {
-  const supabase = await createClient();
+  const supabase = createClient();
 
   if (tab === "upcoming" || tab === "past") {
     const nowIso = new Date().toISOString();
@@ -355,4 +355,7 @@ function TabLink({ current, value, label }: { current: Tab; value: Tab; label: s
           : "text-ink-600 hover:bg-ink-900/5 hover:text-ink-900 dark:text-bone-100 dark:hover:bg-white/10 dark:hover:text-bone-50",
       )}
     >
-    
+      {label}
+     </Link>
+  );
+}

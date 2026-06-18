@@ -13,7 +13,7 @@ export default async function NewAdminNotePage(
   }
 ) {
   const searchParams = await props.searchParams;
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
@@ -222,4 +222,5 @@ function EditorShell({ title, children }: { title: string; children: React.React
       </div>
       <div>{children}</div>
     </div>
- 
+  );
+}

@@ -18,7 +18,7 @@ export async function startPurchaseAction({
   packId: string;
   method: PaymentMethod;
 }): Promise<{ error?: string; redirect?: string }> {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Sessão expirada." };
 
@@ -41,3 +41,5 @@ export async function startPurchaseAction({
     logError("startPurchaseAction", err);
     const friendly = userFacingRpcError(err);
     return { error: friendly ?? "Não foi possível iniciar a compra. Tenta novamente." };
+  }
+}

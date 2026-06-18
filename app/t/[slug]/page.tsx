@@ -6,7 +6,7 @@ import type { Metadata } from "next";
 import { getPublicTrainerBySlug } from "@/lib/public-trainer";
 import { ReviewsPopup } from "./reviews-popup";
 
-// Página pública do treinador. Indexável (SEO) — sem auth obrigatória.
+// Página pública do trainer. Indexável (SEO) — sem auth obrigatória.
 // URL: /t/<slug>
 //
 // Page renderizada dinamicamente por causa do JSON-LD (precisa do
@@ -23,7 +23,7 @@ export async function generateMetadata(
   const params = await props.params;
   const t = await getPublicTrainerBySlug(params.slug);
   if (!t) {
-    return { title: "Treinador não encontrado" };
+    return { title: "Trainer não encontrado" };
   }
   const title = `${t.fullName} · Personal Trainer`;
   const description =

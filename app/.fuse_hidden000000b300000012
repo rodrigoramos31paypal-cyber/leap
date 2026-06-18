@@ -66,7 +66,7 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const theme = await getTheme();
+  const theme = getTheme();
   // H2: nonce CSP gerado por middleware e propagado via `x-nonce`.
   // Sem nonce (dev local sem middleware), o CSP no production-build
   // não permitiria este `<script>` correr.
@@ -99,4 +99,5 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         />
       </body>
     </html>
- 
+  );
+}

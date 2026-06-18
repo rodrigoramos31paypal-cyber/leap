@@ -62,7 +62,7 @@ export function AvatarUploader({
           Foto de perfil
         </h3>
         <p className="mt-0.5 text-xs text-ink-500">
-          Aparece na tua página pública e onde os clientes escolhem treinador. JPG, PNG ou WEBP até 2 MB.
+          Aparece na tua página pública e onde os clientes escolhem trainer. JPG, PNG ou WEBP até 2 MB.
         </p>
       </div>
 

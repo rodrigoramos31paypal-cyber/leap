@@ -31,7 +31,7 @@ export default async function AdminSegurancaPage() {
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           <div className="font-semibold">Recomendamos activar 2FA</div>
           <p className="mt-1 text-xs">
-            Como és treinador/owner, ativar 2FA protege o acesso à gestão dos teus clientes
+            Como és trainer/owner, ativar 2FA protege o acesso à gestão dos teus clientes
             mesmo que a tua password seja comprometida. Depois de ativares e marcares "confiar
             neste dispositivo 30 dias", deixas de ter de meter o código a cada login no mesmo browser.
           </p>

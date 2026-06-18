@@ -29,7 +29,7 @@ export default async function SegurancaPage() {
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           <div className="font-semibold">2FA recomendado para contas admin</div>
           <p className="mt-1 text-xs">
-            Como és treinador/owner, ativar 2FA protege o acesso à gestão dos teus clientes
+            Como és trainer/owner, ativar 2FA protege o acesso à gestão dos teus clientes
             mesmo que a tua password seja comprometida.
           </p>
         </div>

@@ -151,7 +151,7 @@ export async function GET(request: NextRequest) {
         trainerProfileId,
         trainerProf?.email,
         emailTemplates.sessionReminderTrainer({
-          trainerName: trainerProf?.full_name ?? "treinador",
+          trainerName: trainerProf?.full_name ?? "trainer",
           clientName: client?.full_name ?? "cliente",
           when,
         }),

@@ -21,7 +21,7 @@ function priceToInput(cents: number | null): string {
 }
 
 export default async function AdminLojaPage() {
-  const supabase = await createClient();
+  const supabase = createClient();
   const trainerIds = await getAccessibleTrainerIds();
   const scope = trainerIds.length > 0 ? trainerIds : [""];
 
@@ -168,4 +168,5 @@ export default async function AdminLojaPage() {
         );
       })}
     </div>
- 
+  );
+}

@@ -75,7 +75,7 @@ export async function confirmEnrollAction(formData: FormData) {
   const factorId = String(formData.get("factorId") ?? "");
   const code = String(formData.get("code") ?? "").trim();
   if (!factorId || !/^\d{6}$/.test(code)) {
-    await setFlash("Código inválido.", "error");
+    setFlash("Código inválido.", "error");
     redirect(safeReturn(formData) ?? "/app/perfil?tab=perfil");
   }
 
@@ -87,11 +87,11 @@ export async function confirmEnrollAction(formData: FormData) {
   if (error) {
     logError("confirmEnrollAction", error);
     await supabase.auth.mfa.unenroll({ factorId }).catch(() => {});
-    await setFlash("Código inválido. Tenta de novo.", "error");
+    setFlash("Código inválido. Tenta de novo.", "error");
     redirect(safeReturn(formData) ?? "/app/perfil?tab=perfil");
   }
 
-  await setFlash("2FA activada com sucesso");
+  setFlash("2FA activada com sucesso");
   revalidatePath("/app/perfil");
   revalidatePath("/admin/seguranca");
   redirect(safeReturn(formData) ?? "/app/perfil?tab=perfil");
@@ -103,7 +103,7 @@ export async function unenrollAction(formData: FormData) {
 
   const factorId = String(formData.get("factorId") ?? "");
   if (!factorId) {
-    await setFlash("Factor não encontrado.", "error");
+    setFlash("Factor não encontrado.", "error");
     redirect(safeReturn(formData) ?? "/app/perfil?tab=perfil");
   }
 
@@ -115,7 +115,7 @@ export async function unenrollAction(formData: FormData) {
   // mesmo que a sessão venha de um cookie roubado ou de um device confiado.
   const code = String(formData.get("code") ?? "").trim();
   if (!/^\d{6}$/.test(code)) {
-    await setFlash("Introduz o código 2FA actual para desactivar.", "error");
+    setFlash("Introduz o código 2FA actual para desactivar.", "error");
     redirect(safeReturn(formData) ?? "/app/perfil?tab=perfil");
   }
   const { error: verifyError } = await (supabase.auth.mfa as any).challengeAndVerify({
@@ -124,16 +124,16 @@ export async function unenrollAction(formData: FormData) {
   });
   if (verifyError) {
     logError("unenrollAction:verify", verifyError);
-    await setFlash("Código inválido. A 2FA não foi desactivada.", "error");
+    setFlash("Código inválido. A 2FA não foi desactivada.", "error");
     redirect(safeReturn(formData) ?? "/app/perfil?tab=perfil");
   }
 
   const { error } = await supabase.auth.mfa.unenroll({ factorId });
   if (error) {
     logError("unenrollAction", error);
-    await setFlash("Não foi possível desactivar 2FA.", "error");
+    setFlash("Não foi possível desactivar 2FA.", "error");
   } else {
-    await setFlash("2FA desactivada");
+    setFlash("2FA desactivada");
   }
   revalidatePath("/app/perfil");
   revalidatePath("/admin/seguranca");
@@ -148,4 +148,9 @@ function safeReturn(formData: FormData): string | null {
   if (
     r === "/app/perfil" ||
     r === "/app/perfil?tab=perfil" ||
-    r === "/admin/segu
+    r === "/admin/seguranca"
+  ) {
+    return r;
+  }
+  return null;
+}

@@ -149,7 +149,7 @@ export default async function ClientDashboard() {
       {/* Bolsas por trainer (multi-trainer) */}
       {multiTrainer && (
         <section>
-          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-ink-500">Sessões por treinador</h2>
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-ink-500">Sessões por trainer</h2>
           <ul className="grid gap-2 sm:grid-cols-2">
             {creditsByTrainer.map((t) => (
               <li key={t.trainerId} className="card p-4">

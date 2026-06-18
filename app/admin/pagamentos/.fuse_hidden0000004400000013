@@ -26,7 +26,7 @@ export default async function AdminPaymentsPage(
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 
-  const supabase = await createClient();
+  const supabase = createClient();
   const trainerIds = await getAccessibleTrainerIds();
   const trainerScope = trainerIds.length > 0 ? trainerIds : [""];
 
@@ -323,4 +323,5 @@ function paymentMethodLabel(m: string) {
 function statusColor(s: string) {
   if (s === "confirmed") return "ok";
   if (s === "rejected" || s === "cancelled") return "danger";
-  return "war
+  return "warn";
+}

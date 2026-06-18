@@ -103,7 +103,7 @@ async function Kpis({ year, month }: { year: number; month: number }) {
   const monthStart = new Date(year, month, 1);
   const monthEnd = new Date(year, month + 1, 1);
 
-  const supabase = await createClient();
+  const supabase = createClient();
   const trainerIds = await getAccessibleTrainerIds();
   const trainerScope = trainerIds.length > 0 ? trainerIds : [""];
 
@@ -218,7 +218,7 @@ async function Kpis({ year, month }: { year: number; month: number }) {
 }
 
 async function TodaySessions() {
-  const supabase = await createClient();
+  const supabase = createClient();
   const trainerIds = await getAccessibleTrainerIds();
   const trainerScope = trainerIds.length > 0 ? trainerIds : [""];
 
@@ -285,4 +285,5 @@ function Stat({
       <div className="mt-auto pt-1.5 font-display text-xl font-bold sm:pt-2 sm:text-2xl">{value}</div>
     </div>
   );
-  return href ? <Link href={href} className="block h-full">{inner}</Link>
+  return href ? <Link href={href} className="block h-full">{inner}</Link> : inner;
+}

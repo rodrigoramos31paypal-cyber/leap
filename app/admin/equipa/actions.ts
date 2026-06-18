@@ -83,8 +83,8 @@ export async function addTrainerAction(formData: FormData): Promise<{ error?: st
  *
  * A conta passa a OWNER (gestão total + todas as notificações) e
  * PARTILHA o calendário do estúdio — NÃO cria um trainer separado, por
- * isso os clientes NÃO passam a ter de "escolher treinador". Para um
- * calendário próprio (estúdio com vários treinadores) usa antes
+ * isso os clientes NÃO passam a ter de "escolher trainer". Para um
+ * calendário próprio (estúdio com vários trainers) usa antes
  * "Adicionar trainer".
  */
 export async function grantAdminByEmailAction(
@@ -123,7 +123,7 @@ export async function grantAdminByEmailAction(
     }
 
     // Promove a OWNER. SEM criar trainer — partilha o calendário do
-    // estúdio (não introduz a escolha de treinador para os clientes).
+    // estúdio (não introduz a escolha de trainer para os clientes).
     const { error: roleErr } = await admin
       .from("profiles")
       .update({ role: "owner" })
@@ -146,9 +146,9 @@ export async function grantAdminByEmailAction(
 
 /**
  * "Tornar só admin": remove o registo de trainer de uma conta mas mantém
- * o acesso de owner. Deixa de ser treinador marcável e passa a partilhar
+ * o acesso de owner. Deixa de ser trainer marcável e passa a partilhar
  * o calendário do estúdio. Usado para consolidar vários admins num único
- * calendário (deixa de haver escolha de treinador para os clientes).
+ * calendário (deixa de haver escolha de trainer para os clientes).
  *
  * Não remove o ÚLTIMO trainer, nem um trainer com histórico
  * (marcações/compras/séries) — nesse caso há que transferir primeiro.
@@ -229,8 +229,8 @@ export async function revokeAdminByProfileAction(formData: FormData) {
 }
 
 /**
- * "Tornar treinador": move o calendário do estúdio (o único trainer)
- * para esta conta. Passa a ser o treinador marcável; quem o era antes
+ * "Tornar trainer": move o calendário do estúdio (o único trainer)
+ * para esta conta. Passa a ser o trainer marcável; quem o era antes
  * fica como admin (owner) sem calendário. Mantém marcações/histórico —
  * só muda quem controla o registo de trainer. Move "full powers".
  *
@@ -251,7 +251,7 @@ export async function makeStudioTrainerAction(formData: FormData) {
       return;
     }
     if (list[0].profile_id === profileId) {
-      await setFlash("Esta conta já é o treinador.", "error");
+      await setFlash("Esta conta já é o trainer.", "error");
       return;
     }
 
@@ -267,7 +267,7 @@ export async function makeStudioTrainerAction(formData: FormData) {
     }
 
     revalidateTeamViews();
-    await setFlash("Calendário transferido — esta conta é agora o treinador.");
+    await setFlash("Calendário transferido — esta conta é agora o trainer.");
   } catch (e) {
     logError("makeStudioTrainerAction", e);
     await setFlash("Não foi possível transferir.", "error");

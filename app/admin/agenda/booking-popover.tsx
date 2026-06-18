@@ -82,7 +82,7 @@ export function BookingBlock({
   sessionsLeft?: number;
   // `true` quando esta é a "sessão do último crédito" do cliente (saldo
   // de packs == 0). Sinalizada a vermelho na agenda para alertar o
-  // treinador de que o cliente fica sem sessões.
+  // trainer de que o cliente fica sem sessões.
   isLastCredit?: boolean;
   // `true` quando esta sessão se sobrepõe a outra — destaca o bordo
   // (cor depende de `overlapCol` para distinguir sessões empilhadas).

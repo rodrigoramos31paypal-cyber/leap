@@ -24,7 +24,7 @@ function hashToken(token: string): string {
 /** Lê os factores TOTP do utilizador autenticado. Devolve apenas os já
  *  verificados (configurados com sucesso). */
 export async function listVerifiedFactors() {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data, error } = await supabase.auth.mfa.listFactors();
   if (error || !data) return [];
   return (data.totp ?? []).filter((f) => f.status === "verified");
@@ -41,7 +41,7 @@ export async function listVerifiedFactors() {
 // Cached por request para deduplicar entre layout e páginas.
 export const getAalInfo = cache(
   async (): Promise<{ currentLevel: "aal1" | "aal2"; hasMfa: boolean }> => {
-    const supabase = await createClient();
+    const supabase = createClient();
     const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     return {
       currentLevel: (data?.currentLevel as "aal1" | "aal2") ?? "aal1",
@@ -111,4 +111,5 @@ export async function clearTrustedDevice() {
       .delete()
       .eq("token_hash", hashToken(cookie));
   }
-  (await cookies()).delete(TRUSTED_DEVICE
+  (await cookies()).delete(TRUSTED_DEVICE_COOKIE);
+}

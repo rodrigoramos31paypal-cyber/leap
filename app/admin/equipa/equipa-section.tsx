@@ -96,8 +96,8 @@ export async function EquipaSection() {
         <p className="mt-3 text-xs text-ink-500">
           A conta tem de já estar registada na app. Fica com acesso total e as
           mesmas notificações, e <strong>partilha o calendário do estúdio</strong>
-          {" "}— não cria um treinador novo (os clientes não passam a ter de escolher
-          treinador). Se o email não estiver registado, aparece um erro.
+          {" "}— não cria um trainer novo (os clientes não passam a ter de escolher
+          trainer). Se o email não estiver registado, aparece um erro.
         </p>
         <form
           action={grantAdminByEmailAction as unknown as (fd: FormData) => Promise<void>}
@@ -170,7 +170,7 @@ export async function EquipaSection() {
           <div className="pt-2">
             <h2 className="font-display text-lg font-bold tracking-tight">Admins</h2>
             <p className="text-sm text-ink-500">
-              Contas com acesso total que partilham o calendário do estúdio (sem treinador próprio).
+              Contas com acesso total que partilham o calendário do estúdio (sem trainer próprio).
             </p>
           </div>
           <ul className="space-y-2">
@@ -192,7 +192,7 @@ export async function EquipaSection() {
                       <form action={makeStudioTrainerAction}>
                         <input type="hidden" name="profileId" value={a.id} />
                         <button className="btn-outline inline-flex items-center gap-1.5 text-xs">
-                          <ArrowRightLeft size={12} /> Tornar treinador
+                          <ArrowRightLeft size={12} /> Tornar trainer
                         </button>
                       </form>
                     )}

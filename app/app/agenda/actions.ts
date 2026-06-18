@@ -14,7 +14,7 @@ const NOTE_MAX_LEN = 5000;
 /**
  * Guarda a nota opcional escrita pelo cliente no momento da marcação
  * (ligada à `booking_id`, autor = cliente) e dispara uma notificação
- * in-app para o treinador, separada da notificação da marcação em si.
+ * in-app para o trainer, separada da notificação da marcação em si.
  *
  * Falhas aqui NÃO devem fazer rollback à marcação — daí o try/catch
  * generoso e o `logError` em vez de `throw`. A marcação fica criada;
@@ -46,7 +46,7 @@ async function persistClientBookingNote(
       return;
     }
 
-    // Notifica o treinador (em separado da notificação da própria
+    // Notifica o trainer (em separado da notificação da própria
     // marcação) que o cliente deixou uma nota.
     try {
       const { data: bk } = await supabase
@@ -100,7 +100,7 @@ export async function bookAction({
   startsAtIso: string;
   durationMin: number;
   sessionType: SessionType;
-  /** Nota opcional do cliente para o treinador (≤5000 chars). */
+  /** Nota opcional do cliente para o trainer (≤5000 chars). */
   note?: string;
 }): Promise<{ ok?: true; error?: string; pending?: boolean }> {
   try {
@@ -123,7 +123,7 @@ export async function bookAction({
     const sideEffects = Promise.allSettled([
       dispatchBookingCreated(bookingId),
       pushBookingToCalendars(bookingId),
-      // Nota opcional do cliente + notificação para o treinador.
+      // Nota opcional do cliente + notificação para o trainer.
       // Best effort: se falhar, a marcação fica na mesma (a função
       // já trata os próprios erros internamente).
       note ? persistClientBookingNote(bookingId, note) : Promise.resolve(),
@@ -160,7 +160,7 @@ export async function rescheduleAction({
   oldBookingId: string;
   startsAtIso: string;
   durationMin: number;
-  /** Nota opcional do cliente para o treinador (ligada à NOVA marcação). */
+  /** Nota opcional do cliente para o trainer (ligada à NOVA marcação). */
   note?: string;
 }): Promise<{ ok?: true; error?: string; pending?: boolean }> {
   const supabase = await createClient();

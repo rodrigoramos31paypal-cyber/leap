@@ -14,7 +14,7 @@ export async function submitRatingAction(formData: FormData) {
   const comment = String(formData.get("comment") ?? "").trim() || null;
 
   if (!bookingId || !Number.isFinite(stars) || stars < 1 || stars > 5) {
-    await setFlash("Avaliação inválida.", "error");
+    setFlash("Avaliação inválida.", "error");
     return;
   }
 
@@ -31,11 +31,11 @@ export async function submitRatingAction(formData: FormData) {
     .maybeSingle();
 
   if (!b) {
-    await setFlash("Sessão não encontrada.", "error");
+    setFlash("Sessão não encontrada.", "error");
     return;
   }
   if (b.status !== "confirmed" || new Date(b.ends_at).getTime() > Date.now()) {
-    await setFlash("Só podes avaliar sessões que já realizaste.", "error");
+    setFlash("Só podes avaliar sessões que já realizaste.", "error");
     return;
   }
 
@@ -55,10 +55,11 @@ export async function submitRatingAction(formData: FormData) {
 
   if (error) {
     logError("submitRatingAction", error);
-    await setFlash("Não foi possível guardar a avaliação.", "error");
+    setFlash("Não foi possível guardar a avaliação.", "error");
     return;
   }
 
-  await setFlash("Obrigado pela tua avaliação!");
+  setFlash("Obrigado pela tua avaliação!");
   revalidatePath(`/app/sessao/${bookingId}`);
-  redirect(`
+  redirect(`/app/sessao/${bookingId}`);
+}

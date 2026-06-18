@@ -48,7 +48,7 @@ export default async function DefinicoesPage(
   }
 ) {
   const searchParams = await props.searchParams;
-  const supabase = await createClient();
+  const supabase = createClient();
   const [trainer, { data: { user } }, profile] = await Promise.all([
     getCurrentTrainer(),
     supabase.auth.getUser(),
@@ -151,7 +151,7 @@ function TabNav({ active, isOwner }: { active: TabId; isOwner: boolean }) {
 // ════════════════════════════════════════════════════════════════
 async function loadTabData(
   tab: TabId,
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: ReturnType<typeof createClient>,
   trainer: NonNullable<Awaited<ReturnType<typeof getCurrentTrainer>>>,
   userId: string | undefined,
 ) {
@@ -744,4 +744,6 @@ function PhoneCalendarRow({
           </div>
         </details>
       )}
-   
+    </div>
+  );
+}

@@ -32,7 +32,7 @@ export async function savePackAction(formData: FormData) {
   const trainerId = String(formData.get("trainerId") ?? "");
   // C-C: owner pode criar para qualquer trainer; trainer só no próprio.
   if (profile.role !== "owner" && trainerId !== (await getCurrentTrainerId())) {
-    await setFlash("Sem permissão.", "error");
+    setFlash("Sem permissão.", "error");
     return;
   }
   const name = String(formData.get("name") ?? "").trim();
@@ -60,9 +60,9 @@ export async function savePackAction(formData: FormData) {
     const msg = (error as any).code === "23505"
       ? "Já existe um pack 'sessão avulsa' activo. Desactiva o existente antes de criar outro."
       : "Não foi possível criar o pack";
-    await setFlash(msg, "error");
+    setFlash(msg, "error");
   } else {
-    await setFlash("Pack criado");
+    setFlash("Pack criado");
   }
   revalidatePackViews();
 }
@@ -78,9 +78,9 @@ export async function updatePackAction(formData: FormData) {
     .select("trainer_id")
     .eq("id", id)
     .maybeSingle();
-  if (!row) { await setFlash("Pack não encontrado", "error"); return; }
+  if (!row) { setFlash("Pack não encontrado", "error"); return; }
   if (profile.role !== "owner" && row.trainer_id !== (await getCurrentTrainerId())) {
-    await setFlash("Sem permissão.", "error");
+    setFlash("Sem permissão.", "error");
     return;
   }
   const name = String(formData.get("name") ?? "").trim();
@@ -104,9 +104,9 @@ export async function updatePackAction(formData: FormData) {
     const msg = (error as any).code === "23505"
       ? "Já existe um pack 'sessão avulsa' activo. Desactiva o existente primeiro."
       : "Não foi possível guardar";
-    await setFlash(msg, "error");
+    setFlash(msg, "error");
   } else {
-    await setFlash("Pack actualizado");
+    setFlash("Pack actualizado");
   }
   revalidatePackViews();
 }
@@ -122,18 +122,18 @@ export async function togglePackAction(formData: FormData) {
     .select("trainer_id")
     .eq("id", id)
     .maybeSingle();
-  if (!row) { await setFlash("Pack não encontrado", "error"); return; }
+  if (!row) { setFlash("Pack não encontrado", "error"); return; }
   if (profile.role !== "owner" && row.trainer_id !== (await getCurrentTrainerId())) {
-    await setFlash("Sem permissão.", "error");
+    setFlash("Sem permissão.", "error");
     return;
   }
   const active = formData.get("active") === "true";
   const { error } = await supabase.from("packs").update({ active }).eq("id", id);
   if (error) {
     logError("togglePackAction", error);
-    await setFlash("Não foi possível alterar o estado", "error");
+    setFlash("Não foi possível alterar o estado", "error");
   } else {
-    await setFlash(active ? "Pack activado" : "Pack desactivado");
+    setFlash(active ? "Pack activado" : "Pack desactivado");
   }
   revalidatePackViews();
 }
@@ -149,12 +149,17 @@ export async function deletePackAction(formData: FormData) {
     .select("trainer_id")
     .eq("id", id)
     .maybeSingle();
-  if (!row) { await setFlash("Pack não encontrado", "error"); return; }
+  if (!row) { setFlash("Pack não encontrado", "error"); return; }
   if (profile.role !== "owner" && row.trainer_id !== (await getCurrentTrainerId())) {
-    await setFlash("Sem permissão.", "error");
+    setFlash("Sem permissão.", "error");
     return;
   }
   const { error } = await supabase.from("packs").delete().eq("id", id);
   if (error) {
     logError("deletePackAction", error);
-    await setFlash("Não foi possível eliminar", 
+    setFlash("Não foi possível eliminar", "error");
+  } else {
+    setFlash("Pack eliminado");
+  }
+  revalidatePackViews();
+}

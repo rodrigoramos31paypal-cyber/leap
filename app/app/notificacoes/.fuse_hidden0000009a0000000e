@@ -36,9 +36,9 @@ export async function deleteNotificationAction(formData: FormData) {
     .eq("user_id", user.id);
   if (error) {
     logError("deleteNotificationAction", error);
-    await setFlash("Não foi possível eliminar", "error");
+    setFlash("Não foi possível eliminar", "error");
   } else {
-    await setFlash("Notificação eliminada");
+    setFlash("Notificação eliminada");
   }
   // Revalida a página correcta consoante o lado (cliente vs admin).
   revalidatePath(scope === "admin" ? "/admin/notificacoes" : "/app/notificacoes");
@@ -52,8 +52,9 @@ export async function deleteAllNotificationsAction(formData: FormData) {
   const { error } = await supabase.from("notifications").delete().eq("user_id", user.id);
   if (error) {
     logError("deleteAllNotificationsAction", error);
-    await setFlash("Não foi possível limpar as notificações", "error");
+    setFlash("Não foi possível limpar as notificações", "error");
   } else {
-    await setFlash("Notificações eliminadas");
+    setFlash("Notificações eliminadas");
   }
-  revalidatePath(scope === "admin" ? "/admin/notificacoes" : 
+  revalidatePath(scope === "admin" ? "/admin/notificacoes" : "/app/notificacoes");
+}

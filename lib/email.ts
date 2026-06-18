@@ -117,7 +117,7 @@ export const emailTemplates = {
       html: shell(
         "Presença confirmada",
         `<p style="margin:0 0 10px">Olá ${escapeHtml(args.clientName)},</p>
-         <p style="margin:0">A tua sessão de <strong>${escapeHtml(args.when)}</strong> foi confirmada pelo treinador. Bom trabalho!</p>`,
+         <p style="margin:0">A tua sessão de <strong>${escapeHtml(args.when)}</strong> foi confirmada pelo trainer. Bom trabalho!</p>`,
       ),
       text: `Sessão de ${args.when} confirmada.`,
     };

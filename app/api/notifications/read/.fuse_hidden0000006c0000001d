@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
   }
   if (!id) return NextResponse.json({ ok: true, skipped: "no_id" });
 
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
@@ -57,4 +57,5 @@ export async function POST(request: NextRequest) {
     .is("read_at", null);
 
   if (error) return NextResponse.json({ ok: false }, { status: 500 });
-  return NextResponse.json({ ok: true 
+  return NextResponse.json({ ok: true });
+}
