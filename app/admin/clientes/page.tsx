@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getCurrentProfile } from "@/lib/supabase/server";
 import { getAccessibleTrainerIds, getClientIdsInScope } from "@/lib/trainer";
 import { cn } from "@/lib/utils";
 import { Pagination } from "@/components/pagination";
@@ -212,6 +212,26 @@ async function loadAllClientsPage(
   from: number,
 ): Promise<{ clients: ClientRow[]; total: number }> {
   const supabase = await createClient();
+
+  // OWNER: vê TODOS os clientes do estúdio, incluindo "órfãos" — contas que
+  // se registaram fora de um link de trainer (profiles.trainer_id NULL) e
+  // ainda não compraram/marcaram. O scope por trainer (getClientIdsInScope)
+  // só apanha clientes ligados a um trainer ou com compras/bookings, por
+  // isso uma conta recém-criada sem trainer ficava invisível aqui. Para o
+  // owner isso é indesejado — ele gere o estúdio todo. Exclui anonimizados.
+  const profile = await getCurrentProfile();
+  if (profile?.role === "owner") {
+    const { data, count } = await (supabase as any)
+      .from("profiles")
+      .select("id, full_name, email, phone", { count: "exact" })
+      .eq("role", "client")
+      .not("email", "ilike", "%@removido.invalid")
+      .order("full_name")
+      .range(from, from + PAGE_SIZE - 1);
+    return { clients: (data ?? []) as ClientRow[], total: count ?? 0 };
+  }
+
+  // TRAINER: mantém-se scoped — só os seus clientes.
   const ids = await getClientIdsInScope(trainerIds);
   if (ids.length === 0) return { clients: [], total: 0 };
   const { data, count } = await supabase
@@ -280,6 +300,25 @@ async function getScopedPageIds(
   }
 }
 
+// Mantém só os IDs que correspondem a um cliente ACTIVO: role='client' e
+// não anonimizado (@removido.invalid). Preserva a ordem de entrada. Usado
+// pelos fallbacks JS de upcoming/past/esgotar para tirar staff e removidos.
+async function filterToActiveClients(ids: string[]): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const supabase = await createClient();
+  const { data } = await (supabase as any)
+    .from("profiles")
+    .select("id, email")
+    .eq("role", "client")
+    .in("id", ids);
+  const valid = new Set<string>(
+    ((data ?? []) as any[])
+      .filter((p) => !((p.email ?? "") as string).endsWith("@removido.invalid"))
+      .map((p) => p.id as string),
+  );
+  return ids.filter((id) => valid.has(id));
+}
+
 async function getScopedPageIdsFallback(
   tab: "upcoming" | "past" | "esgotar",
   trainerScope: string[],
@@ -308,7 +347,13 @@ async function getScopedPageIdsFallback(
       seen.add(b.client_id);
       orderedIds.push(b.client_id);
     }
-    return { pageIds: orderedIds.slice(from, from + PAGE_SIZE), total: orderedIds.length };
+
+    // Exclui staff (owners/trainers/admins) e contas anonimizadas/removidas
+    // — mesmo guard que a RPC clients_by_booking. Sem isto, uma conta de
+    // staff que apareça como client_id de um booking (ex.: sessões de teste)
+    // surgia nas tabs Próximas/Sessões passadas.
+    const filteredIds = await filterToActiveClients(orderedIds);
+    return { pageIds: filteredIds.slice(from, from + PAGE_SIZE), total: filteredIds.length };
   }
 
   // esgotar
@@ -344,20 +389,7 @@ async function getScopedPageIdsFallback(
   // (@removido.invalid) — mesmo guard que clients_low_sessions (RPC) e
   // count_clients_in_scope. Sem isto, qualquer conta não-cliente com
   // compras no scope, ou um cliente já removido, aparecia na vista.
-  let lowList = lowCandidates;
-  if (lowCandidates.length > 0) {
-    const { data: validProfiles } = await (supabase as any)
-      .from("profiles")
-      .select("id, email")
-      .eq("role", "client")
-      .in("id", lowCandidates);
-    const validSet = new Set<string>(
-      ((validProfiles ?? []) as any[])
-        .filter((p) => !((p.email ?? "") as string).endsWith("@removido.invalid"))
-        .map((p) => p.id as string),
-    );
-    lowList = lowCandidates.filter((id) => validSet.has(id));
-  }
+  const lowList = await filterToActiveClients(lowCandidates);
   return { pageIds: lowList.slice(from, from + PAGE_SIZE), total: lowList.length };
 }
 
@@ -375,6 +407,6 @@ function TabLink({ current, value, label }: { current: Tab; value: Tab; label: s
       )}
     >
       {label}
-     </Link>
+    </Link>
   );
 }
