@@ -5,6 +5,7 @@ import { createPurchase } from "@/lib/credits";
 import { dispatchPurchasePending } from "@/lib/email-dispatch";
 import { logError, userFacingRpcError } from "@/lib/errors";
 import { revalidateCreditsViews } from "@/lib/revalidate";
+import { setFlash } from "@/lib/flash";
 import { rateLimit } from "@/lib/rate-limit";
 import type { PaymentMethod } from "@/types/database";
 
@@ -36,6 +37,7 @@ export async function startPurchaseAction({
     const purchaseId = await createPurchase(packId, method);
     await dispatchPurchasePending(purchaseId).catch(() => {});
     revalidateCreditsViews();
+    await setFlash("Compra criada — segue as instruções de pagamento", "info");
     return { redirect: `/app/compras/${purchaseId}/manual` };
   } catch (err) {
     logError("startPurchaseAction", err);

@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
 
 export async function createGeneralNoteAction(formData: FormData): Promise<{ error?: string; ok?: true } | void> {
@@ -33,12 +34,15 @@ export async function createGeneralNoteAction(formData: FormData): Promise<{ err
   if (error) {
     // RLS rejeição → mensagem humana em vez de "violates RLS policy"
     if (/row-level security/i.test(error.message)) {
+      await setFlash("Sem permissão para criar uma nota sobre este utilizador.", "error");
       return { error: "Sem permissão para criar uma nota sobre este utilizador." };
     }
     logError("createGeneralNoteAction", error);
+    await setFlash("Não foi possível guardar a nota.", "error");
     return { error: "Não foi possível guardar a nota." };
   }
 
+  await setFlash("Nota criada");
   revalidatePath("/app/notas");
   revalidatePath("/admin/notas");
   if (redirectTo) redirect(redirectTo);
@@ -66,9 +70,11 @@ export async function createBookingNoteAction(formData: FormData): Promise<{ err
     .insert({ booking_id: bookingId, author_id: user.id, body });
   if (error) {
     logError("createBookingNoteAction", error);
+    await setFlash("Não foi possível guardar a nota.", "error");
     return { error: "Não foi possível guardar a nota." };
   }
 
+  await setFlash("Nota guardada");
   revalidatePath("/app/notas");
   revalidatePath("/admin/notas");
   revalidatePath("/app/historico");
@@ -92,9 +98,11 @@ export async function updateNoteByIdAction(formData: FormData): Promise<{ error?
     .eq("author_id", user.id);
   if (error) {
     logError("updateNoteByIdAction", error);
+    await setFlash("Não foi possível guardar a nota.", "error");
     return { error: "Não foi possível guardar a nota." };
   }
 
+  await setFlash("Nota actualizada");
   revalidatePath("/app/notas");
   revalidatePath("/admin/notas");
   revalidatePath("/app/historico");
@@ -107,11 +115,17 @@ export async function deleteNoteByIdAction(formData: FormData) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
-  await supabase
+  const { error } = await supabase
     .from("session_notes")
     .delete()
     .eq("id", noteId)
     .eq("author_id", user.id);
+  if (error) {
+    logError("deleteNoteByIdAction", error);
+    await setFlash("Não foi possível apagar a nota.", "error");
+    return;
+  }
+  await setFlash("Nota apagada");
   revalidatePath("/app/notas");
   revalidatePath("/admin/notas");
   revalidatePath("/app/historico");
@@ -140,6 +154,7 @@ export async function upsertNoteAction(formData: FormData): Promise<{ error?: st
       .insert({ booking_id: bookingId, author_id: user.id, body });
     if (error) {
       logError("upsertNoteAction", error);
+      await setFlash("Não foi possível guardar a nota.", "error");
       return { error: "Não foi possível guardar a nota." };
     }
 
