@@ -272,6 +272,17 @@ async function getScopedPageIds(
   from: number,
 ): Promise<{ pageIds: string[]; total: number }> {
   const supabase = await createClient();
+
+  // OWNER + esgotar: enumera TODOS os clientes (incl. órfãos e quem nunca
+  // comprou → 0 sessões), não só os que têm compras no scope. A RPC scoped
+  // deixava de fora exactamente os clientes com 0 sessões sem histórico.
+  if (tab === "esgotar") {
+    const profile = await getCurrentProfile();
+    if (profile?.role === "owner") {
+      return getOwnerLowSessionsPageIds(from);
+    }
+  }
+
   try {
     // `as any`: estas RPCs ainda não estão nos tipos gerados do Supabase.
     // O runtime é correcto; evitamos só novos erros de `tsc`.
@@ -317,6 +328,46 @@ async function filterToActiveClients(ids: string[]): Promise<string[]> {
       .map((p) => p.id as string),
   );
   return ids.filter((id) => valid.has(id));
+}
+
+// OWNER · "Esgotar sessões" sobre TODOS os clientes do estúdio (incluindo
+// quem nunca comprou → 0 sessões, e órfãos sem trainer). Soma as sessões
+// activas (confirmed, não expiradas) por cliente; quem não tem compras fica
+// a 0. Filtra <= 2, ordena (menos sessões primeiro) e pagina.
+async function getOwnerLowSessionsPageIds(
+  from: number,
+): Promise<{ pageIds: string[]; total: number }> {
+  const supabase = await createClient();
+
+  const { data: profs } = await (supabase as any)
+    .from("profiles")
+    .select("id")
+    .eq("role", "client")
+    .not("email", "ilike", "%@removido.invalid");
+  const allIds = ((profs ?? []) as any[]).map((p) => p.id as string);
+  if (allIds.length === 0) return { pageIds: [], total: 0 };
+
+  const totals = new Map<string, number>();
+  for (const id of allIds) totals.set(id, 0);
+
+  const { data: rows } = await supabase
+    .from("purchases")
+    .select("client_id, sessions_remaining, expires_at")
+    .in("client_id", allIds)
+    .eq("status", "confirmed");
+  const now = Date.now();
+  for (const r of (rows ?? []) as any[]) {
+    if (r.expires_at && new Date(r.expires_at).getTime() < now) continue;
+    if (!totals.has(r.client_id)) continue; // ignora compras de não-clientes
+    totals.set(r.client_id, (totals.get(r.client_id) ?? 0) + Number(r.sessions_remaining ?? 0));
+  }
+
+  const lowList = Array.from(totals.entries())
+    .filter(([, n]) => n <= 2)
+    .sort((a, b) => a[1] - b[1] || (a[0] < b[0] ? -1 : 1))
+    .map(([id]) => id);
+
+  return { pageIds: lowList.slice(from, from + PAGE_SIZE), total: lowList.length };
 }
 
 async function getScopedPageIdsFallback(
