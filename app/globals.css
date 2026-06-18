@@ -146,6 +146,10 @@ input[type="date"]::-webkit-date-and-time-value {
    por toda a app sem ter de adicionar `dark:` em cada componente.
    ────────────────────────────────────────────────────────────── */
 .dark .text-ink-900 { color: #FAFAF7; }
+/* text-ink-800 faltava aqui: sem este override ficava escuro (quase preto)
+   em dark mode, ilegível sobre superfícies escuras (ex: bio do PT, painel
+   bg-gold-50). Alinhado com os vizinhos 700/900. */
+.dark .text-ink-800 { color: #F2F1EA; }
 .dark .text-ink-700 { color: #F2F1EA; }
 .dark .text-ink-600 { color: rgb(242 241 234 / 0.85); }
 .dark .text-ink-500 { color: rgb(242 241 234 / 0.65); }
@@ -164,6 +168,15 @@ input[type="date"]::-webkit-date-and-time-value {
    já declaram `dark:bg-ink-800` (#111111) não mudam. O KNOB do switch
    usa `bg-[#fff]` (classe diferente) para se manter branco. */
 .dark .bg-white { background-color: #111111; }
+
+/* Estados "selecionados/destaque" usam bg-gold-50 (creme claro) com texto
+   text-ink-900 — que o dark mode inverte para quase-branco. Resultado: texto
+   branco sobre creme = ilegível (ex: pílula de DURAÇÃO, slots de horário,
+   método de pagamento, cards accent do dashboard admin). Em dark mode
+   trocamos o creme por um tom dourado translúcido sobre a superfície escura,
+   mantendo a borda gold-400 como sinal de seleção. NÃO afeta os chips
+   (bg-gold-100 + text-gold-700), que precisam de fundo claro. */
+.dark .bg-gold-50 { background-color: rgb(207 179 37 / 0.18); }
 .dark .border-ink-900\/5 { border-color: rgb(255 255 255 / 0.05); }
 .dark .border-ink-900\/10 { border-color: rgb(255 255 255 / 0.1); }
 .dark .border-ink-900\/15 { border-color: rgb(255 255 255 / 0.15); }

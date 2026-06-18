@@ -159,7 +159,11 @@ export function BottomNav({ variant }: { variant: "client" | "admin" }) {
           signing keys ASSIMETRICAS no Supabase, getClaims valida o JWT
           localmente (sem round-trip); em HS256 cada prefetch custa uma chamada
           ao GoTrue. Migrar as keys e o que torna este prefetch barato. */}
-      <nav id="app-bottom-nav" className="safe-bottom fixed bottom-0 left-0 right-0 z-40 border-t border-ink-900/10 bg-white/95 backdrop-blur dark:border-white/10 dark:bg-ink-900/95 md:hidden">
+      {/* iOS Safari: `position: fixed` + `backdrop-filter` (backdrop-blur) é um
+          bug conhecido do WebKit — a barra "descola" e flutua a meio do ecrã
+          durante o scroll com inércia, em vez de ficar colada em baixo. Por
+          isso usamos um fundo OPACO (sem backdrop-blur) aqui. */}
+      <nav id="app-bottom-nav" className="safe-bottom fixed bottom-0 left-0 right-0 z-40 border-t border-ink-900/10 bg-white dark:border-white/10 dark:bg-ink-900 md:hidden">
         <ul className="mx-auto flex max-w-md items-stretch justify-around px-2 py-1.5">
           {items.map((it) => {
             const active = path?.startsWith(it.href);
