@@ -272,7 +272,7 @@ export async function createAgendaBookingAction(
   // SEC: o trainer só pode marcar para um trainer dentro do seu scope.
   const accessible = await getAccessibleTrainerIds();
   if (!accessible.includes(trainerId)) {
-    return { error: "Sem permissão para este treinador." };
+    return { error: "Sem permissão para este trainer." };
   }
 
   const startsAt = lisbonWallClockToUTC(date, time);
@@ -558,7 +558,7 @@ export async function createBusyAction(
   const reasonRaw = String(formData.get("reason") ?? "").trim().slice(0, 200);
   const reason = reasonRaw.length > 0 ? reasonRaw : null;
 
-  if (!trainerId) return { error: "Treinador em falta." };
+  if (!trainerId) return { error: "Trainer em falta." };
   if (!/^\d{2}:\d{2}$/.test(from) || !/^\d{2}:\d{2}$/.test(to)) {
     return { error: "Indica as horas de início e fim." };
   }
@@ -567,7 +567,7 @@ export async function createBusyAction(
   // SEC: o trainerId tem de estar no scope do utilizador autenticado.
   const accessible = await getAccessibleTrainerIds();
   if (!accessible.includes(trainerId)) {
-    return { error: "Sem permissão para este treinador." };
+    return { error: "Sem permissão para este trainer." };
   }
 
   const supabase = await createClient();

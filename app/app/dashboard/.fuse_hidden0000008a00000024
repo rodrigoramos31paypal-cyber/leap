@@ -21,7 +21,7 @@ export default async function ClientDashboard() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
-  const supabase = await createClient();
+  const supabase = createClient();
   const nowIso = new Date().toISOString();
 
   // PERF (audit #3): só a 1ª vaga (above-the-fold: saldo, CTAs, promo,
@@ -212,7 +212,7 @@ async function BelowFold({
   nowIso: string;
   latestPackRows: any[];
 }) {
-  const supabase = await createClient();
+  const supabase = createClient();
   const nowMs = Date.now();
 
   const latestPack = (latestPackRows as any[]).find(
@@ -352,4 +352,5 @@ function StatusChip({ status }: { status: string }) {
     cancelled: "chip-mute",
     no_show: "chip-danger",
   };
-  return <span className={map[status] ?? "chip-mute"}>{(BOOKING_STATUS as any)[status] ?? status
+  return <span className={map[status] ?? "chip-mute"}>{(BOOKING_STATUS as any)[status] ?? status}</span>;
+}

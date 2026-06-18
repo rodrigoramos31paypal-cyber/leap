@@ -18,7 +18,7 @@ export type TrainerReview = {
 
 /** Média + nº total de avaliações para um trainer. */
 export async function getTrainerRatingStats(trainerId: string, client?: any): Promise<TrainerRatingStats> {
-  const supabase = client ?? await createClient();
+  const supabase = client ?? createClient();
   const { data } = await (supabase as any)
     .from("trainer_rating_stats")
     .select("avg_stars, review_count")
@@ -37,7 +37,7 @@ export async function getTrainerReviews(
   client?: any,
 ): Promise<TrainerReview[]> {
   const { limit = 20, offset = 0 } = opts;
-  const supabase = client ?? await createClient();
+  const supabase = client ?? createClient();
   const { data } = await (supabase as any)
     .from("trainer_recent_reviews")
     .select("stars, comment, created_at, reviewer_name")
@@ -53,7 +53,7 @@ export async function getTrainerReviews(
 
 /** Avaliação existente do próprio cliente para esta marcação. */
 export async function getMyRatingForBooking(bookingId: string) {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data } = await (supabase as any)
     .from("session_ratings")
     .select("stars, comment")
@@ -65,9 +65,10 @@ export async function getMyRatingForBooking(bookingId: string) {
 /** Lista de booking_ids (entre os passados) que já têm avaliação do cliente actual. */
 export async function getRatedBookingIds(bookingIds: string[]): Promise<Set<string>> {
   if (bookingIds.length === 0) return new Set();
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data } = await (supabase as any)
     .from("session_ratings")
     .select("booking_id")
     .in("booking_id", bookingIds);
-  return new Set(((data as any[]) ?? []).map((
+  return new Set(((data as any[]) ?? []).map((r) => r.booking_id));
+}

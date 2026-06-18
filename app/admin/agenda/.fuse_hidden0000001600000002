@@ -47,7 +47,7 @@ export default async function AdminAgendaPage(props: {
   let defaultDuration = 45;
   let packs: { id: string; name: string; sessions: number; price_cents: number }[] = [];
   if (trainerId) {
-    const sb = await createClient();
+    const sb = createClient();
     const [{ data: st }, { data: pk }] = await Promise.all([
       sb
         .from("trainer_settings")
@@ -119,7 +119,7 @@ async function CalendarView({
 }: {
   view: View; day: Date; rangeStart: Date; rangeEnd: Date; canBook: boolean;
 }) {
-  const supabase = await createClient();
+  const supabase = createClient();
   // PERF (Q5): trainerIds + myTrainerId são independentes (e cached) —
   // corremo-los em paralelo em vez de em série antes do calendário.
   const [trainerIds, myTrainerId] = await Promise.all([
@@ -1468,4 +1468,5 @@ function fmt(d: Date) {
 // estreitas).
 function shortName(full?: string | null) {
   const first = (full ?? "").trim().split(/\s+/)[0] ?? "";
-  return first.sli
+  return first.slice(0, 7);
+}

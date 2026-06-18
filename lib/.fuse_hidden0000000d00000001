@@ -22,8 +22,8 @@ import { revalidatePath, revalidateTag } from "next/cache";
 /** Vistas/queries que mostram saldo de sessões/créditos/pagamentos. */
 export function revalidateCreditsViews(clientId?: string) {
   // Tags (queries em unstable_cache).
-  revalidateTag("client-credits", "max");
-  if (clientId) revalidateTag(`client-credits:${clientId}`, "max");
+  revalidateTag("client-credits");
+  if (clientId) revalidateTag(`client-credits:${clientId}`);
 
   // Paths que renderizam o estado actual no RSC.
   revalidatePath("/admin/clientes");
@@ -37,8 +37,8 @@ export function revalidateCreditsViews(clientId?: string) {
 
 /** Vistas que mostram marcações / agenda / próximas sessões. */
 export function revalidateBookingViews(clientId?: string) {
-  revalidateTag("bookings", "max");
-  if (clientId) revalidateTag(`bookings:${clientId}`, "max");
+  revalidateTag("bookings");
+  if (clientId) revalidateTag(`bookings:${clientId}`);
 
   revalidatePath("/admin/agenda");
   revalidatePath("/admin/dashboard");
@@ -51,7 +51,7 @@ export function revalidateBookingViews(clientId?: string) {
 
 /** Vistas que mostram horários disponíveis / bloqueios. */
 export function revalidateAvailabilityViews() {
-  revalidateTag("availability", "max");
+  revalidateTag("availability");
   revalidatePath("/admin/agenda");
   revalidatePath("/admin/definicoes");
   revalidatePath("/app/agenda");
@@ -59,15 +59,15 @@ export function revalidateAvailabilityViews() {
 
 /** Vistas que mostram packs. */
 export function revalidatePackViews() {
-  revalidateTag("packs", "max");
+  revalidateTag("packs");
   revalidatePath("/admin/packs");
   revalidatePath("/app/comprar");
 }
 
 /** Vistas que mostram dados de perfil (nome, contactos). */
 export function revalidateProfileViews(profileId?: string) {
-  revalidateTag("profile", "max");
-  if (profileId) revalidateTag(`profile:${profileId}`, "max");
+  revalidateTag("profile");
+  if (profileId) revalidateTag(`profile:${profileId}`);
 
   revalidatePath("/app/perfil");
   revalidatePath("/admin/clientes");
@@ -79,8 +79,10 @@ export function revalidateProfileViews(profileId?: string) {
  *  em lib/trainer.ts (QW-7). */
 export function revalidateTeamViews() {
   // QW-7: getActiveTrainersPublic em unstable_cache com este tag.
-  revalidateTag("active-trainers", "max");
+  revalidateTag("active-trainers");
   revalidatePath("/admin/equipa");
   revalidatePath("/admin/clientes");
   revalidatePath("/admin/packs");
-  reva
+  revalidatePath("/app/agenda");
+  revalidatePath("/app/comprar");
+}

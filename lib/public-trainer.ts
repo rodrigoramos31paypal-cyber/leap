@@ -38,7 +38,7 @@ async function loadPublicTrainerBySlug(slug: string): Promise<PublicTrainer | nu
   if (!data) return null;
 
   const trainerId = data.id as string;
-  const fullName = (data.profiles?.full_name ?? "").trim() || "Treinador";
+  const fullName = (data.profiles?.full_name ?? "").trim() || "Trainer";
 
   // Stats + primeiras reviews em paralelo (mesmo cliente anon).
   const [stats, reviews] = await Promise.all([

@@ -48,7 +48,7 @@ export async function getAvailableSlots(args: {
   durationMin: number;
 }): Promise<Slot[]> {
   const { trainerId, date, durationMin } = args;
-  const supabase = await createClient();
+  const supabase = createClient();
 
   // Componentes do dia-calendário (date = meia-noite UTC de "YYYY-MM-DD").
   const y = date.getUTCFullYear();
@@ -167,4 +167,5 @@ export async function getAvailableSlots(args: {
   }
 
   slots.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
-  return slo
+  return slots;
+}

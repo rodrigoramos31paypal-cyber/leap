@@ -39,7 +39,7 @@ export default async function ClientLayout({ children }: { children: React.React
     redirect("/admin/dashboard");
   }
 
-  const flash = await consumeFlash();
+  const flash = consumeFlash();
 
   return (
     <div className="min-h-screen bg-bone-50 pb-20 dark:bg-ink-900 md:pb-0">
@@ -50,4 +50,5 @@ export default async function ClientLayout({ children }: { children: React.React
       <main className="mx-auto max-w-6xl px-4 pt-1 pb-6">{children}</main>
       <BottomNav variant="client" />
     </div>
- 
+  );
+}

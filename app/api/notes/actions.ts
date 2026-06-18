@@ -143,7 +143,7 @@ export async function upsertNoteAction(formData: FormData): Promise<{ error?: st
       return { error: "Não foi possível guardar a nota." };
     }
 
-    // Se foi o CLIENTE a escrever, notifica o treinador da sessão.
+    // Se foi o CLIENTE a escrever, notifica o trainer da sessão.
     try {
       const { data: bk } = await supabase
         .from("bookings")

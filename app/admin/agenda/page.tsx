@@ -206,7 +206,7 @@ async function CalendarView({
 
   // PERF (audit #2): 2ª (e última) vaga — só os reads que dependem mesmo
   // de `bookings`, corridos em paralelo entre si.
-  //   • notesMap: notas do treinador por marcação (só Day/Week; o Month
+  //   • notesMap: notas do trainer por marcação (só Day/Week; o Month
   //     não consome notas → saltamos o round-trip e o payload).
   //   • creditRows: saldo de sessões por cliente (purchases confirmadas).
   const clientIds = Array.from(
@@ -248,7 +248,7 @@ async function CalendarView({
   const sessionsLeftMap = new Map<string, number>();
   // "Último crédito": IDs das marcações a sinalizar a vermelho. Um cliente
   // cujo saldo de packs chegou a 0 (gastou o último crédito) tem a sua
-  // ÚLTIMA marcação ativa marcada aqui, para alertar o treinador.
+  // ÚLTIMA marcação ativa marcada aqui, para alertar o trainer.
   const lastCreditIds = new Set<string>();
   if (clientIds.length > 0) {
     const now = Date.now();

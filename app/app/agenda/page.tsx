@@ -65,8 +65,8 @@ export default async function AgendaPage(
     return (
       <div className="space-y-5">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight">Escolhe o treinador</h1>
-          <p className="text-sm text-ink-500">Cada treinador tem o seu calendário.</p>
+          <h1 className="font-display text-2xl font-bold tracking-tight">Escolhe o trainer</h1>
+          <p className="text-sm text-ink-500">Cada trainer tem o seu calendário.</p>
         </div>
         <ul className="grid gap-3 sm:grid-cols-2">
           {actives.map((t) => (
@@ -79,13 +79,13 @@ export default async function AgendaPage(
                   {t.full_name?.[0]?.toUpperCase() ?? "T"}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="font-display text-base font-bold tracking-tight">{t.full_name || "Treinador"}</div>
+                  <div className="font-display text-base font-bold tracking-tight">{t.full_name || "Trainer"}</div>
                   <div className="text-xs text-ink-500">@{t.slug}</div>
                   {t.bio && (
                     <p className="mt-2 line-clamp-3 text-xs text-ink-600">{t.bio}</p>
                   )}
                   <div className="mt-3 text-xs font-medium text-gold-600 group-hover:text-gold-700">
-                    Marcar com este treinador →
+                    Marcar com este trainer →
                   </div>
                 </div>
               </Link>
@@ -125,7 +125,7 @@ export default async function AgendaPage(
           {actives.length > 1 && (
             <>
               {" · "}
-              <Link href="/app/agenda" className="font-medium text-gold-600">Mudar treinador</Link>
+              <Link href="/app/agenda" className="font-medium text-gold-600">Mudar trainer</Link>
             </>
           )}
         </p>

@@ -21,7 +21,7 @@ export default async function HistoricoPage(
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
-  const supabase = await createClient();
+  const supabase = createClient();
 
   return (
     <div className="space-y-5">
@@ -103,7 +103,7 @@ function FilterChip({ label, href, active }: { label: string; href: string; acti
 }
 
 async function SessoesTab({ userId, filter }: { userId: string; filter: "todas" | "futuras" | "passadas" }) {
-  const supabase = await createClient();
+  const supabase = createClient();
   const nowIso = new Date().toISOString();
   // PERF (CB-5 audit jun/2026): antes era select("*") — trazia 15+
   // colunas (cancellation_reason, confirmed_by/at, cancelled_by/at,
@@ -182,7 +182,7 @@ async function SessoesTab({ userId, filter }: { userId: string; filter: "todas" 
 }
 
 async function ComprasTab({ userId, filter }: { userId: string; filter: "todas" | "confirmadas" | "rejeitadas" }) {
-  const supabase = await createClient();
+  const supabase = createClient();
   // PERF: limita explicitamente — antes era sem limite e podia trazer
   // o histórico todo do cliente. Os campos pedidos também foram
   // restringidos aos que a UI usa.
@@ -248,4 +248,5 @@ function PurchaseChip({ status }: { status: string }) {
     cancelled: "chip-mute",
   };
   const cls = map[status] ?? "chip-mute";
-  return <span className={cls}>{(PURCHASE_STATUS as any)[status] ?? 
+  return <span className={cls}>{(PURCHASE_STATUS as any)[status] ?? status}</span>;
+}

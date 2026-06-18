@@ -16,7 +16,7 @@ export default async function AdminNotasPage(
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
-  const supabase = await createClient();
+  const supabase = createClient();
 
   // ── Vista de cliente específico ──────────────────────────────
   // PERF: aqui fazemos a query focada no cliente (com body completo).
@@ -199,4 +199,5 @@ export default async function AdminNotasPage(
         </ul>
       )}
     </div>
- 
+  );
+}

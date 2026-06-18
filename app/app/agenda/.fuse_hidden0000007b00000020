@@ -15,7 +15,7 @@ export default async function AgendaPage(
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
-  const supabase = await createClient();
+  const supabase = createClient();
 
   // Modo reagendamento: a marcação antiga só é cancelada ao confirmar o novo
   // horário. Força o trainer e a duração da sessão original.
@@ -165,4 +165,5 @@ export default async function AgendaPage(
         />
       )}
     </div>
- 
+  );
+}

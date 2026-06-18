@@ -11,7 +11,7 @@ function escapeIcs(s: string) {
 
 export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return new NextResponse("Unauthorized", { status: 401 });
 
@@ -80,4 +80,5 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
       "Content-Disposition": `attachment; filename="leap-session-${booking.id.slice(0, 8)}.ics"`,
       "Cache-Control": cacheControl,
     },
-  
+  });
+}

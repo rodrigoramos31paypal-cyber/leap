@@ -61,7 +61,7 @@ export default async function AvaliarSessaoPage(props: { params: Promise<{ id: s
             className="input min-h-[110px]"
           />
           <p className="mt-1 text-xs text-ink-500">
-            O comentário pode ser mostrado (com primeiro nome + inicial) na página pública do treinador.
+            O comentário pode ser mostrado (com primeiro nome + inicial) na página pública do trainer.
           </p>
         </div>
 

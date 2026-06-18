@@ -56,13 +56,13 @@ export async function bookAction({
     await sideEffects;
 
     const pending = (b as any)?.status === "booked";
-    await setFlash(pending ? "Marcação criada — a aguardar aprovação" : "Marcação confirmada");
+    setFlash(pending ? "Marcação criada — a aguardar aprovação" : "Marcação confirmada");
     revalidateBookingViews();
     return { ok: true, pending };
   } catch (err) {
     logError("bookAction", err);
     const friendly = userFacingRpcError(err);
-    await setFlash(friendly ?? "Não foi possível marcar", "error");
+    setFlash(friendly ?? "Não foi possível marcar", "error");
     return { error: friendly ?? "Não foi possível marcar. Tenta novamente." };
   }
 }
@@ -149,11 +149,11 @@ export async function bookRecurringAction({
     // Nenhuma semana disponível → nada marcado (devolvemos os conflitos
     // na mesma para a UI poder sugerir alternativas).
     if (result.booked_count === 0) {
-      await setFlash("Nenhuma semana disponível para a série", "error");
+      setFlash("Nenhuma semana disponível para a série", "error");
       return { error: "Nenhuma semana disponível.", result };
     }
 
-    await setFlash(
+    setFlash(
       result.conflicts.length > 0
         ? `Marcadas ${result.booked_count} de ${result.requested_count} sessões`
         : `Criadas ${result.booked_count} marcações`,
@@ -162,5 +162,7 @@ export async function bookRecurringAction({
   } catch (err) {
     logError("bookRecurringAction", err);
     const friendly = userFacingRpcError(err);
-    await setFlash(friendly ?? "Não foi possível marcar a série", "error");
-    return { error: friendly ?? "Não foi possível marcar a séri
+    setFlash(friendly ?? "Não foi possível marcar a série", "error");
+    return { error: friendly ?? "Não foi possível marcar a série. Tenta novamente." };
+  }
+}

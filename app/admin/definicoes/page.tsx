@@ -243,7 +243,7 @@ function PerfilTab({
         </h2>
         <p className="text-xs text-ink-500">
           O teu nome ({trainer.full_name || "—"}) e esta biografia aparecem ao cliente
-          quando escolhe treinador.
+          quando escolhe trainer.
         </p>
         <input type="hidden" name="trainerId" value={trainer.id} />
         <div>
@@ -264,7 +264,7 @@ function PerfilTab({
         <AvatarUploader
           trainerId={trainer.id}
           currentUrl={(trainer as any).avatar_url ?? null}
-          fullName={trainer.full_name || "Treinador"}
+          fullName={trainer.full_name || "Trainer"}
         />
       </div>
 

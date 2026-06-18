@@ -8,7 +8,7 @@ import { PaymentSteps } from "./payment-steps";
 
 export default async function ManualPaymentPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
@@ -117,4 +117,5 @@ export default async function ManualPaymentPage(props: { params: Promise<{ id: s
         Voltar ao início
       </Link>
     </div>
- 
+  );
+}

@@ -15,7 +15,7 @@ export async function EquipaSection() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
-  const supabase = await createClient();
+  const supabase = createClient();
 
   // PERF: layout admin ja chamou getCurrentProfile() — aqui vem do cache.
   const me = await getCurrentProfile();
@@ -212,4 +212,5 @@ export async function EquipaSection() {
         </div>
       )}
     </div>
- 
+  );
+}

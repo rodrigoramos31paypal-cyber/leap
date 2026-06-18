@@ -120,7 +120,7 @@ export function NoteEditor({
         </button>
         {error && <span className="text-xs text-red-700">{error}</span>}
       </div>
-      <p className="text-[10px] text-ink-500">{sharedWithTrainer ? "O teu treinador também vê esta nota." : "Só tu vês esta nota."}</p>
+      <p className="text-[10px] text-ink-500">{sharedWithTrainer ? "O teu trainer também vê esta nota." : "Só tu vês esta nota."}</p>
     </div>
   );
 }

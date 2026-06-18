@@ -52,7 +52,7 @@ export default async function NewClientNotePage(
             className="input"
             placeholder="Como te sentiste? Energia, dores, foco…"
           />
-          <p className="text-[10px] text-ink-500">Só tu vês esta nota. O treinador não tem acesso.</p>
+          <p className="text-[10px] text-ink-500">Só tu vês esta nota. O trainer não tem acesso.</p>
           <div className="flex gap-2">
             <button type="submit" className="btn-primary">Guardar nota</button>
             <Link href={`/app/notas/nova?trainer=${trainer.id}`} className="btn-outline">Voltar</Link>
@@ -79,7 +79,7 @@ export default async function NewClientNotePage(
             className="input"
             placeholder="Escreve a tua nota livre…"
           />
-          <p className="text-[10px] text-ink-500">Só tu vês esta nota. O treinador não tem acesso.</p>
+          <p className="text-[10px] text-ink-500">Só tu vês esta nota. O trainer não tem acesso.</p>
           <div className="flex gap-2">
             <button type="submit" className="btn-primary">Guardar nota</button>
             <Link href={`/app/notas/nova?trainer=${trainer.id}`} className="btn-outline">Voltar</Link>
@@ -95,11 +95,11 @@ export default async function NewClientNotePage(
     return (
       <EditorShell title="Nova nota">
         <div className="card p-4">
-          <div className="text-xs uppercase tracking-wide text-ink-500">Treinador</div>
+          <div className="text-xs uppercase tracking-wide text-ink-500">Trainer</div>
           <div className="mt-1 text-sm font-semibold">{trainer.full_name}</div>
           {actives.length > 1 && (
             <Link href="/app/notas/nova" className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-gold-600">
-              <ArrowLeft size={12} /> Mudar treinador
+              <ArrowLeft size={12} /> Mudar trainer
             </Link>
           )}
         </div>
@@ -121,7 +121,7 @@ export default async function NewClientNotePage(
             </Link>
           </li>
           {recent.length === 0 ? (
-            <li className="card p-4 text-sm text-ink-500">Sem sessões recentes com este treinador.</li>
+            <li className="card p-4 text-sm text-ink-500">Sem sessões recentes com este trainer.</li>
           ) : (
             recent.map((b: any) => (
               <li key={b.id}>
@@ -149,8 +149,8 @@ export default async function NewClientNotePage(
 
   // Step 1: escolhe trainer
   return (
-    <EditorShell title="Escolhe o treinador">
-      <p className="text-xs text-ink-500">A nota fica organizada por treinador.</p>
+    <EditorShell title="Escolhe o trainer">
+      <p className="text-xs text-ink-500">A nota fica organizada por trainer.</p>
       <ul className="mt-3 grid gap-3 sm:grid-cols-2">
         {actives.map((t) => (
           <li key={t.id}>
@@ -162,7 +162,7 @@ export default async function NewClientNotePage(
                 {t.full_name?.[0]?.toUpperCase() ?? "T"}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="font-display text-base font-bold tracking-tight">{t.full_name || "Treinador"}</div>
+                <div className="font-display text-base font-bold tracking-tight">{t.full_name || "Trainer"}</div>
                 <div className="text-xs text-ink-500">@{t.slug}</div>
                 {t.bio && <p className="mt-2 line-clamp-2 text-xs text-ink-600">{t.bio}</p>}
               </div>
@@ -170,7 +170,7 @@ export default async function NewClientNotePage(
           </li>
         ))}
         {actives.length === 0 && (
-          <li className="card p-5 text-sm text-ink-500">Sem treinadores activos.</li>
+          <li className="card p-5 text-sm text-ink-500">Sem trainers activos.</li>
         )}
       </ul>
     </EditorShell>

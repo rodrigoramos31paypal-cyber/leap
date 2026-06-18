@@ -24,7 +24,7 @@ export type CreditsByTrainer = Array<{
 }>;
 
 const fetchActiveCredits = cache(async (clientId: string) => {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data } = await supabase
     .from("purchases")
     .select(
@@ -82,7 +82,7 @@ export async function createPurchase(
   paymentMethod: PaymentMethod,
   clientId?: string,
 ): Promise<string> {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data, error } = await supabase.rpc("create_purchase", {
     p_pack_id: packId,
     p_payment_method: paymentMethod,
@@ -93,7 +93,7 @@ export async function createPurchase(
 }
 
 export async function confirmPurchase(purchaseId: string) {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { error } = await supabase.rpc("confirm_purchase", { p_purchase_id: purchaseId });
   if (error) throw error;
 }
@@ -105,7 +105,7 @@ export async function removeClientSessions(
   trainerId: string,
   count: number,
 ): Promise<number> {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data, error } = await supabase.rpc("remove_client_sessions", {
     p_client_id: clientId,
     p_trainer_id: trainerId,
@@ -126,7 +126,7 @@ export async function createCustomPurchase(args: {
   name?: string;
   validityDays?: number | null;
 }): Promise<string> {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data, error } = await supabase.rpc("create_custom_purchase", {
     p_client_id: args.clientId,
     p_trainer_id: args.trainerId,
@@ -144,7 +144,7 @@ export async function createCustomPurchase(args: {
 }
 
 export async function rejectPurchase(purchaseId: string, reason?: string) {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { error } = await supabase.rpc("reject_purchase", {
     p_purchase_id: purchaseId,
     p_reason: reason,
@@ -159,7 +159,7 @@ export async function rejectPurchase(purchaseId: string, reason?: string) {
  * "Rejeitados" da página de pagamentos.
  */
 export async function cancelConfirmedPurchase(purchaseId: string, reason?: string) {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { error } = await (supabase as any).rpc("cancel_confirmed_purchase", {
     p_purchase_id: purchaseId,
     p_reason: reason,
@@ -174,7 +174,7 @@ export async function createBooking(args: {
   sessionType?: SessionType;
   clientId?: string;
 }): Promise<string> {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data, error } = await supabase.rpc("create_booking", {
     p_trainer_id: args.trainerId,
     p_starts_at: args.startsAt.toISOString(),
@@ -201,7 +201,7 @@ async function alertIfCreditsMismatch(args: {
   sessionType?: SessionType;
   clientId?: string;
 }): Promise<void> {
-  const supabase = await createClient();
+  const supabase = createClient();
   let clientId = args.clientId;
   if (!clientId) {
     const { data: { user } } = await supabase.auth.getUser();
@@ -239,7 +239,7 @@ export async function createBookingAdmin(args: {
   sessionType?: SessionType;
   deduct: boolean;
 }): Promise<string> {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data, error } = await (supabase as any).rpc("create_booking_admin", {
     p_trainer_id: args.trainerId,
     p_starts_at: args.startsAt.toISOString(),
@@ -281,7 +281,7 @@ export async function createRecurringBooking(args: {
   sessionType?: SessionType;
   clientId?: string;
 }): Promise<RecurringBookingResult> {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data, error } = await supabase.rpc("create_recurring_booking", {
     p_trainer_id: args.trainerId,
     p_starts_at: args.startsAt.toISOString(),
@@ -307,7 +307,7 @@ export async function rescheduleBookingAdmin(args: {
   notifyClient: boolean;
   force?: boolean;
 }): Promise<string> {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data, error } = await (supabase as any).rpc("reschedule_booking_admin", {
     p_old_booking_id: args.oldBookingId,
     p_starts_at: args.startsAt.toISOString(),
@@ -320,13 +320,13 @@ export async function rescheduleBookingAdmin(args: {
 }
 
 export async function confirmAttendance(bookingId: string) {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { error } = await supabase.rpc("confirm_booking_attendance", { p_booking_id: bookingId });
   if (error) throw error;
 }
 
 export async function cancelBooking(bookingId: string, reason?: string) {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { error } = await supabase.rpc("cancel_booking", {
     p_booking_id: bookingId,
     p_reason: reason,
@@ -335,7 +335,7 @@ export async function cancelBooking(bookingId: string, reason?: string) {
 }
 
 export async function markNoShow(bookingId: string) {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { error } = await supabase.rpc("mark_no_show", { p_booking_id: bookingId });
   if (error) throw error;
 }
@@ -345,7 +345,7 @@ export async function revertNoShow(
   newStatus: "confirmed" | "cancelled",
   refundCredit: boolean,
 ) {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { error } = await supabase.rpc("revert_no_show", {
     p_booking_id: bookingId,
     p_new_status: newStatus,
@@ -355,6 +355,12 @@ export async function revertNoShow(
 }
 
 export async function adjustCredits(purchaseId: string, delta: number, reason: string) {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { error } = await supabase.rpc("adjust_credits", {
-    p_
+    p_purchase_id: purchaseId,
+    p_delta: delta,
+    p_reason: reason,
+  });
+  if (error) throw error;
+}
+

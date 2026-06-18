@@ -31,12 +31,12 @@ export async function cancelBookingAction(formData: FormData) {
     const refunded = await wasRefunded(bookingId);
     await dispatchBookingCancelled(bookingId, refunded).catch(() => {});
     await removeBookingFromCalendars(bookingId).catch(() => {});
-    await setFlash(
+    setFlash(
       refunded ? "Sessão cancelada e devolvida" : "Sessão cancelada (cancelamento tardio)",
     );
   } catch (e) {
     logError("cancelBookingAction", e);
-    await setFlash("Não foi possível cancelar", "error");
+    setFlash("Não foi possível cancelar", "error");
   }
   revalidateBookingViews();
 }
@@ -48,4 +48,5 @@ export async function rebookAction(formData: FormData) {
   // reagendamento — a sessão atual só é cancelada quando ele confirmar o
   // novo horário (rescheduleAction → RPC atómica). Se desistir, não perde
   // a sessão.
-  redirect(`/app/agenda?reschedule=${bookin
+  redirect(`/app/agenda?reschedule=${bookingId}`);
+}

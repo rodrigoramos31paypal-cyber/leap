@@ -69,7 +69,7 @@ export default async function RelatoriosPage(props: { searchParams: Promise<{ fr
 }
 
 async function ReportStats({ from, to }: { from: Date; to: Date }) {
-  const supabase = await createClient();
+  const supabase = createClient();
   // PERF: pedimos só as colunas consumidas pelos reduces/filtros (antes `*`).
   // purchases → amount_cents + sessions_total; bookings → status. As colunas
   // de filtro (confirmed_at/starts_at/status) não precisam de vir no payload.
@@ -126,4 +126,5 @@ function Stat({ label, value }: { label: string; value: string }) {
       <div className="text-xs uppercase tracking-wide text-ink-500">{label}</div>
       <div className="mt-1 font-display text-2xl font-bold">{value}</div>
     </div>
- 
+  );
+}

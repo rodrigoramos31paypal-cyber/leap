@@ -35,9 +35,9 @@ export function BookingFlow({
   const [picked, setPicked] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Nota opcional para o treinador, escrita no momento da marcação.
+  // Nota opcional para o trainer, escrita no momento da marcação.
   // Persistida como `session_notes` ligada à marcação (booking_id) com o
-  // cliente como autor; o treinador é notificado em separado.
+  // cliente como autor; o trainer é notificado em separado.
   const [note, setNote] = useState<string>("");
   const [noteOpen, setNoteOpen] = useState<boolean>(false);
   // PERF (CB-3 audit jun/2026): cache em memória dos slots já lidos
@@ -220,8 +220,8 @@ export function BookingFlow({
         )}
       </div>
 
-      {/* Nota opcional para o treinador — só faz sentido depois de
-          escolhido o horário. O treinador recebe a nota junto da sessão
+      {/* Nota opcional para o trainer — só faz sentido depois de
+          escolhido o horário. O trainer recebe a nota junto da sessão
           e uma notificação separada a sinalizá-la. */}
       {picked && (
         <div className="card p-4">
@@ -231,12 +231,12 @@ export function BookingFlow({
               onClick={() => setNoteOpen(true)}
               className="inline-flex items-center gap-1.5 text-sm font-medium text-gold-600 hover:text-gold-700"
             >
-              <NotebookPen size={14} /> Adicionar nota para o treinador (opcional)
+              <NotebookPen size={14} /> Adicionar nota para o trainer (opcional)
             </button>
           ) : (
             <div className="space-y-2">
               <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-500">
-                <NotebookPen size={12} /> Nota para o treinador (opcional)
+                <NotebookPen size={12} /> Nota para o trainer (opcional)
               </label>
               <textarea
                 rows={3}
@@ -247,7 +247,7 @@ export function BookingFlow({
                 className="input"
               />
               <div className="flex items-center justify-between text-[10px] text-ink-500">
-                <span>O treinador vê esta nota e é notificado.</span>
+                <span>O trainer vê esta nota e é notificado.</span>
                 <span className="tabular-nums">{note.length}/{NOTE_MAX_LEN}</span>
               </div>
             </div>

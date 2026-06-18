@@ -20,7 +20,7 @@ export async function verifyChallengeAction(formData: FormData) {
   const next = formData.get("next");
 
   if (!/^\d{6}$/.test(code)) {
-    await setFlash("Código inválido (6 dígitos).", "error");
+    setFlash("Código inválido (6 dígitos).", "error");
     redirect("/login/2fa" + (typeof next === "string" ? `?next=${encodeURIComponent(next)}` : ""));
   }
 
@@ -31,14 +31,14 @@ export async function verifyChallengeAction(formData: FormData) {
   }
   const factorId = factors[0].id;
 
-  const supabase = await createClient();
+  const supabase = createClient();
   const { error } = await (supabase.auth.mfa as any).challengeAndVerify({
     factorId,
     code,
   });
   if (error) {
     logError("verifyChallengeAction", error);
-    await setFlash("Código inválido. Tenta de novo.", "error");
+    setFlash("Código inválido. Tenta de novo.", "error");
     redirect("/login/2fa" + (typeof next === "string" ? `?next=${encodeURIComponent(next)}` : ""));
   }
 
@@ -56,4 +56,5 @@ export async function verifyChallengeAction(formData: FormData) {
   const profile = await getCurrentProfile();
   const fallback = profile?.role === "client" ? "/app/dashboard" : "/admin/dashboard";
   const target = typeof next === "string" && isSafePath(next) ? next : fallback;
-  re
+  redirect(target);
+}
