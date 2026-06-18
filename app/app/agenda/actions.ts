@@ -47,11 +47,14 @@ async function persistClientBookingNote(
     }
 
     // Notifica o trainer (em separado da notificação da própria
-    // marcação) que o cliente deixou uma nota.
+    // marcação) que o cliente deixou uma nota. Deep-link: abre a
+    // agenda no DIA da sessão (vista de dia) e auto-abre o popover
+    // dessa sessão. O `?d=` é a data em hora-de-parede de Lisboa, o
+    // `?booking=` é o id; ambos são lidos em `/admin/agenda/page.tsx`.
     try {
       const { data: bk } = await supabase
         .from("bookings")
-        .select("trainer_id")
+        .select("trainer_id, starts_at")
         .eq("id", bookingId)
         .maybeSingle();
       if (!bk) return;
@@ -71,12 +74,20 @@ async function persistClientBookingNote(
       const trainerProfileId = (tr as any)?.profile_id as string | undefined;
       if (!trainerProfileId) return;
       const name = ((prof as any)?.full_name ?? "").split(" ")[0] || "Um cliente";
+      // Data-calendário LOCAL (Europe/Lisbon) da sessão para o `?d=` do
+      // deep-link. Usar UTC partia o dia em sessões noturnas.
+      const localDate = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Europe/Lisbon",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date((bk as any).starts_at));
       await (admin as any).from("notifications").insert({
         user_id: trainerProfileId,
         type: "client_note",
         title: "Nova nota de cliente",
         body: `${name} deixou uma nota na sessão marcada.`,
-        link: "/admin/agenda",
+        link: `/admin/agenda?view=day&d=${localDate}&booking=${bookingId}`,
       });
     } catch (e) {
       logError("persistClientBookingNote:notify", e);

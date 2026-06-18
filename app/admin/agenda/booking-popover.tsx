@@ -64,6 +64,7 @@ export function BookingBlock({
   isLastCredit = false,
   overlap = false,
   overlapCol = 0,
+  autoOpen = false,
 }: {
   b: any;
   note?: { body: string } | null;
@@ -91,8 +92,10 @@ export function BookingBlock({
   // Mapeia para uma cor de bordo diferente, ajudando a distinguir
   // visualmente sessões empilhadas em mobile.
   overlapCol?: number;
+  /** Quando true (deep-link `?booking=<id>`), abre o popover ao montar. */
+  autoOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(autoOpen);
   const [cancelOpen, setCancelOpen] = useState(false);
   // Reverter falta: devolver crédito por defeito (escolha do trainer).
   const [refundCredit, setRefundCredit] = useState(true);
