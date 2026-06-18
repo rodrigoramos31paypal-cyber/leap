@@ -100,6 +100,7 @@ export async function deleteAccountAction(
   }
 
   await supabase.auth.signOut().catch(() => {});
+  await setFlash("Conta apagada");
   revalidateProfileViews(uid);
   return { ok: true };
 }

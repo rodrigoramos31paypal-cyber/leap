@@ -188,6 +188,10 @@ export async function rescheduleAction({
   if (error) {
     logError("rescheduleAction", error);
     const friendly = userFacingRpcError(error);
+    await setFlash(
+      friendly ?? "Não foi possível reagendar. O horário pode já estar ocupado.",
+      "error",
+    );
     return {
       error: friendly ?? "Não foi possível reagendar. O horário pode já estar ocupado.",
     };
@@ -211,8 +215,10 @@ export async function rescheduleAction({
 
   await sideEffects;
 
+  const pending = (b as any)?.status === "booked";
+  await setFlash(pending ? "Sessão reagendada — a aguardar aprovação" : "Sessão reagendada");
   revalidateBookingViews();
-  return { ok: true, pending: (b as any)?.status === "booked" };
+  return { ok: true, pending };
 }
 
 export async function bookRecurringAction({
