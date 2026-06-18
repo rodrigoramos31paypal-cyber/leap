@@ -221,12 +221,15 @@ export async function bookRecurringAction({
   durationMin,
   sessionType,
   sessionsCount,
+  note,
 }: {
   trainerId: string;
   startsAtIso: string;
   durationMin: number;
   sessionType: SessionType;
   sessionsCount: number;
+  /** Nota opcional do cliente — aplicada a TODAS as sessões criadas. */
+  note?: string;
 }): Promise<{ ok?: true; error?: string; result?: RecurringBookingResult }> {
   try {
     const result = await createRecurringBooking({
@@ -239,14 +242,20 @@ export async function bookRecurringAction({
 
     // PARCIAL: a RPC marca as semanas livres e devolve as restantes em
     // `conflicts`. Disparamos side-effects (email/calendário) só para as
-    // marcações criadas — em PARALELO (um único batch).
+    // marcações criadas — em PARALELO (um único batch). Se houver nota,
+    // anexa-a a CADA marcação (mesmo conteúdo); o trainer recebe UMA
+    // notificação por sessão (paridade com o caminho single-shot).
     if (result.booking_ids.length > 0) {
-      await Promise.allSettled(
-        result.booking_ids.flatMap((id) => [
-          dispatchBookingCreated(id),
-          pushBookingToCalendars(id),
-        ]),
-      );
+      const tasks: Promise<unknown>[] = result.booking_ids.flatMap((id) => [
+        dispatchBookingCreated(id),
+        pushBookingToCalendars(id),
+      ]);
+      if (note && note.trim()) {
+        for (const id of result.booking_ids) {
+          tasks.push(persistClientBookingNote(id, note));
+        }
+      }
+      await Promise.allSettled(tasks);
       revalidateBookingViews();
     }
 
