@@ -1,15 +1,24 @@
 "use client";
+// recurring booking: count selector + graceful credit handling
+// + nota opcional do cliente para o trainer ao marcar.
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { cn, formatTime } from "@/lib/utils";
-import { Clock, NotebookPen } from "lucide-react";
-import { bookAction, rescheduleAction } from "./actions";
+import { cn, formatTime, formatDateTime } from "@/lib/utils";
+import { Clock, Repeat, NotebookPen } from "lucide-react";
+import { bookAction, bookRecurringAction, rescheduleAction } from "./actions";
 import type { SessionType } from "@/types/database";
 
 const NOTE_MAX_LEN = 5000;
 
 type CreditSummary = { individual: number; dupla: number; total: number };
+
+type Conflict = {
+  week: number;
+  starts_at: string;
+  reason: "booking" | "blocked" | "reserved" | "no_credit" | string;
+};
+type PartialResult = { booked_count: number; requested_count: number; conflicts: Conflict[] };
 
 export function BookingFlow({
   trainerId,
@@ -22,12 +31,12 @@ export function BookingFlow({
   slotDurations: number[];
   defaultDuration: number;
   credits: CreditSummary;
-  /** Quando presente, estamos a reagendar esta marcação: confirmar
-   *  cancela a antiga e cria a nova atomicamente (sem perder a sessão). */
+  /** Quando presente, estamos a reagendar esta marcacao: confirmar
+   *  cancela a antiga e cria a nova atomicamente (sem perder a sessao). */
   rescheduleBookingId?: string;
 }) {
   const router = useRouter();
-  // Dupla está desactivada na UI — todas as marcações são individuais por agora.
+  // Dupla esta desactivada na UI - todas as marcacoes sao individuais por agora.
   const [sessionType] = useState<SessionType>("individual");
   const [duration, setDuration] = useState<number>(defaultDuration);
   const [date, setDate] = useState<Date>(() => startOfDay(new Date()));
@@ -35,24 +44,26 @@ export function BookingFlow({
   const [picked, setPicked] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Nota opcional para o trainer, escrita no momento da marcação.
-  // Persistida como `session_notes` ligada à marcação (booking_id) com o
-  // cliente como autor; o trainer é notificado em separado.
+  const [partial, setPartial] = useState<PartialResult | null>(null);
+  const [resolved, setResolved] = useState<Set<string>>(new Set());
+  const [recurring, setRecurring] = useState(false);
+  // Nota opcional para o trainer, escrita no momento da marcacao.
+  // Persistida como `session_notes` ligada a marcacao (booking_id) com o
+  // cliente como autor; o trainer e notificado em separado.
   const [note, setNote] = useState<string>("");
   const [noteOpen, setNoteOpen] = useState<boolean>(false);
-  // PERF (CB-3 audit jun/2026): cache em memória dos slots já lidos
-  // neste mount, por chave `trainer|YYYY-MM-DD|duration`. Re-tocar
-  // num dia já visto → 0 round-trips. TTL implícito: vida do
-  // componente. Trade-off aceitável: se outro cliente acabou de
-  // marcar nesse slot, o create_booking valida atomicamente no
-  // servidor.
+  // PERF (CB-3 audit jun/2026): cache em memoria dos slots ja lidos.
   const slotsCache = useRef(new Map<string, { startsAt: string; endsAt: string }[]>());
+  // Quantas semanas marcar de uma vez. Default conservador: 4 (ou menos,
+  // se o cliente tiver menos creditos). O cliente ajusta com o stepper.
+  const [recurringCount, setRecurringCount] = useState<number>(() =>
+    Math.min(4, Math.max(2, credits.individual)),
+  );
   const [pending, start] = useTransition();
 
   useEffect(() => {
     let cancelled = false;
     const cacheKey = `${trainerId}|${ymd(date)}|${duration}`;
-    // CB-3 cache hit → 0 round-trips. Set síncrono, render imediato.
     const cached = slotsCache.current.get(cacheKey);
     if (cached) {
       setSlots(cached);
@@ -62,10 +73,6 @@ export function BookingFlow({
     }
     (async () => {
       setLoading(true);
-      // Envia o dia-calendário LOCAL ("YYYY-MM-DD"), não toISOString():
-      // meia-noite local convertida para UTC saltava para o dia anterior
-      // (ex.: Segunda 00:00 Lisboa → Domingo 23:00 UTC), e o servidor
-      // calculava o dia-da-semana errado.
       const params = new URLSearchParams({
         trainer: trainerId,
         date: ymd(date),
@@ -83,7 +90,7 @@ export function BookingFlow({
           slotsCache.current.set(cacheKey, next);
         }
       } catch {
-        // rede falhou — mostra "sem horários" em vez de crashar.
+        // rede falhou - mostra "sem horarios" em vez de crashar.
       }
       if (cancelled) return;
       setSlots(next);
@@ -109,6 +116,8 @@ export function BookingFlow({
   function confirm() {
     if (!picked) return;
     setError(null);
+    setPartial(null);
+    setResolved(new Set());
     const trimmedNote = note.trim().slice(0, NOTE_MAX_LEN);
     start(async () => {
       if (rescheduleBookingId) {
@@ -123,6 +132,32 @@ export function BookingFlow({
           return;
         }
         router.push(`/app/historico?ok=${res.pending ? "pending" : "reschedule"}`);
+        return;
+      }
+      if (recurring && availableCredits > 1) {
+        const count = Math.max(2, Math.min(availableCredits, recurringCount));
+        const res = await bookRecurringAction({
+          trainerId,
+          startsAtIso: picked,
+          durationMin: duration,
+          sessionType,
+          sessionsCount: count,
+          note: trimmedNote || undefined,
+        });
+        if (res.result && res.result.conflicts.length > 0) {
+          setPartial({
+            booked_count: res.result.booked_count,
+            requested_count: res.result.requested_count,
+            conflicts: res.result.conflicts,
+          });
+          setResolved(new Set());
+          return;
+        }
+        if (res.error) {
+          setError(res.error);
+          return;
+        }
+        router.push("/app/historico?ok=recurring");
         return;
       }
       const res = await bookAction({
@@ -142,9 +177,6 @@ export function BookingFlow({
 
   return (
     <div className="space-y-5">
-      {/* Tipo de sessão (Dupla escondida — todas as marcações são individuais por agora) */}
-
-      {/* Duração */}
       <div>
         <div className="label">Duração</div>
         <div className="flex flex-wrap gap-2">
@@ -164,7 +196,6 @@ export function BookingFlow({
         </div>
       </div>
 
-      {/* Dia */}
       <div>
         <div className="label">Dia</div>
         <div className="flex gap-1.5 overflow-x-auto pb-2">
@@ -190,7 +221,6 @@ export function BookingFlow({
         </div>
       </div>
 
-      {/* Slots */}
       <div>
         <div className="label">Horários disponíveis</div>
         {loading ? (
@@ -220,10 +250,7 @@ export function BookingFlow({
         )}
       </div>
 
-      {/* Nota opcional para o trainer — só faz sentido depois de
-          escolhido o horário. O trainer recebe a nota junto da sessão
-          e uma notificação separada a sinalizá-la. */}
-      {picked && (
+      {picked && !partial && (
         <div className="card p-4">
           {!noteOpen && !note ? (
             <button
@@ -257,7 +284,70 @@ export function BookingFlow({
 
       {error && <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
 
-      {picked && (
+      {partial && (() => {
+        const remaining = partial.conflicts.filter((c) => !resolved.has(c.starts_at));
+        const booked = partial.booked_count + resolved.size;
+        return (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4">
+            <div className="max-h-[85vh] w-full overflow-y-auto rounded-t-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900 shadow-xl sm:max-w-md sm:rounded-2xl">
+            <div className="font-semibold">
+              {booked > 0
+                ? `Marcadas ${booked} de ${partial.requested_count} sessões.`
+                : "Não foi possível marcar nenhuma semana."}
+            </div>
+            {remaining.length > 0 ? (
+              <>
+                <p className="mt-1 text-xs">
+                  Estas semanas ficaram por marcar. Para as ocupadas, escolhe outro horário
+                  (ou marca-as mais tarde, quando quiseres):
+                </p>
+                <ul className="mt-2 space-y-3">
+                  {remaining.map((c) => (
+                    <li key={c.starts_at}>
+                      <div className="text-xs font-medium">
+                        Semana {c.week} · {formatDateTime(c.starts_at)} — {reasonLabel(c.reason)}
+                      </div>
+                      {c.reason === "no_credit" ? (
+                        <p className="mt-1 text-xs text-amber-800">
+                          Não tens sessões suficientes para esta semana. Compra mais um pack
+                          para a marcares.
+                        </p>
+                      ) : (
+                        <ConflictSuggestions
+                          trainerId={trainerId}
+                          durationMin={duration}
+                          sessionType={sessionType}
+                          conflictStartsAt={c.starts_at}
+                          pickedIso={picked!}
+                          onBooked={() =>
+                            setResolved((prev) => {
+                              const next = new Set(prev);
+                              next.add(c.starts_at);
+                              return next;
+                            })
+                          }
+                        />
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className="mt-1 text-xs">Tudo marcado. 🎉</p>
+            )}
+            <button
+              type="button"
+              onClick={() => router.push("/app/historico?ok=recurring")}
+              className="btn-outline mt-3 w-full text-xs"
+            >
+              Concluir
+            </button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {picked && !partial && (
         <div className="card sticky bottom-24 z-20 p-4 md:bottom-4">
           <div className="flex items-center justify-between text-sm">
             <div>
@@ -269,12 +359,79 @@ export function BookingFlow({
             <div className="text-xs text-ink-500">{availableCredits} restantes</div>
           </div>
 
+          {availableCredits > 1 && !rescheduleBookingId && (
+            <div className="mt-3 rounded-md border border-ink-900/10 bg-bone-50 px-3 py-2 text-xs">
+              <label className="flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={recurring}
+                  onChange={(e) => {
+                    setRecurring(e.target.checked);
+                    if (e.target.checked) {
+                      setRecurringCount(Math.min(4, availableCredits));
+                    }
+                  }}
+                  className="mt-0.5 h-4 w-4 rounded border-ink-900/30"
+                />
+                <span>
+                  <span className="flex items-center gap-1 font-semibold">
+                    <Repeat size={12} /> Marcar recorrente
+                  </span>
+                  <span className="text-ink-500">
+                    Marca já várias semanas no mesmo dia e hora. Escolhe quantas — não
+                    precisas de usar todas as sessões de uma vez.
+                  </span>
+                </span>
+              </label>
+
+              {recurring && (
+                <div className="mt-2 flex items-center justify-between gap-3 rounded-md bg-bone-100 px-2 py-2">
+                  <span className="text-ink-700">Quantas semanas?</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      aria-label="Menos semanas"
+                      onClick={() => setRecurringCount((c) => Math.max(2, c - 1))}
+                      disabled={recurringCount <= 2}
+                      className="flex h-7 w-7 items-center justify-center rounded-md border border-ink-900/20 text-base font-semibold leading-none disabled:opacity-40"
+                    >
+                      -
+                    </button>
+                    <span className="w-6 text-center font-semibold tabular-nums">
+                      {recurringCount}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Mais semanas"
+                      onClick={() =>
+                        setRecurringCount((c) => Math.min(availableCredits, c + 1))
+                      }
+                      disabled={recurringCount >= availableCredits}
+                      className="flex h-7 w-7 items-center justify-center rounded-md border border-ink-900/20 text-base font-semibold leading-none disabled:opacity-40"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              )}
+              {recurring && (
+                <p className="mt-1 text-ink-500">
+                  Usa {recurringCount} de {availableCredits} sessões. Ficam {availableCredits -
+                    recurringCount}{" "}
+                  por usar.
+                </p>
+              )}
+            </div>
+          )}
+
           <button onClick={confirm} disabled={pending} className="btn-gold mt-3 w-full">
             {pending
               ? "A marcar…"
               : rescheduleBookingId
                 ? "Confirmar reagendamento"
-                : "Confirmar marcação"}
+                : recurring && availableCredits > 1
+                  ? `Confirmar ${Math.min(availableCredits, recurringCount)} marcações`
+                  : "Confirmar marcação"}
           </button>
         </div>
       )}
@@ -282,7 +439,167 @@ export function BookingFlow({
   );
 }
 
-// Dia-calendário local como "YYYY-MM-DD" (sem conversão de fuso).
+function ConflictSuggestions({
+  trainerId,
+  durationMin,
+  sessionType,
+  conflictStartsAt,
+  pickedIso,
+  onBooked,
+}: {
+  trainerId: string;
+  durationMin: number;
+  sessionType: SessionType;
+  conflictStartsAt: string;
+  pickedIso: string;
+  onBooked: () => void;
+}) {
+  const [slots, setSlots] = useState<{ startsAt: string; sameDay: boolean }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [booking, setBooking] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const pickedMin = minutesOfDay(new Date(pickedIso));
+      const conflictDay = new Date(conflictStartsAt);
+
+      const same = await fetchSlots(trainerId, conflictDay, durationMin);
+      let list = same.map((s) => ({ startsAt: s.startsAt, sameDay: true }));
+
+      if (list.length === 0) {
+        const monday = mondayOf(conflictDay);
+        const days: Date[] = [];
+        for (let k = 0; k < 7; k++) {
+          const d = new Date(monday);
+          d.setDate(d.getDate() + k);
+          if (!isSameDay(d, conflictDay)) days.push(d);
+        }
+        const results = await Promise.all(
+          days.map((d) => fetchSlots(trainerId, d, durationMin)),
+        );
+        for (const ss of results) {
+          for (const s of ss) list.push({ startsAt: s.startsAt, sameDay: false });
+        }
+      }
+
+      const now = Date.now();
+      list = list
+        .filter((s) => new Date(s.startsAt).getTime() > now)
+        .sort(
+          (a, b) =>
+            Math.abs(minutesOfDay(new Date(a.startsAt)) - pickedMin) -
+            Math.abs(minutesOfDay(new Date(b.startsAt)) - pickedMin),
+        )
+        .slice(0, 4);
+
+      if (!cancelled) {
+        setSlots(list);
+        setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [trainerId, durationMin, conflictStartsAt, pickedIso]);
+
+  async function book(startsAt: string) {
+    setBooking(startsAt);
+    setErr(null);
+    const res = await bookAction({ trainerId, startsAtIso: startsAt, durationMin, sessionType });
+    setBooking(null);
+    if (res.error) {
+      setErr(res.error);
+      return;
+    }
+    setDone(startsAt);
+    onBooked();
+  }
+
+  if (done) {
+    return (
+      <div className="mt-1 text-xs font-semibold text-emerald-700">
+        ✓ Marcada às {formatTime(done)}.
+      </div>
+    );
+  }
+  if (loading) return <div className="mt-1 text-xs text-amber-700/70">A procurar horários…</div>;
+  if (slots.length === 0)
+    return <div className="mt-1 text-xs text-amber-700/70">Sem horários livres nessa semana.</div>;
+
+  return (
+    <div className="mt-1.5">
+      <div className="flex flex-wrap gap-1.5">
+        {slots.map((s) => (
+          <button
+            key={s.startsAt}
+            type="button"
+            disabled={booking !== null}
+            onClick={() => book(s.startsAt)}
+            className="rounded-md border border-amber-300 bg-white px-2 py-1 text-xs font-medium tabular-nums text-ink-900 hover:bg-amber-100 disabled:opacity-50 dark:border-amber-300/40 dark:text-bone-50 dark:hover:bg-ink-700"
+          >
+            {booking === s.startsAt
+              ? "A marcar…"
+              : s.sameDay
+                ? formatTime(s.startsAt)
+                : `${WEEKDAYS_PT_SHORT[new Date(s.startsAt).getDay()]} ${formatTime(s.startsAt)}`}
+          </button>
+        ))}
+      </div>
+      {err && <div className="mt-1 text-xs text-red-700">{err}</div>}
+    </div>
+  );
+}
+
+async function fetchSlots(
+  trainerId: string,
+  day: Date,
+  durationMin: number,
+): Promise<{ startsAt: string; endsAt: string }[]> {
+  const params = new URLSearchParams({
+    trainer: trainerId,
+    date: ymd(day),
+    duration: String(durationMin),
+  });
+  try {
+    const res = await fetch(`/api/slots?${params.toString()}`, { credentials: "same-origin" });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.slots ?? [];
+  } catch {
+    return [];
+  }
+}
+
+function minutesOfDay(d: Date) {
+  return d.getHours() * 60 + d.getMinutes();
+}
+
+function mondayOf(d: Date) {
+  const x = startOfDay(d);
+  const dow = (x.getDay() + 6) % 7;
+  x.setDate(x.getDate() - dow);
+  return x;
+}
+
+function reasonLabel(reason: string) {
+  switch (reason) {
+    case "booking":
+      return "já há uma marcação";
+    case "blocked":
+      return "horário bloqueado pelo trainer";
+    case "reserved":
+      return "horário reservado para outro cliente";
+    case "no_credit":
+      return "sem sessões disponíveis para esta semana";
+    default:
+      return reason;
+  }
+}
+
 function ymd(d: Date) {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
@@ -295,9 +612,6 @@ function startOfDay(d: Date) {
 function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
-// Abreviações fixas (3 letras) para caberem nos chips do seletor de dia.
-// O Intl "short" em pt-PT devolvia o nome completo (Domingo, Segunda…) em
-// alguns runtimes, rebentando a largura do botão.
 const WEEKDAYS_PT_SHORT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 function weekday(d: Date) {
   return WEEKDAYS_PT_SHORT[d.getDay()];
