@@ -308,42 +308,6 @@ function PerfilTab({
           desc="Recebe um email e uma notificação na app antes das tuas sessões."
         />
       </div>
-
-      <form action={changeStaffPasswordAction} className="card space-y-3 p-5">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">
-          Palavra-passe
-        </h2>
-        <p className="text-xs text-ink-500">
-          Define uma nova palavra-passe. Mínimo de 8 caracteres.
-        </p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="label" htmlFor="staff-password">Nova palavra-passe</label>
-            <input
-              id="staff-password"
-              type="password"
-              name="password"
-              minLength={8}
-              autoComplete="new-password"
-              required
-              className="input"
-            />
-          </div>
-          <div>
-            <label className="label" htmlFor="staff-password-confirm">Confirmar</label>
-            <input
-              id="staff-password-confirm"
-              type="password"
-              name="confirm"
-              minLength={8}
-              autoComplete="new-password"
-              required
-              className="input"
-            />
-          </div>
-        </div>
-        <button className="btn-primary">Actualizar palavra-passe</button>
-      </form>
     </div>
   );
 }
@@ -651,23 +615,61 @@ function CalendarioTab({
 
 function SegurancaTab() {
   return (
-    <Link
-      href="/admin/seguranca"
-      className="card flex items-center justify-between p-4 hover:border-gold-400"
-    >
-      <div className="flex items-center gap-3">
-        <span className="grid h-10 w-10 place-items-center rounded-lg bg-bone-100 text-ink-700">
-          <ShieldCheck size={18} />
-        </span>
-        <div>
-          <div className="text-sm font-semibold">Verificação em dois passos (2FA)</div>
-          <div className="text-xs text-ink-500">
-            Activa o 2FA e gere os dispositivos onde dispensaste o código.
+    <div className="space-y-5">
+      <Link
+        href="/admin/seguranca"
+        className="card flex items-center justify-between p-4 hover:border-gold-400"
+      >
+        <div className="flex items-center gap-3">
+          <span className="grid h-10 w-10 place-items-center rounded-lg bg-bone-100 text-ink-700 dark:bg-white/[0.04] dark:text-bone-100">
+            <ShieldCheck size={18} />
+          </span>
+          <div>
+            <div className="text-sm font-semibold">Verificação em dois passos (2FA)</div>
+            <div className="text-xs text-ink-500">
+              Activa o 2FA e gere os dispositivos onde dispensaste o código.
+            </div>
           </div>
         </div>
-      </div>
-      <ChevronRight size={16} className="text-ink-500" />
-    </Link>
+        <ChevronRight size={16} className="text-ink-500" />
+      </Link>
+
+      <form action={changeStaffPasswordAction} className="card space-y-3 p-5">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">
+          Palavra-passe
+        </h2>
+        <p className="text-xs text-ink-500">
+          Define uma nova palavra-passe. Mínimo de 8 caracteres.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="label" htmlFor="staff-password">Nova palavra-passe</label>
+            <input
+              id="staff-password"
+              type="password"
+              name="password"
+              minLength={8}
+              autoComplete="new-password"
+              required
+              className="input"
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="staff-password-confirm">Confirmar</label>
+            <input
+              id="staff-password-confirm"
+              type="password"
+              name="confirm"
+              minLength={8}
+              autoComplete="new-password"
+              required
+              className="input"
+            />
+          </div>
+        </div>
+        <button className="btn-primary">Actualizar palavra-passe</button>
+      </form>
+    </div>
   );
 }
 

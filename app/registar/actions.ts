@@ -16,6 +16,16 @@ export async function registerAction(formData: FormData) {
     redirect("/registar?error=" + encodeURIComponent("Password tem de ter pelo menos 8 caracteres."));
   }
 
+  // Telemóvel obrigatório com exactamente 9 dígitos (PT). Ignora espaços
+  // que o utilizador possa ter colado, mas exige strictly 9 dígitos.
+  const phoneDigits = phone.replace(/\D/g, "");
+  if (phoneDigits.length !== 9) {
+    redirect(
+      "/registar?error=" +
+        encodeURIComponent("O telemóvel tem de ter exactamente 9 dígitos."),
+    );
+  }
+
   // SEC (H-C, audit jun/2026): defesa em profundidade no boundary.
   // O trainer_id vem do form (página pública /t/<slug> → /registar?
   // trainer=<id>) e acaba em user_metadata → handle_new_user. O trigger
@@ -43,7 +53,9 @@ export async function registerAction(formData: FormData) {
     email,
     password,
     options: {
-      data: trainer_id ? { full_name, phone, trainer_id } : { full_name, phone },
+      data: trainer_id
+        ? { full_name, phone: phoneDigits, trainer_id }
+        : { full_name, phone: phoneDigits },
       emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/auth/callback`,
     },
   });

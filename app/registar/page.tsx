@@ -50,7 +50,19 @@ export default async function RegisterPage(
             </div>
             <div>
               <label className="label">Telemóvel</label>
-              <input name="phone" type="tel" required pattern="[0-9 +]{9,15}" className="input" placeholder="9XX XXX XXX" />
+              <input
+                name="phone"
+                type="tel"
+                required
+                inputMode="numeric"
+                pattern="[0-9]{9}"
+                minLength={9}
+                maxLength={9}
+                title="Indica 9 dígitos (sem espaços nem indicativo)."
+                className="input"
+                placeholder="9XXXXXXXX"
+              />
+              <p className="mt-1 text-xs text-ink-500">9 dígitos, sem espaços.</p>
             </div>
             <div>
               <label className="label">Password</label>
