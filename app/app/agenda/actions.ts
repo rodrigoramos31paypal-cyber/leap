@@ -87,7 +87,11 @@ async function persistClientBookingNote(
         type: "client_note",
         title: "Nova nota de cliente",
         body: `${name} deixou uma nota na sessão marcada.`,
-        link: `/admin/agenda?view=day&d=${localDate}&booking=${bookingId}`,
+        // Vista de SEMANA com `?d=` no dia da sessão — o page computa
+        // `startOfWeek(d)` e os 7 dias incluem o dia da sessão. O
+        // `?booking=<id>` é matched contra cada BookingBlock e abre o
+        // popover desse, igual ao que já fazíamos em vista de dia.
+        link: `/admin/agenda?view=week&d=${localDate}&booking=${bookingId}`,
       });
     } catch (e) {
       logError("persistClientBookingNote:notify", e);
