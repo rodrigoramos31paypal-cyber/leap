@@ -140,7 +140,7 @@ export default async function AgendaPage(
       <div>
         <h1 className="font-display text-2xl font-bold tracking-tight">Marcar sessão</h1>
         <p className="text-sm text-ink-500">
-          {trainerName ? `Com ${trainerName}.` : "Escolhe o dia, hora e tipo de sessão."}
+          {trainerName ? `com ${trainerName}` : "Escolhe o dia, hora e tipo de sessão."}
           {actives.length > 1 && (
             <>
               {" · "}
