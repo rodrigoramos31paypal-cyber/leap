@@ -5,7 +5,7 @@ import { formatTime, BOOKING_STATUS } from "@/lib/utils";
 import { confirmAttendanceAction, markNoShowAction, cancelAdminAction, addBlockQuickAction, deleteBlockAction, skipRecurringDateAction, deleteRecurringBlockAction } from "./actions";
 import { Ban, NotebookPen } from "lucide-react";
 import { NoteEditor } from "@/components/note-editor";
-import { getMyNotesMapForBookings } from "@/lib/notes";
+import { getMyNotesMapForBookings, getClientNotesByBookings } from "@/lib/notes";
 import { getCurrentTrainerId, getAccessibleTrainerIds } from "@/lib/trainer";
 import { BlockPresets } from "@/components/block-presets";
 import { BookingBlock } from "./booking-popover";
@@ -212,10 +212,21 @@ async function CalendarView({
   const clientIds = Array.from(
     new Set(bookings.map((b: any) => b.client_id).filter(Boolean)),
   );
-  const [notesMap, creditRows] = await Promise.all([
+  // Notas do CLIENTE por booking — visíveis ao trainer (RLS 0078).
+  // Carregadas em Day/Week para o popover sinalizar e mostrar a nota
+  // que o cliente deixou ao marcar (ou mais tarde). No Month não é
+  // consumida → saltamos o round-trip.
+  const [notesMap, clientNotesMap, creditRows] = await Promise.all([
     view === "month"
       ? Promise.resolve(new Map<string, any>())
       : getMyNotesMapForBookings(bookings.map((b: any) => b.id)),
+    view === "month"
+      ? Promise.resolve(new Map<string, any>())
+      : getClientNotesByBookings(
+          bookings
+            .filter((b: any) => b.client_id)
+            .map((b: any) => ({ id: b.id, clientId: b.client_id as string })),
+        ),
     // PERF (CB-7 audit jun/2026): scope filter por trainer — antes
     // trazia TODAS as compras confirmadas de cada cliente em qualquer
     // trainer do sistema (irrelevante para o admin a olhar para a sua
@@ -340,6 +351,7 @@ async function CalendarView({
           blocks={allBlocks}
           reserved={reserved ?? []}
           notesMap={notesMap}
+          clientNotesMap={clientNotesMap}
           sessionsLeftMap={sessionsLeftMap}
           lastCreditIds={lastCreditIds}
           canBook={canBook}
@@ -355,6 +367,7 @@ async function CalendarView({
           blocks={allBlocks}
           reserved={reserved ?? []}
           notesMap={notesMap}
+          clientNotesMap={clientNotesMap}
           sessionsLeftMap={sessionsLeftMap}
           lastCreditIds={lastCreditIds}
           canBook={canBook}
@@ -451,6 +464,7 @@ function DayView({
   blocks,
   reserved,
   notesMap,
+  clientNotesMap,
   sessionsLeftMap,
   lastCreditIds,
   canBook,
@@ -463,6 +477,7 @@ function DayView({
   blocks: any[];
   reserved: any[];
   notesMap: Map<string, any>;
+  clientNotesMap: Map<string, any>;
   sessionsLeftMap: Map<string, number>;
   lastCreditIds: Set<string>;
   canBook: boolean;
@@ -698,6 +713,7 @@ function DayView({
                         key={`b-${b.id}`}
                         b={b}
                         note={notesMap.get(b.id)}
+                        clientNote={clientNotesMap.get(b.id)}
                         style={{ top: pos.top, height: pos.height, ...overlapStyle }}
                         draggable={canDrag}
                         rowTops={layout.tops}
@@ -964,6 +980,7 @@ function WeekView({
   blocks,
   reserved,
   notesMap,
+  clientNotesMap,
   sessionsLeftMap,
   lastCreditIds,
   canBook,
@@ -976,6 +993,7 @@ function WeekView({
   blocks: any[];
   reserved: any[];
   notesMap: Map<string, any>;
+  clientNotesMap: Map<string, any>;
   sessionsLeftMap: Map<string, number>;
   lastCreditIds: Set<string>;
   canBook: boolean;
@@ -1261,6 +1279,7 @@ function WeekView({
                         key={`b-${b.id}`}
                         b={b}
                         note={notesMap.get(b.id)}
+                        clientNote={clientNotesMap.get(b.id)}
                         style={{ top: pos.top, height: pos.height, ...overlapStyle }}
                         draggable={canDrag}
                         rowTops={layout.tops}

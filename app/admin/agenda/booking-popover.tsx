@@ -54,6 +54,7 @@ type Preview = {
 export function BookingBlock({
   b,
   note,
+  clientNote,
   style,
   draggable = false,
   rowTops,
@@ -66,6 +67,8 @@ export function BookingBlock({
 }: {
   b: any;
   note?: { body: string } | null;
+  /** Nota escrita pelo cliente para esta sessão (read-only, RLS 0078). */
+  clientNote?: { body: string } | null;
   style: React.CSSProperties;
   draggable?: boolean;
   // Layout de altura variável (24 horas), partilhado com a grelha em
@@ -414,6 +417,14 @@ export function BookingBlock({
           className="pointer-events-none absolute right-0.5 top-0.5 z-10 h-2 w-2 rounded-full bg-red-500 ring-1 ring-white"
         />
       )}
+      {clientNote?.body && b.status !== "cancelled" && (
+        <span
+          title="O cliente deixou uma nota"
+          className="pointer-events-none absolute left-0.5 top-0.5 z-10 inline-flex items-center justify-center rounded-sm bg-ink-900/85 px-0.5 text-[7px] font-bold text-bone-50 ring-1 ring-white"
+        >
+          <NotebookPen size={7} />
+        </span>
+      )}
       <button
         type="button"
         onPointerDown={onPointerDown}
@@ -734,6 +745,17 @@ export function BookingBlock({
                 )}
               </div>
             </details>
+          )}
+
+          {clientNote?.body && (
+            <div className="mb-3 rounded-lg border border-gold-300 bg-gold-50 p-3 dark:border-gold-400/30 dark:bg-gold-400/10">
+              <div className="mb-1 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gold-700">
+                <NotebookPen size={11} /> Nota do cliente
+              </div>
+              <p className="whitespace-pre-wrap text-xs text-ink-700 dark:text-bone-100">
+                {clientNote.body}
+              </p>
+            </div>
           )}
 
           <details className="border-t border-ink-900/10 pt-3">

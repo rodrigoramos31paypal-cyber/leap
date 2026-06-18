@@ -149,6 +149,44 @@ export async function getClientNotesMapForBookings(
   return map;
 }
 
+/**
+ * Notas do CLIENTE para um conjunto de marcações de vários clientes.
+ *
+ * Usada pela agenda admin: o trainer vê dezenas de bookings com clientes
+ * diferentes e queremos saber, por booking, se o cliente desse booking
+ * deixou nota e qual o body. A RLS 0078 já restringe o trainer a ler
+ * apenas notas em que `author_id = bookings.client_id` na sessão dele,
+ * portanto basta filtrar pelo conjunto de booking_ids — o filtro de
+ * autoria é implícito via policy.
+ *
+ * Uma única query para todos os bookings (em vez de N por cliente).
+ */
+export async function getClientNotesByBookings(
+  bookings: { id: string; clientId: string }[],
+): Promise<Map<string, SessionNote>> {
+  const map = new Map<string, SessionNote>();
+  if (bookings.length === 0) return map;
+  const supabase = await createClient();
+  // Filtramos por (booking_id, author_id) — author_id = client_id do
+  // booking — para impedir que uma nota do trainer ao próprio booking
+  // (booking-bound, autoria do trainer) apareça aqui como "nota do cliente".
+  const clientIdByBooking = new Map(bookings.map((b) => [b.id, b.clientId]));
+  const { data } = await supabase
+    .from("session_notes")
+    .select("booking_id, author_id, body")
+    .in(
+      "booking_id",
+      bookings.map((b) => b.id),
+    );
+  for (const row of (data ?? []) as unknown as SessionNote[]) {
+    if (!row.booking_id) continue;
+    const expectedAuthor = clientIdByBooking.get(row.booking_id);
+    if (!expectedAuthor || row.author_id !== expectedAuthor) continue;
+    map.set(row.booking_id, row);
+  }
+  return map;
+}
+
 export async function getMyNotesMapForBookings(bookingIds: string[]): Promise<Map<string, SessionNote>> {
   const map = new Map<string, SessionNote>();
   if (bookingIds.length === 0) return map;
