@@ -4,6 +4,7 @@ import {
   saveTrainerBioAction,
   addAvailabilityAction,
   deleteBlockAction,
+  changeStaffPasswordAction,
 } from "./actions";
 import { googleEnabled, microsoftEnabled } from "@/lib/calendar-sync";
 import { getCurrentTrainer } from "@/lib/trainer";
@@ -242,10 +243,21 @@ function PerfilTab({
           Perfil público
         </h2>
         <p className="text-xs text-ink-500">
-          O teu nome ({trainer.full_name || "—"}) e esta biografia aparecem ao cliente
-          quando escolhe trainer.
+          O teu nome e biografia aparecem ao cliente quando escolhe trainer.
         </p>
         <input type="hidden" name="trainerId" value={trainer.id} />
+        <div>
+          <label className="label">Nome completo</label>
+          <input
+            name="full_name"
+            type="text"
+            maxLength={120}
+            defaultValue={trainer.full_name ?? ""}
+            className="input"
+            placeholder="Ex: João Pedro Silva"
+            required
+          />
+        </div>
         <div>
           <label className="label">Biografia (máx. 500 caracteres)</label>
           <textarea
@@ -296,6 +308,42 @@ function PerfilTab({
           desc="Recebe um email e uma notificação na app antes das tuas sessões."
         />
       </div>
+
+      <form action={changeStaffPasswordAction} className="card space-y-3 p-5">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">
+          Palavra-passe
+        </h2>
+        <p className="text-xs text-ink-500">
+          Define uma nova palavra-passe. Mínimo de 8 caracteres.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="label" htmlFor="staff-password">Nova palavra-passe</label>
+            <input
+              id="staff-password"
+              type="password"
+              name="password"
+              minLength={8}
+              autoComplete="new-password"
+              required
+              className="input"
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="staff-password-confirm">Confirmar</label>
+            <input
+              id="staff-password-confirm"
+              type="password"
+              name="confirm"
+              minLength={8}
+              autoComplete="new-password"
+              required
+              className="input"
+            />
+          </div>
+        </div>
+        <button className="btn-primary">Actualizar palavra-passe</button>
+      </form>
     </div>
   );
 }
