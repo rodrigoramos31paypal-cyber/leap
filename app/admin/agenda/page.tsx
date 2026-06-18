@@ -714,10 +714,12 @@ function DayView({
                       : new Date(s.getTime() + 60 * 60 * 1000);
                     const pos = clampPosition(layout, s, e);
                     if (!pos) return null;
+                    // Drag liberado para passado/presente/futuro (pedido
+                    // do trainer): basta a sessão estar activa. O servidor
+                    // (reschedule_booking_admin) também aceita slot/origem
+                    // no passado para o caminho admin.
                     const canDrag =
-                      canBook &&
-                      (b.status === "booked" || b.status === "confirmed") &&
-                      s.getTime() > Date.now();
+                      canBook && (b.status === "booked" || b.status === "confirmed");
                     const g = groupOf.get(b.id);
                     const cols = g !== undefined ? groupCols.get(g) ?? 1 : 1;
                     const col = colOf.get(b.id) ?? 0;
@@ -1273,10 +1275,10 @@ function WeekView({
                       : new Date(s.getTime() + 60 * 60 * 1000);
                     const pos = clampPosition(layout, s, e);
                     if (!pos) return null;
+                    // Drag liberado para passado/presente/futuro (pedido
+                    // do trainer): basta a sessão estar activa.
                     const canDrag =
-                      canBook &&
-                      (b.status === "booked" || b.status === "confirmed") &&
-                      s.getTime() > Date.now();
+                      canBook && (b.status === "booked" || b.status === "confirmed");
                     const g = groupOf.get(b.id);
                     const cols = g !== undefined ? groupCols.get(g) ?? 1 : 1;
                     const col = colOf.get(b.id) ?? 0;
