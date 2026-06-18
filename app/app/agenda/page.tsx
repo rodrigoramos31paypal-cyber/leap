@@ -13,6 +13,7 @@ import {
   ShoppingBag,
   Package,
   ChevronRight,
+  Trophy,
 } from "lucide-react";
 
 export default async function AgendaPage(
@@ -167,16 +168,7 @@ export default async function AgendaPage(
         isNewClient ? (
           <NewClientWelcome trainerName={trainerName} trainerId={currentTrainer?.id} />
         ) : (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
-            Sem sessões disponíveis {currentTrainer ? `com ${currentTrainer.full_name}` : ""}.{" "}
-            <a
-              href={`/app/comprar${currentTrainer ? `?trainer=${currentTrainer.id}` : ""}`}
-              className="font-semibold underline"
-            >
-              Compra um pack
-            </a>{" "}
-            para marcares sessões.
-          </div>
+          <ReturningClientEmpty trainerId={currentTrainer?.id} />
         )
       ) : (
         <BookingFlow
@@ -278,6 +270,55 @@ function Feature({
       </div>
       <div className="text-[11px] font-semibold leading-tight sm:text-xs">{title}</div>
       <div className="text-[10px] leading-tight text-ink-500 dark:text-bone-100/70 sm:text-[11px]">{desc}</div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════
+// Ecrã para clientes RECORRENTES com saldo esgotado. Mesma estrutura
+// visual do NewClientWelcome, copy diferente: parabeniza por terem
+// usado todas as sessões e convida a renovar.
+// ════════════════════════════════════════════════════════════════
+function ReturningClientEmpty({ trainerId }: { trainerId?: string }) {
+  const buyHref = `/app/comprar${trainerId ? `?trainer=${trainerId}` : ""}`;
+  return (
+    <div className="card p-6 text-center sm:p-8">
+      <div className="relative mx-auto h-24 w-24">
+        <div className="absolute inset-0 grid place-items-center rounded-full border-2 border-gold-400/50">
+          <Trophy className="h-10 w-10 text-gold-500" strokeWidth={1.75} />
+        </div>
+        <span aria-hidden className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 -translate-y-4 text-gold-500">✦</span>
+        <span aria-hidden className="pointer-events-none absolute right-0 top-2 translate-x-2 text-gold-500/80">✧</span>
+        <span aria-hidden className="pointer-events-none absolute left-0 top-2 -translate-x-2 text-gold-500/80">✧</span>
+        <span aria-hidden className="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-4 text-gold-500/80">✦</span>
+      </div>
+
+      <h2 className="mt-5 font-display text-2xl font-bold tracking-tight sm:text-3xl">
+        Bom trabalho!
+      </h2>
+      <p className="mx-auto mt-2 max-w-xs text-sm text-ink-600 dark:text-bone-100/80">
+        Utilizaste todas as sessões do teu pack.
+      </p>
+      <div aria-hidden className="mx-auto mt-4 h-0.5 w-16 rounded-full bg-gold-400" />
+      <p className="mx-auto mt-4 max-w-xs text-sm font-semibold">
+        Escolhe um novo pack para continuar a treinar.
+      </p>
+
+      <div className="mt-6">
+        <Link
+          href={buyHref}
+          className="btn-gold inline-flex w-full items-center justify-center gap-2 uppercase tracking-wide"
+        >
+          <ShoppingBag size={16} /> Comprar pack
+        </Link>
+        <Link
+          href={buyHref}
+          className="mt-3 inline-flex items-center justify-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-900 dark:text-bone-100/80 dark:hover:text-bone-50"
+        >
+          <Package size={14} className="text-gold-500" /> Ver packs disponíveis
+          <ChevronRight size={14} />
+        </Link>
+      </div>
     </div>
   );
 }
