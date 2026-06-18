@@ -30,13 +30,21 @@ type View = "day" | "week" | "month";
 // da pagina de imediato ao mudar para Agenda.
 // ════════════════════════════════════════════════════════════════
 export default async function AdminAgendaPage(props: {
-  searchParams: Promise<{ d?: string; view?: string }>;
+  searchParams: Promise<{ d?: string; view?: string; booking?: string }>;
 }) {
   const searchParams = await props.searchParams;
   const view: View = (["day", "week", "month"].includes(searchParams.view ?? "") ? searchParams.view : "week") as View;
   const dayParam = searchParams.d;
   const day = dayParam ? new Date(dayParam + "T00:00:00") : new Date();
   day.setHours(0, 0, 0, 0);
+  // Deep-link de notificação: abrir o popover da sessão alvo. Validado
+  // como UUID antes de descer aos BookingBlocks para evitar attribute
+  // injection no DOM.
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const focusBookingId =
+    searchParams.booking && UUID_RE.test(searchParams.booking)
+      ? searchParams.booking
+      : undefined;
 
   // trainerId precisa de ser conhecido para a BlockTimeForm / BookingDialog —
   // bloqueia apenas para isto (cached via React.cache, rapido).
@@ -92,10 +100,17 @@ export default async function AdminAgendaPage(props: {
             bottom-nav (popover com 3 opções).
           Default = vista de semana (cf. lógica acima). */}
       <Suspense
-        key={`${view}-${isoDate(day)}`}
+        key={`${view}-${isoDate(day)}-${focusBookingId ?? ""}`}
         fallback={<CardSkeleton className="h-96" />}
       >
-        <CalendarView view={view} day={day} rangeStart={rangeStart} rangeEnd={rangeEnd} canBook={canBook} />
+        <CalendarView
+          view={view}
+          day={day}
+          rangeStart={rangeStart}
+          rangeEnd={rangeEnd}
+          canBook={canBook}
+          focusBookingId={focusBookingId}
+        />
       </Suspense>
 
       {/* BookingDialog "headless" + RescheduleDialog: invisíveis até o
@@ -115,9 +130,11 @@ export default async function AdminAgendaPage(props: {
 }
 
 async function CalendarView({
-  view, day, rangeStart, rangeEnd, canBook,
+  view, day, rangeStart, rangeEnd, canBook, focusBookingId,
 }: {
   view: View; day: Date; rangeStart: Date; rangeEnd: Date; canBook: boolean;
+  /** Quando definido, o BookingBlock com este id auto-abre o popover. */
+  focusBookingId?: string;
 }) {
   const supabase = await createClient();
   // PERF (Q5): trainerIds + myTrainerId são independentes (e cached) —
@@ -356,6 +373,7 @@ async function CalendarView({
           lastCreditIds={lastCreditIds}
           canBook={canBook}
           avail={availMap}
+          focusBookingId={focusBookingId}
           prevHref={`/admin/agenda?view=day&d=${isoDate(stepBack("day", day))}`}
           nextHref={`/admin/agenda?view=day&d=${isoDate(stepForward("day", day))}`}
         />
@@ -372,6 +390,7 @@ async function CalendarView({
           lastCreditIds={lastCreditIds}
           canBook={canBook}
           avail={availMap}
+          focusBookingId={focusBookingId}
           prevHref={`/admin/agenda?view=week&d=${isoDate(stepBack("week", day))}`}
           nextHref={`/admin/agenda?view=week&d=${isoDate(stepForward("week", day))}`}
         />
@@ -469,6 +488,7 @@ function DayView({
   lastCreditIds,
   canBook,
   avail,
+  focusBookingId,
   prevHref,
   nextHref,
 }: {
@@ -482,6 +502,7 @@ function DayView({
   lastCreditIds: Set<string>;
   canBook: boolean;
   avail: AvailMap;
+  focusBookingId?: string;
   prevHref: string;
   nextHref: string;
 }) {
@@ -723,6 +744,7 @@ function DayView({
                         isLastCredit={lastCreditIds.has(b.id)}
                         overlap={isOverlap}
                         overlapCol={col}
+                        autoOpen={focusBookingId === b.id}
                       />
                     );
                   });
@@ -985,6 +1007,7 @@ function WeekView({
   lastCreditIds,
   canBook,
   avail,
+  focusBookingId,
   prevHref,
   nextHref,
 }: {
@@ -998,6 +1021,7 @@ function WeekView({
   lastCreditIds: Set<string>;
   canBook: boolean;
   avail: AvailMap;
+  focusBookingId?: string;
   prevHref: string;
   nextHref: string;
 }) {
@@ -1289,6 +1313,7 @@ function WeekView({
                         isLastCredit={lastCreditIds.has(b.id)}
                         overlap={isOverlap}
                         overlapCol={col}
+                        autoOpen={focusBookingId === b.id}
                       />
                     );
                   });
