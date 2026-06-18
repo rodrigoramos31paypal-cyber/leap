@@ -5,30 +5,54 @@
 > Severidade: Critical / High / Medium / Low / Info.
 > Status: OPEN / IN PROGRESS / FIXED / ACCEPTED.
 >
-> Último run: 2026-06-17 (re-audit + S-10 / S-11 / S-12 acrescentados).
+> Último run: 2026-06-18 (re-audit white-box + S-13 / S-14 / S-15 acrescentados).
 
 ## Resumo executivo
 
 Postura geral **boa**. As fronteiras de autorização foram cobertas em
-runs anteriores (H-A/H-B/H-C/H-D, C-A/C-B/C-C, S-01..S-09) e a maioria
+runs anteriores (H-A/H-B/H-C/H-D, C-A/C-B/C-C, S-01..S-12) e a maioria
 das Server Actions usam `requireStaff`/`requireOwner` + checks
 explícitos de ownership sobre o `trainer_id` vindo do form. RLS está
 activo em todas as tabelas sensíveis e os RPCs críticos são
-`SECURITY DEFINER` com guards internos.
+`SECURITY DEFINER` com guards internos (`_is_service_or_admin`,
+`_trainer_is_accessible`, ownership por `auth.uid()`) — verificado em
+0015/0042 neste run.
 
-Neste run novo (2026-06-17 redux) **não foram encontrados findings
-High/Critical**. Acrescenta-se um **finding Medium** (S-10 — gap de
-defense-in-depth nas Server Actions de `app/admin/agenda/actions.ts`,
-únicas em todo o `app/admin` sem `requireStaff()` no boundary) e dois
-**Low/Info** (S-11 audit-log RGPD em `/api/me/export`; S-12 directiva
-`Cache-Control: public` numa rota autenticada). Os três foram fechados
-no mesmo run. O S-02 (CVEs do Next 14.2.33) está **resolvido na raiz**:
-o `package.json` está agora em `next@^16.2.9` / `react@^19.2.7`.
+Neste run (2026-06-18) o achado material é **S-13 (High)**: o gate de
+**2FA estava implementado SÓ no `app/admin/layout.tsx`**. Como as Server
+Actions são endpoints POST que NÃO renderizam o layout, uma sessão
+**AAL1** (password correcta, sem TOTP — exactamente o cenário que o 2FA
+existe para travar) podia invocar **todas** as actions de staff
+directamente (apagar cliente, atribuir/remover créditos, cancelar
+sessões, conceder/revogar admin). `is_admin()` nas RPCs também devolve
+`true` em AAL1, por isso a camada de dados não apanhava o gap. **Fechado
+neste run** movendo o gate de 2FA para `lib/authz.ts`
+(`requireStaff`/`requireOwner` passam a exigir AAL2-ou-trusted-device
+quando o caller tem factor verificado, replicando o layout). Acrescentam-se
+ainda dois itens de defesa-em-profundidade, **ambos fechados neste run**:
+**S-14 (Low → FIXED)** — `getRequestIp` aceitava `x-forwarded-for` forjável
+como fallback (mitigado no Vercel; agora pinado a `x-vercel-forwarded-for`
+com fail-closed em prod); e **S-15 (Info → FIXED)** — upload de avatar
+validava só o MIME declarado pelo cliente (mitigado por bucket em origem
+separada `*.supabase.co` + `nosniff` + allowlist sem SVG; agora também
+valida magic-bytes).
 
-A correcção do S-10 não altera comportamento normal — `requireStaff()`
-é idempotente para callers que já são staff (uma leitura cached por
-request), e devolve erro idêntico ao que a RPC `SECURITY DEFINER` já
-devolvia a não-staff.
+A correcção do S-13 não altera o fluxo normal: um staff que fez login e
+completou o 2FA está em AAL2 (ou tem cookie trusted-device), por isso
+`requireStaff`/`requireOwner` passam sem custo extra (sessões AAL2 ou
+sem 2FA nem tocam na BD — `getAalInfo` é local e cached por request).
+Só a sessão AAL1-com-2FA-pendente é recusada — idêntico ao que o layout
+já fazia, agora também no boundary de dados.
+
+> **Baseline determinístico (2026-06-18):** `next@16.2.9` confirmado
+> instalado (`node_modules/next/package.json`) → **S-02 fechado na raiz**.
+> `npm audit` não pôde correr neste ambiente (rede do sandbox bloqueada);
+> correr na máquina/CI. `tsc --noEmit` não é fiável neste sandbox (o mount
+> FUSE faz leituras parciais de ficheiros UTF-8 com acentos/em-dash e
+> produz erros-fantasma "unterminated string"/JSX em ficheiros não
+> tocados); correr `npm run type-check` na máquina como fonte de verdade.
+> O fix do S-13 espelha verbatim o uso já tipado de
+> `getAalInfo`+`isDeviceTrusted` em `app/admin/layout.tsx`.
 
 ## Findings — Índice
 
@@ -46,6 +70,9 @@ devolvia a não-staff.
 | S-10 | Medium | CWE-285 / CWE-862 | `app/admin/agenda/actions.ts` — 11 Server Actions sem `requireStaff()` no boundary. Único ficheiro `app/admin/**/actions.ts` sem o guard explícito. Defense-in-depth ausente. | Autenticado (cliente) | FIXED |
 | S-11 | Low | CWE-778 | `/api/me/export` (XLSX dos meus dados RGPD) não regista evento no audit log; assimetria com `/api/relatorios/export` | Autenticado (próprio user) | FIXED |
 | S-12 | Low | CWE-525 | `/api/slots` devolve `Cache-Control: public, s-maxage=30` mas a rota está fora de `isPublic` no middleware → Vercel Edge cacheia para qualquer origem incluindo unauth (dados não são PII, mas inconsistência de policy) | Anónimo | FIXED |
+| S-13 | High | CWE-306 / CWE-862 | Gate de 2FA só no `app/admin/layout.tsx` — Server Actions de staff (apagar cliente, créditos, cancelar sessões, conceder admin) invocáveis em sessão AAL1, contornando o TOTP. `requireStaff`/`requireOwner` e `is_admin()` só checavam role, não AAL. | Autenticado staff em AAL1 (password comprometida, sem 2º factor) | FIXED |
+| S-14 | Low | CWE-348 | `getRequestIp` (`lib/rate-limit.ts:141`) aceita `x-forwarded-for`/`x-real-ip` forjáveis como fallback → rotação da chave de rate-limit / bypass de brute-force se `x-vercel-forwarded-for` faltar | Anónimo (só fora do Vercel) | FIXED |
+| S-15 | Info | CWE-434 | Upload de avatar (`app/admin/definicoes/actions.ts:303-315`) valida só o `file.type` declarado pelo cliente, sem magic-bytes | Autenticado staff (próprio trainer) | FIXED |
 
 ## Controlos JÁ em vigor (não voltam a ser flagged)
 
@@ -93,6 +120,15 @@ Lista do que está **bem feito** para evitar re-flag em runs futuros.
 - **MFA re-auth ("sudo")**: enroll do primeiro factor exige re-confirmar
   password; unenroll exige challenge TOTP fresco — não basta cookie/trusted
   device (H-A audit, `app/app/perfil/seguranca/actions.ts`).
+- **2FA enforced NO BOUNDARY de dados** (S-13, este run): `requireStaff`/
+  `requireOwner` (`lib/authz.ts`) exigem AAL2-ou-trusted-device quando o
+  caller tem factor verificado — não só o `app/admin/layout.tsx`. O gate
+  deixa de depender de o atacante "passar pelo layout".
+- **Auth boundary verificada server-side, não só descodificada** (RPCs):
+  `0015_security_harden_rpcs.sql` usa `_is_service_or_admin()` (que exige
+  `is_admin()` ou service-role) e `0042` valida `client_id = auth.uid()` ou
+  `is_admin() AND _trainer_is_accessible(...)` ANTES de qualquer mutação —
+  IDOR de reschedule/cancel/confirm/no-show fechado na BD (re-verificado).
 - **Service role** confinado a 3 ficheiros (`lib/supabase/server.ts`,
   `app/admin/clientes/[id]/actions.ts`, `app/app/perfil/actions.ts`) — todos
   em código server-only, sempre após `requireOwner`/check explícito de ownership.
@@ -404,15 +440,150 @@ s-maxage=30`.
 
 ---
 
+### S-13 · Gate de 2FA só no layout — bypass via Server Action `[High → FIXED]`
+
+**Ficheiro/linhas:** `lib/authz.ts:14-29` (antes do fix), gate original em
+`app/admin/layout.tsx:52-56`. Afecta TODAS as Server Actions de staff:
+`app/admin/agenda/actions.ts`, `app/admin/clientes/[id]/actions.ts`
+(adminDeleteClientAction, setClientBannedAction, grantPackAction,
+adjustCreditsAction), `app/admin/equipa/actions.ts` (addTrainer,
+grantAdminByEmail, demoteTrainer, makeStudioTrainer…), `app/admin/loja`,
+`app/admin/promocoes`, `app/admin/packs`, `app/admin/pagamentos`,
+`app/admin/definicoes`.
+
+**Vulnerabilidade:** o desafio de 2FA do staff vivia exclusivamente no
+Server Component `app/admin/layout.tsx`:
+
+```ts
+const { currentLevel, hasMfa } = await getAalInfo();
+if (hasMfa && currentLevel !== "aal2" && !(await isDeviceTrusted(user.id))) {
+  redirect(`/login/2fa?next=${...}`);
+}
+```
+
+`signInWithPassword` estabelece a sessão em **AAL1** ANTES do desafio
+TOTP. O layout só corre quando o browser navega para uma página `/admin/*`
+e renderiza o layout. Mas as **Server Actions são endpoints POST
+independentes** — o Next despacha-as pelo action-id no corpo, sem
+renderizar o layout da rota. O guard de dados `requireStaff()`/
+`requireOwner()` (e `is_admin()` dentro das RPCs `SECURITY DEFINER`) só
+verificava o **role**, nunca o **AAL**. Logo:
+
+- Um atacante com a **password** de um admin (phishing, reuse, leak) mas
+  SEM o 2º factor obtém uma sessão AAL1.
+- O layout `/admin` redirecciona-o para `/login/2fa` → parece bloqueado.
+- Mas ele constrói o POST da Server Action (o payload é serializável e o
+  action-id é estável por build) e invoca `adminDeleteClientAction`,
+  `grantPackAction`, `cancelAdminAction`, `grantAdminByEmailAction`, etc.
+  `requireStaff()` vê `role ∈ {trainer,owner}` → passa. A RPC vê
+  `is_admin()` → passa. **O 2FA é completamente contornado** para todas as
+  operações destrutivas/financeiras.
+
+**Impacto:** o 2FA — controlo cujo propósito é precisamente proteger
+contra password comprometida — não oferece protecção nenhuma às operações
+mais sensíveis do painel. Eleva a severidade de qualquer leak de password
+de staff a comprometimento total (apagar PII de clientes, falsear
+créditos/pagamentos, auto-conceder admin).
+
+**Fix aplicado (2026-06-18):** o gate passou para o boundary de dados em
+`lib/authz.ts`. `requireStaff()`/`requireOwner()` chamam agora
+`assertMfaSatisfied(profile.id)` depois de validar o role:
+
+```ts
+async function assertMfaSatisfied(userId: string): Promise<void> {
+  const { currentLevel, hasMfa } = await getAalInfo();
+  if (hasMfa && currentLevel !== "aal2" && !(await isDeviceTrusted(userId))) {
+    throw new Error("2FA necessária.");
+  }
+}
+```
+
+Replica EXACTAMENTE a condição do layout (mesma política: só staff com
+factor verificado é forçado; AAL2 ou trusted-device satisfazem). Custo
+nulo no fluxo normal — `getAalInfo` é local (lê o JWT) e cached por
+request; só toca na BD (`isDeviceTrusted`) no caso "tem 2FA mas ainda em
+AAL1".
+
+**Verificação:**
+1. Login como owner com 2FA activo, NÃO completar o desafio (ficar em
+   `/login/2fa`). Replicar o POST de uma Server Action
+   (ex.: `setClientBannedAction`) com as devnav-tools → resposta lança
+   "2FA necessária." (antes executava).
+2. Completar o 2FA (AAL2) e repetir → executa normalmente.
+3. `grep -n "assertMfaSatisfied" lib/authz.ts` → usado em `requireStaff`
+   e `requireOwner`.
+4. `npm run type-check` na máquina (o sandbox do audit não consegue —
+   ver baseline).
+
+---
+
+### S-14 · `getRequestIp` confia em `x-forwarded-for` forjável `[Low → FIXED]`
+
+**Ficheiro/linhas:** `lib/rate-limit.ts:141-...`
+
+A função tentava `x-vercel-forwarded-for` PRIMEIRO (definido pelo proxy do
+Vercel, não forjável pelo cliente) e só depois `x-forwarded-for` /
+`x-real-ip` (ambos enviáveis pelo cliente). Em produção no Vercel o
+primeiro está sempre presente → não explorável. Fora do Vercel (ou se a
+infra mudar), um atacante podia enviar `x-forwarded-for: <aleatório>` por
+request e **rodar a chave do rate-limit**, anulando o limite de
+brute-force em `/login`/`/registar`.
+
+**Fix aplicado (2026-06-18):** se houver `x-vercel-forwarded-for`, é esse o
+IP (idêntico ao anterior — zero mudança em produção, onde está sempre
+presente). Em produção SEM esse header (não ocorre no Vercel) deixamos de
+confiar nos headers do cliente e devolvemos uma chave fixa
+(`"no-trusted-ip"`) → o limiter degrada para um bucket global mais
+apertado, **falhando SEGURO** (nunca abre o brute-force). O fallback para
+`x-forwarded-for`/`x-real-ip` fica restrito a dev/local.
+
+**Verificação:** em prod, `curl -H 'x-forwarded-for: 1.2.3.4'` repetidamente
+sem o header do Vercel → todas as tentativas caem no mesmo bucket (não há
+rotação de chave). Em dev local o limiter continua a funcionar via
+`x-forwarded-for`.
+
+---
+
+### S-15 · Upload de avatar valida só o MIME declarado `[Info → FIXED]`
+
+**Ficheiro/linhas:** `app/admin/definicoes/actions.ts:303-346`
+
+A validação usava `file.type` (Content-Type declarado pelo browser) +
+`file.size`, e derivava a extensão do MIME (não do filename) — bom. Mas não
+inspeccionava magic-bytes, por isso um ficheiro com bytes arbitrários e
+`type=image/png` era aceite e gravado no bucket `avatars` servido com esse
+content-type. Risco já baixo (bucket em **origem separada**
+`*.supabase.co`; `X-Content-Type-Options: nosniff` global; allowlist
+**exclui SVG**, o único vector real de XSS via imagem).
+
+**Fix aplicado (2026-06-18):** validação da assinatura (magic-bytes) depois
+de ler o buffer e antes do upload — aceita só JPEG (`FF D8 FF`), PNG
+(`89 50 4E 47 0D 0A 1A 0A`) e WEBP (`RIFF`…`WEBP`). Imagens legítimas
+passam sempre, por isso o fluxo normal não muda; conteúdo com type forjado
+é rejeitado com "Ficheiro de imagem inválido.".
+
+**Verificação:** upload de um `.txt` renomeado/forjado com
+`Content-Type: image/png` → rejeitado. Upload de JPG/PNG/WEBP reais →
+funciona como antes.
+
+---
+
 ## Ordem de remediação sugerida
 
 1. **S-01 · S-03 · S-04 · S-06 · S-07 · S-08** — FIXED no run anterior.
 2. **S-02** — FIXED na raiz (upgrade para Next 16.2.9 + React 19.2.7).
 3. **S-10** — FIXED neste run (2026-06-17). `requireStaff()` em todas as
    11 actions de `app/admin/agenda/actions.ts`.
-4. **S-11** — FIXED neste run. Audit log no `/api/me/export`.
-5. **S-12** — FIXED neste run. `Cache-Control: private` + `CDN-Cache-Control: public`.
-6. **S-05 · S-09** — ACCEPTED, monitor.
+4. **S-11** — FIXED no run anterior. Audit log no `/api/me/export`.
+5. **S-12** — FIXED no run anterior. `Cache-Control: private` + `CDN-Cache-Control: public`.
+6. **S-13 (High)** — FIXED neste run (2026-06-18). Gate de 2FA movido para
+   `lib/authz.ts` (`requireStaff`/`requireOwner`). **Prioridade máxima** —
+   re-testar o fluxo AAL1 antes do próximo release.
+7. **S-14 (Low)** — FIXED neste run. `getRequestIp` pinado a
+   `x-vercel-forwarded-for` (fail-closed em prod sem o header).
+8. **S-15 (Info)** — FIXED neste run. Magic-bytes no upload de avatar.
+9. **S-05 · S-09** — ACCEPTED, monitor (trade-offs de PERF deliberados;
+   alterá-los mudaria comportamento — não tocados).
 
 ## Como reproduzir o baseline determinístico
 
