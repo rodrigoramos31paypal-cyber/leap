@@ -140,8 +140,10 @@ async function Kpis({ year, month }: { year: number; month: number }) {
     sessionsNoShow = Number(kpi.sessions_no_show) || 0;
     activeClients = Number(kpi.active_clients) || 0;
   } else {
-    // FALLBACK (caminho antigo): fetch + agregacao em JS. Identico ao
-    // que existia antes da RPC; so corre se a RPC falhar.
+    // FALLBACK (caminho antigo): fetch + agregacao em JS. Mantido em
+    // paridade com 0088 — sessions_booked = mirror da agenda (qualquer
+    // status excepto cancelled); active_clients exclui staff (role !=
+    // 'client') e contas anonimizadas. So corre se a RPC falhar.
     const [
       { count: pendingCount },
       { data: monthPurchases },
@@ -170,16 +172,32 @@ async function Kpis({ year, month }: { year: number; month: number }) {
     revenue = ((monthPurchases ?? []) as any[]).reduce((acc: number, r: any) => acc + r.amount_cents, 0);
     packsSold = (monthPurchases ?? []).length;
     pendingPaymentsCount = pendingCount ?? 0;
-    const activeClientsSet = new Set<string>();
+    // Conjunto candidato de client_ids (qualquer status que apareça na
+    // agenda) — filtrado a seguir contra profiles para excluir staff.
+    const candidateClientIds = new Set<string>();
     for (const b of ((monthBookings ?? []) as any[])) {
-      if (b.status === "booked" || b.status === "confirmed") {
+      if (b.status !== "cancelled") {
         sessionsBooked++;
-        activeClientsSet.add(b.client_id);
+        if (b.client_id) candidateClientIds.add(b.client_id);
       }
       if (b.status === "confirmed") sessionsConfirmed++;
       else if (b.status === "no_show") sessionsNoShow++;
     }
-    activeClients = activeClientsSet.size;
+    if (candidateClientIds.size > 0) {
+      const { data: clientProfiles } = await supabase
+        .from("profiles")
+        .select("id, email")
+        .in("id", Array.from(candidateClientIds))
+        .eq("role", "client");
+      const valid = new Set(
+        ((clientProfiles ?? []) as any[])
+          .filter((p) => !String(p.email ?? "").endsWith("@removido.invalid"))
+          .map((p) => p.id),
+      );
+      activeClients = valid.size;
+    } else {
+      activeClients = 0;
+    }
   }
 
   const avgRevenuePerClient = activeClients > 0 ? Math.round(revenue / activeClients) : 0;
