@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { cn, formatTime } from "@/lib/utils";
-import { Clock } from "lucide-react";
+import { Clock, NotebookPen } from "lucide-react";
 import { bookAction, rescheduleAction } from "./actions";
 import type { SessionType } from "@/types/database";
+
+const NOTE_MAX_LEN = 5000;
 
 type CreditSummary = { individual: number; dupla: number; total: number };
 
@@ -33,6 +35,11 @@ export function BookingFlow({
   const [picked, setPicked] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Nota opcional para o treinador, escrita no momento da marcação.
+  // Persistida como `session_notes` ligada à marcação (booking_id) com o
+  // cliente como autor; o treinador é notificado em separado.
+  const [note, setNote] = useState<string>("");
+  const [noteOpen, setNoteOpen] = useState<boolean>(false);
   // PERF (CB-3 audit jun/2026): cache em memória dos slots já lidos
   // neste mount, por chave `trainer|YYYY-MM-DD|duration`. Re-tocar
   // num dia já visto → 0 round-trips. TTL implícito: vida do
@@ -102,12 +109,14 @@ export function BookingFlow({
   function confirm() {
     if (!picked) return;
     setError(null);
+    const trimmedNote = note.trim().slice(0, NOTE_MAX_LEN);
     start(async () => {
       if (rescheduleBookingId) {
         const res = await rescheduleAction({
           oldBookingId: rescheduleBookingId,
           startsAtIso: picked,
           durationMin: duration,
+          note: trimmedNote || undefined,
         });
         if (res.error) {
           setError(res.error);
@@ -121,6 +130,7 @@ export function BookingFlow({
         startsAtIso: picked,
         durationMin: duration,
         sessionType,
+        note: trimmedNote || undefined,
       });
       if (res.error) {
         setError(res.error);
@@ -209,6 +219,41 @@ export function BookingFlow({
           </div>
         )}
       </div>
+
+      {/* Nota opcional para o treinador — só faz sentido depois de
+          escolhido o horário. O treinador recebe a nota junto da sessão
+          e uma notificação separada a sinalizá-la. */}
+      {picked && (
+        <div className="card p-4">
+          {!noteOpen && !note ? (
+            <button
+              type="button"
+              onClick={() => setNoteOpen(true)}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-gold-600 hover:text-gold-700"
+            >
+              <NotebookPen size={14} /> Adicionar nota para o treinador (opcional)
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-500">
+                <NotebookPen size={12} /> Nota para o treinador (opcional)
+              </label>
+              <textarea
+                rows={3}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Ex: tive uma lesão no joelho, vamos com calma."
+                maxLength={NOTE_MAX_LEN}
+                className="input"
+              />
+              <div className="flex items-center justify-between text-[10px] text-ink-500">
+                <span>O treinador vê esta nota e é notificado.</span>
+                <span className="tabular-nums">{note.length}/{NOTE_MAX_LEN}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {error && <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
 

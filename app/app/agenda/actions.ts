@@ -3,11 +3,88 @@
 import { createBooking, createRecurringBooking, type RecurringBookingResult } from "@/lib/credits";
 import { dispatchBookingCreated } from "@/lib/email-dispatch";
 import { pushBookingToCalendars, removeBookingFromCalendars } from "@/lib/calendar-sync";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
 import { logError, userFacingRpcError } from "@/lib/errors";
 import { revalidateBookingViews } from "@/lib/revalidate";
 import type { SessionType } from "@/types/database";
+
+const NOTE_MAX_LEN = 5000;
+
+/**
+ * Guarda a nota opcional escrita pelo cliente no momento da marcação
+ * (ligada à `booking_id`, autor = cliente) e dispara uma notificação
+ * in-app para o treinador, separada da notificação da marcação em si.
+ *
+ * Falhas aqui NÃO devem fazer rollback à marcação — daí o try/catch
+ * generoso e o `logError` em vez de `throw`. A marcação fica criada;
+ * a nota é "best effort".
+ */
+async function persistClientBookingNote(
+  bookingId: string,
+  rawNote: string,
+): Promise<void> {
+  const body = rawNote.trim().slice(0, NOTE_MAX_LEN);
+  if (!body) return;
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Substitui qualquer nota anterior do mesmo autor para esta sessão
+    // (delete-then-insert; o partial unique index não suporta upsert).
+    await supabase
+      .from("session_notes")
+      .delete()
+      .eq("booking_id", bookingId)
+      .eq("author_id", user.id);
+    const { error: insertErr } = await supabase
+      .from("session_notes")
+      .insert({ booking_id: bookingId, author_id: user.id, body });
+    if (insertErr) {
+      logError("persistClientBookingNote:insert", insertErr);
+      return;
+    }
+
+    // Notifica o treinador (em separado da notificação da própria
+    // marcação) que o cliente deixou uma nota.
+    try {
+      const { data: bk } = await supabase
+        .from("bookings")
+        .select("trainer_id")
+        .eq("id", bookingId)
+        .maybeSingle();
+      if (!bk) return;
+      const admin = createAdminClient();
+      const [{ data: tr }, { data: prof }] = await Promise.all([
+        admin
+          .from("trainers")
+          .select("profile_id")
+          .eq("id", (bk as any).trainer_id)
+          .maybeSingle(),
+        admin
+          .from("profiles")
+          .select("full_name")
+          .eq("id", user.id)
+          .maybeSingle(),
+      ]);
+      const trainerProfileId = (tr as any)?.profile_id as string | undefined;
+      if (!trainerProfileId) return;
+      const name = ((prof as any)?.full_name ?? "").split(" ")[0] || "Um cliente";
+      await (admin as any).from("notifications").insert({
+        user_id: trainerProfileId,
+        type: "client_note",
+        title: "Nova nota de cliente",
+        body: `${name} deixou uma nota na sessão marcada.`,
+        link: "/admin/agenda",
+      });
+    } catch (e) {
+      logError("persistClientBookingNote:notify", e);
+    }
+  } catch (e) {
+    logError("persistClientBookingNote", e);
+  }
+}
 
 // NOTA (C3): a leitura de slots passou a Route Handler GET /api/slots
 // (cacheável + paralelizável). A antiga `getSlotsAction` foi removida.
@@ -17,11 +94,14 @@ export async function bookAction({
   startsAtIso,
   durationMin,
   sessionType,
+  note,
 }: {
   trainerId: string;
   startsAtIso: string;
   durationMin: number;
   sessionType: SessionType;
+  /** Nota opcional do cliente para o treinador (≤5000 chars). */
+  note?: string;
 }): Promise<{ ok?: true; error?: string; pending?: boolean }> {
   try {
     const bookingId = await createBooking({
@@ -43,6 +123,10 @@ export async function bookAction({
     const sideEffects = Promise.allSettled([
       dispatchBookingCreated(bookingId),
       pushBookingToCalendars(bookingId),
+      // Nota opcional do cliente + notificação para o treinador.
+      // Best effort: se falhar, a marcação fica na mesma (a função
+      // já trata os próprios erros internamente).
+      note ? persistClientBookingNote(bookingId, note) : Promise.resolve(),
     ]);
 
     // Verifica o status final para a UI mostrar mensagem correcta
@@ -71,10 +155,13 @@ export async function rescheduleAction({
   oldBookingId,
   startsAtIso,
   durationMin,
+  note,
 }: {
   oldBookingId: string;
   startsAtIso: string;
   durationMin: number;
+  /** Nota opcional do cliente para o treinador (ligada à NOVA marcação). */
+  note?: string;
 }): Promise<{ ok?: true; error?: string; pending?: boolean }> {
   const supabase = await createClient();
   // RPC atómica: devolve crédito da antiga, cancela-a e cria a nova.
@@ -97,6 +184,8 @@ export async function rescheduleAction({
     dispatchBookingCreated(newId as string),
     pushBookingToCalendars(newId as string),
     removeBookingFromCalendars(oldBookingId),
+    // Nota opcional do cliente — ligada à NOVA marcação.
+    note ? persistClientBookingNote(newId as string, note) : Promise.resolve(),
   ]);
 
   const { data: b } = await supabase
