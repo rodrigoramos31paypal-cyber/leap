@@ -95,23 +95,44 @@ export function NotificationsList({
       </div>
       <ul className="space-y-2">
       {items.map((n) => {
-        // Só sessões canceladas pelo trainer geram CTA — as outras
-        // notificações são meramente informativas.
+        // Só sessões canceladas pelo trainer geram CTA extra (reagendar) —
+        // as outras notificações apenas abrem o seu assunto ao clicar.
         const isCancelled = scope === "app" && n.type === "booking_cancelled";
+        // Destino do clique: o `link` guardado na notificação (sessão,
+        // pagamento, etc.). Toda a notificação com link fica clicável.
+        const href = n.link || null;
+
+        // Conteúdo (título + corpo + data). Quando há `href`, embrulhamos
+        // só este bloco num <Link> — os botões (eliminar / reagendar) ficam
+        // como IRMÃOS, nunca aninhados dentro do link (âncora dentro de
+        // âncora é HTML inválido).
+        const content = (
+          <>
+            <div className="text-sm font-semibold">{n.title}</div>
+            {n.body && (
+              <div className="mt-0.5 text-xs text-ink-500">
+                <NotificationBody body={n.body} />
+              </div>
+            )}
+            <div className="mt-1 text-[10px] uppercase tracking-wide text-ink-500/70">
+              {formatDateTime(n.created_at)}
+            </div>
+          </>
+        );
+
         return (
           <li key={n.id} className={`card p-4 ${busyId === n.id ? "opacity-50" : ""}`}>
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold">{n.title}</div>
-                {n.body && (
-                  <div className="mt-0.5 text-xs text-ink-500">
-                    <NotificationBody body={n.body} />
-                  </div>
-                )}
-                <div className="mt-1 text-[10px] uppercase tracking-wide text-ink-500/70">
-                  {formatDateTime(n.created_at)}
-                </div>
-              </div>
+              {href ? (
+                <Link
+                  href={href}
+                  className="group min-w-0 flex-1 -m-1 rounded-md p-1 transition hover:bg-ink-900/5 dark:hover:bg-white/5"
+                >
+                  {content}
+                </Link>
+              ) : (
+                <div className="min-w-0 flex-1">{content}</div>
+              )}
               <div className="flex shrink-0 flex-col items-end gap-1.5">
                 {isCancelled && (
                   <Link
@@ -121,9 +142,9 @@ export function NotificationsList({
                     <RefreshCcw size={11} /> Reagendar
                   </Link>
                 )}
-                {scope === "admin" && n.link && (
+                {href && (
                   <Link
-                    href={n.link}
+                    href={href}
                     className="text-xs font-medium text-gold-600 hover:text-gold-700"
                   >
                     Abrir →

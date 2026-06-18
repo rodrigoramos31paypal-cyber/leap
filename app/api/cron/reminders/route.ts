@@ -142,7 +142,7 @@ export async function GET(request: NextRequest) {
       b.client_id,
       "Leap Fitness Studio",
       `Tens uma sessão a ${when}.`,
-      "/app/agenda",
+      `/app/sessao/${b.id}`,
     );
 
     if (trainerProfileId) {
