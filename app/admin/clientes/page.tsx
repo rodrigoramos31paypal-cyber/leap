@@ -335,10 +335,29 @@ async function getScopedPageIdsFallback(
       totalsByClient.set(r.client_id, 0);
     }
   }
-  const lowList = Array.from(totalsByClient.entries())
+  const lowCandidates = Array.from(totalsByClient.entries())
     .filter(([_, n]) => n <= 2)
     .sort((a, b) => a[1] - b[1])
     .map(([id]) => id);
+
+  // Exclui staff (trainers/owners) e contas anonimizadas/removidas
+  // (@removido.invalid) — mesmo guard que clients_low_sessions (RPC) e
+  // count_clients_in_scope. Sem isto, qualquer conta não-cliente com
+  // compras no scope, ou um cliente já removido, aparecia na vista.
+  let lowList = lowCandidates;
+  if (lowCandidates.length > 0) {
+    const { data: validProfiles } = await (supabase as any)
+      .from("profiles")
+      .select("id, email")
+      .eq("role", "client")
+      .in("id", lowCandidates);
+    const validSet = new Set<string>(
+      ((validProfiles ?? []) as any[])
+        .filter((p) => !((p.email ?? "") as string).endsWith("@removido.invalid"))
+        .map((p) => p.id as string),
+    );
+    lowList = lowCandidates.filter((id) => validSet.has(id));
+  }
   return { pageIds: lowList.slice(from, from + PAGE_SIZE), total: lowList.length };
 }
 
