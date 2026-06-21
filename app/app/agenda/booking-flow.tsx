@@ -57,11 +57,13 @@ export function BookingFlow({
   const [sessionType, setSessionType] = useState<SessionType>(
     onlyDupla ? "dupla" : "individual",
   );
-  // Par sem sessões PT Dupla → a marcação dupla não pode avançar (ambos
-  // têm de ter crédito). O servidor recusa de qualquer forma; aqui só
-  // damos o aviso e bloqueamos o botão para não enviar um pedido que falha.
+  // Marcação PT Dupla exige (1) contas ligadas e (2) ambos com crédito.
+  // O servidor recusa de qualquer forma; aqui avisamos e bloqueamos o
+  // botão para não enviar um pedido que vai falhar.
+  const duoNotLinked = !hasPartner;
   const partnerHasNoDupla = hasPartner && (partnerDuplaCredits ?? 0) === 0;
-  const duoBlocked = sessionType === "dupla" && partnerHasNoDupla;
+  const duoBlocked =
+    sessionType === "dupla" && (duoNotLinked || partnerHasNoDupla);
   const [duration, setDuration] = useState<number>(defaultDuration);
   const [date, setDate] = useState<Date>(() => startOfDay(new Date()));
   const [slots, setSlots] = useState<{ startsAt: string; endsAt: string }[]>([]);
@@ -139,10 +141,12 @@ export function BookingFlow({
 
   function confirm() {
     if (!picked) return;
-    // Guarda: nunca enviar uma marcação dupla se o par não tem saldo.
+    // Guarda: marcação dupla exige contas ligadas + ambos com saldo.
     if (duoBlocked) {
       setError(
-        `${partnerName ? partnerName.split(" ")[0] : "A tua conta ligada"} não tem sessões PT Dupla. Ambos precisam de crédito para marcar a dois.`,
+        duoNotLinked
+          ? "Para marcar PT Dupla, a tua conta tem de estar ligada à do teu par. Fala com o teu treinador."
+          : `${partnerName ? partnerName.split(" ")[0] : "A tua conta ligada"} não tem sessões PT Dupla. Ambos precisam de crédito para marcar a dois.`,
       );
       return;
     }
@@ -243,7 +247,12 @@ export function BookingFlow({
               </button>
             </div>
           )}
-          {sessionType === "dupla" && partnerHasNoDupla ? (
+          {sessionType === "dupla" && duoNotLinked ? (
+            <p className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+              Para marcar sessões PT Dupla, a tua conta tem de estar ligada à do teu par.
+              Fala com o teu treinador para ligar as duas contas.
+            </p>
+          ) : sessionType === "dupla" && partnerHasNoDupla ? (
             <p className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
               Não é possível marcar uma sessão PT Dupla:{" "}
               {partnerName ? partnerName.split(" ")[0] : "a tua conta ligada"} não tem
@@ -518,7 +527,9 @@ export function BookingFlow({
             {pending
               ? "A marcar…"
               : duoBlocked
-                ? "Par sem sessões PT Dupla"
+                ? duoNotLinked
+                  ? "Conta não ligada a um par"
+                  : "Par sem sessões PT Dupla"
                 : rescheduleBookingId
                   ? "Confirmar reagendamento"
                   : recurring && availableCredits > 1
