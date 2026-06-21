@@ -18,9 +18,10 @@ export default async function SessaoPage(props: { params: Promise<{ id: string }
   const supabase = await createClient();
   const { data: b } = await supabase
     .from("bookings")
-    .select("id, starts_at, ends_at, session_type, status, client_id, trainer_id")
+    .select("id, starts_at, ends_at, session_type, status, client_id, trainer_id, partner_client_id")
     .eq("id", params.id)
-    .eq("client_id", user.id)
+    // DUO: o parceiro também pode abrir a sessão partilhada.
+    .or(`client_id.eq.${user.id},partner_client_id.eq.${user.id}`)
     .maybeSingle();
   if (!b) notFound();
 

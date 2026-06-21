@@ -113,7 +113,8 @@ async function SessoesTab({ userId, filter }: { userId: string; filter: "todas" 
   let query = supabase
     .from("bookings")
     .select("id, starts_at, ends_at, session_type, status")
-    .eq("client_id", userId);
+    // DUO: inclui as sessões partilhadas em que sou o parceiro.
+    .or(`client_id.eq.${userId},partner_client_id.eq.${userId}`);
   if (filter === "futuras") {
     query = query.gte("starts_at", nowIso).order("starts_at", { ascending: true });
   } else if (filter === "passadas") {

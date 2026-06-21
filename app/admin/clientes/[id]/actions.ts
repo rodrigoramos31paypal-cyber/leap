@@ -10,6 +10,7 @@ import {
   removeClientSessions,
 } from "@/lib/credits";
 import { getCurrentTrainerId, getAccessibleTrainerIds } from "@/lib/trainer";
+import { linkDuo, unlinkDuo } from "@/lib/duo";
 import { createClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
@@ -275,6 +276,86 @@ export async function setClientBannedAction(formData: FormData): Promise<void> {
     logError("setClientBannedAction", e);
     if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "setClientBanned", clientId });
     await setFlash("Não foi possível atualizar o estado da conta", "error");
+  }
+  revalidateCreditsViews(clientId);
+}
+
+// ════════════════════════════════════════════════════════════════
+// Pares "Duo" — ligar / desligar duas contas de cliente
+// ════════════════════════════════════════════════════════════════
+
+/**
+ * Liga este cliente a outro (identificado pelo email). A partir daí, as
+ * marcações de qualquer um deles passam a ser sessões duplas partilhadas
+ * que descontam 1 sessão a cada conta. Lança/regista erros via flash.
+ */
+export async function linkDuoAction(formData: FormData): Promise<void> {
+  await requireStaff();
+  const clientId = String(formData.get("clientId") ?? "");
+  const partnerEmail = String(formData.get("partnerEmail") ?? "").trim().toLowerCase();
+  if (!clientId || !partnerEmail) {
+    await setFlash("Indica o email da conta a ligar.", "error");
+    return;
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data: partner } = await (supabase as any)
+      .from("profiles")
+      .select("id, role, email")
+      .ilike("email", partnerEmail)
+      .maybeSingle();
+
+    if (!partner) {
+      await setFlash("Não foi encontrado nenhum cliente com esse email.", "error");
+      return;
+    }
+    if (partner.id === clientId) {
+      await setFlash("Não é possível ligar um cliente a si próprio.", "error");
+      return;
+    }
+    if (partner.role !== "client") {
+      await setFlash("Só é possível ligar contas de cliente.", "error");
+      return;
+    }
+
+    await linkDuo(clientId, partner.id);
+    await logAudit("duo_link", {
+      targetTable: "duo_partnerships",
+      targetId: clientId,
+      payload: { partnerId: partner.id },
+    });
+    await setFlash("Contas ligadas — as sessões passam a descontar a ambas.");
+  } catch (e) {
+    logError("linkDuoAction", e);
+    if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "linkDuo", clientId });
+    const msg = (e as any)?.message;
+    await setFlash(typeof msg === "string" && msg ? msg : "Não foi possível ligar as contas.", "error");
+  }
+  revalidateCreditsViews(clientId);
+}
+
+/** Desliga o par activo de que este cliente faça parte. */
+export async function unlinkDuoAction(formData: FormData): Promise<void> {
+  await requireStaff();
+  const clientId = String(formData.get("clientId") ?? "");
+  if (!clientId) {
+    await setFlash("Cliente não identificado", "error");
+    return;
+  }
+
+  try {
+    await unlinkDuo(clientId);
+    await logAudit("duo_unlink", {
+      targetTable: "duo_partnerships",
+      targetId: clientId,
+      payload: {},
+    });
+    await setFlash("Contas desligadas.");
+  } catch (e) {
+    logError("unlinkDuoAction", e);
+    if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "unlinkDuo", clientId });
+    await setFlash("Não foi possível desligar as contas.", "error");
   }
   revalidateCreditsViews(clientId);
 }

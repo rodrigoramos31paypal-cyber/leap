@@ -168,6 +168,8 @@ export type Database = {
           ends_at: string
           id: string
           notes: string | null
+          partner_client_id: string | null
+          partner_purchase_id: string | null
           purchase_id: string
           series_id: string | null
           session_type: Database["public"]["Enums"]["session_type"]
@@ -188,6 +190,8 @@ export type Database = {
           ends_at: string
           id?: string
           notes?: string | null
+          partner_client_id?: string | null
+          partner_purchase_id?: string | null
           purchase_id: string
           series_id?: string | null
           session_type: Database["public"]["Enums"]["session_type"]
@@ -208,6 +212,8 @@ export type Database = {
           ends_at?: string
           id?: string
           notes?: string | null
+          partner_client_id?: string | null
+          partner_purchase_id?: string | null
           purchase_id?: string
           series_id?: string | null
           session_type?: Database["public"]["Enums"]["session_type"]

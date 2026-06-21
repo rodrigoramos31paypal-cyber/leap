@@ -3,11 +3,13 @@ import Link from "next/link";
 import { NotebookPen, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getClientCredits } from "@/lib/credits";
+import { getDuoPartner } from "@/lib/duo";
 import { eur, formatDateTime, BOOKING_STATUS } from "@/lib/utils";
 import { NoteEditor } from "@/components/note-editor";
 import { getMyNotesMapForBookings, getClientNotesMapForBookings } from "@/lib/notes";
 import { getAccessibleTrainerIds } from "@/lib/trainer";
 import { GrantPackForm } from "./grant-pack-form";
+import { DuoLinkSection } from "./duo-link-section";
 import { setClientBannedAction } from "./actions";
 import { DeleteClientSection } from "./delete-client-section";
 
@@ -57,6 +59,7 @@ export default async function ClientDetail(props: { params: Promise<{ id: string
     getMyNotesMapForBookings(bookings.map((b) => b.id)),
   ]);
   const packs = (packsRaw ?? []) as any[];
+  const duoPartner = isDeleted ? null : await getDuoPartner(profileId);
 
   return (
     <div className="space-y-5">
@@ -120,6 +123,8 @@ export default async function ClientDetail(props: { params: Promise<{ id: string
           />
         </details>
       )}
+
+      {!isDeleted && <DuoLinkSection clientId={profileId} partner={duoPartner} />}
 
       <section>
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-ink-500">Compras recentes</h2>

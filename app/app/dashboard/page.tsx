@@ -43,7 +43,8 @@ export default async function ClientDashboard() {
     supabase
       .from("bookings")
       .select("id, starts_at, session_type, status")
-      .eq("client_id", user.id)
+      // DUO: inclui as sessões partilhadas em que sou o parceiro.
+      .or(`client_id.eq.${user.id},partner_client_id.eq.${user.id}`)
       .in("status", ["booked", "confirmed"])
       .gte("starts_at", nowIso)
       .order("starts_at", { ascending: true })
