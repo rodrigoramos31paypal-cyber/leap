@@ -70,7 +70,14 @@ export default async function DefinicoesPage(
   // Tab activo (default perfil).
   const activeTab: TabId = ((): TabId => {
     const t = searchParams.tab;
-    if (t === "regras" || t === "horarios" || t === "calendario" || t === "seguranca") return t;
+    if (
+      t === "notificacoes" ||
+      t === "regras" ||
+      t === "horarios" ||
+      t === "calendario" ||
+      t === "seguranca"
+    )
+      return t;
     if (t === "equipa" && isOwner) return "equipa";
     return "perfil";
   })();
