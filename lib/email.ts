@@ -237,4 +237,15 @@ export const emailTemplates = {
       text: `${args.clientName} deixou uma nota na sessão de ${args.when}.`,
     };
   },
+  adminBookingCancelled(args: { clientName: string; when: string }) {
+    return {
+      subject: "Cliente cancelou",
+      html: shell(
+        "Cliente cancelou uma sessão",
+        `<p style="margin:0 0 10px"><strong>${escapeHtml(args.clientName)}</strong> cancelou a sessão de <strong>${escapeHtml(args.when)}</strong>.</p>
+         <p style="margin:0">O horário ficou livre na tua agenda.</p>`,
+      ),
+      text: `${args.clientName} cancelou a sessão de ${args.when}.`,
+    };
+  },
 };

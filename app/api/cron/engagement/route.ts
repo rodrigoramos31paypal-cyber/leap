@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail, emailTemplates } from "@/lib/email";
+import { emailAllowed } from "@/lib/notifications-config";
 import { formatDateTime } from "@/lib/utils";
 import { verifyBearer } from "@/lib/secrets";
 
@@ -101,7 +102,6 @@ export async function GET(request: NextRequest) {
   const cooldownSince = new Date(now.getTime() - LOW_CREDIT_COOLDOWN_DAYS * 86400000).toISOString();
   const delayBoundary = new Date(now.getTime() - LOW_CREDIT_DELAY_HOURS * 3600000);
   for (const c of lowClients) {
-    if (disabled.has(c.id)) continue;
     const prof = profileMap.get(c.id);
     if (!prof) continue;
 
@@ -148,9 +148,11 @@ export async function GET(request: NextRequest) {
       link: "/app/comprar",
     });
 
-    const tpl = emailTemplates.creditLow({ clientName: prof.full_name ?? "atleta", total: c.total });
-    const res = await sendEmail({ to: prof.email, ...tpl });
-    if (res.ok) lowSent++;
+    if (await emailAllowed(supabase as any, c.id, "packs")) {
+      const tpl = emailTemplates.creditLow({ clientName: prof.full_name ?? "atleta", total: c.total });
+      const res = await sendEmail({ to: prof.email, ...tpl });
+      if (res.ok) lowSent++;
+    }
   }
 
   // ── 2) Packs a expirar (janela de 7 dias, com sessões por usar) ──
@@ -158,7 +160,6 @@ export async function GET(request: NextRequest) {
   // compra. Dedup via engagement_alerts (kind 'pack_expiring', ref_id =
   // purchase.id). Respeita a mesma preferência 'credit_alert'.
   for (const p of (expiring ?? []) as any[]) {
-    if (disabled.has(p.client_id)) continue;
     const prof = profileMap.get(p.client_id);
     if (!prof) continue;
 
@@ -192,14 +193,16 @@ export async function GET(request: NextRequest) {
       link: "/app/agenda",
     });
 
-    const tpl = emailTemplates.packExpiring({
-      clientName: prof.full_name ?? "atleta",
-      remaining,
-      when,
-      packName,
-    });
-    const res = await sendEmail({ to: prof.email, ...tpl });
-    if (res.ok) expirySent++;
+    if (await emailAllowed(supabase as any, p.client_id, "packs")) {
+      const tpl = emailTemplates.packExpiring({
+        clientName: prof.full_name ?? "atleta",
+        remaining,
+        when,
+        packName,
+      });
+      const res = await sendEmail({ to: prof.email, ...tpl });
+      if (res.ok) expirySent++;
+    }
   }
 
   return NextResponse.json({

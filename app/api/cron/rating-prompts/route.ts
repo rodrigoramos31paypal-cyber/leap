@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail, emailTemplates, emailEnabled } from "@/lib/email";
+import { emailAllowed } from "@/lib/notifications-config";
 import { formatDateTime } from "@/lib/utils";
 import { verifyBearer } from "@/lib/secrets";
 
@@ -59,24 +60,17 @@ export async function GET(request: NextRequest) {
   const rated = new Set(((ratedRows as any[]) ?? []).map((r) => r.booking_id));
   const prompted = new Set(((promptedRows as any[]) ?? []).map((r) => r.booking_id));
 
-  // Perfis + opt-outs.
-  const [{ data: profiles }, { data: prefs }] = await Promise.all([
-    supabase.from("profiles").select("id, full_name, email").in("id", clientIds),
-    (supabase as any)
-      .from("notification_preferences")
-      .select("user_id, enabled")
-      .eq("kind", "rating_prompt")
-      .in("user_id", clientIds),
-  ]);
+  // Perfis. O in-app é sempre enviado; o email é filtrado por
+  // emailAllowed (categoria 'ratings'); o push é filtrado no dispatch.
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, full_name, email")
+    .in("id", clientIds);
   const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
-  const disabled = new Set(
-    ((prefs ?? []) as any[]).filter((p) => p.enabled === false).map((p) => p.user_id),
-  );
 
   let sent = 0;
   for (const b of bookings as any[]) {
     if (rated.has(b.id) || prompted.has(b.id)) continue;
-    if (disabled.has(b.client_id)) continue;
     const prof = profileMap.get(b.client_id);
     if (!prof) continue;
 
@@ -99,8 +93,8 @@ export async function GET(request: NextRequest) {
       link: `/app/sessao/${b.id}/avaliar`,
     });
 
-    // Email (best-effort).
-    if (emailEnabled() && prof.email) {
+    // Email (best-effort), filtrado pela preferência 'ratings'.
+    if (emailEnabled() && prof.email && (await emailAllowed(supabase as any, b.client_id, "ratings"))) {
       const tpl = emailTemplates.ratingPrompt({
         clientName: prof.full_name ?? "atleta",
         when,

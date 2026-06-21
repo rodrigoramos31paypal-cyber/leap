@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail, emailTemplates, emailEnabled } from "@/lib/email";
+import { emailAllowed } from "@/lib/notifications-config";
 import { formatDateTime } from "@/lib/utils";
 import { verifyBearer } from "@/lib/secrets";
 
@@ -70,15 +71,9 @@ export async function GET(request: NextRequest) {
   const trainerProfMap = new Map((trainerProfiles ?? []).map((p: any) => [p.id, p]));
   const trainerToProfile = new Map((trainers ?? []).map((t: any) => [t.id, t.profile_id]));
 
-  const allRecipientIds = Array.from(new Set([...clientIds, ...trainerProfileIds]));
-  const { data: prefs } = await (supabase as any)
-    .from("notification_preferences")
-    .select("user_id, enabled")
-    .eq("kind", "session_reminder")
-    .in("user_id", allRecipientIds.length ? allRecipientIds : [SENTINEL]);
-  const disabled = new Set(
-    (prefs ?? []).filter((p: any) => p.enabled === false).map((p: any) => p.user_id),
-  );
+  // Gating por canal/categoria: o in-app é sempre enviado; o email é
+  // filtrado por emailAllowed (cliente→'sessions', treinador→'reminders');
+  // o push é filtrado no /api/push/dispatch.
 
   let emailSent = 0;
   let inAppSent = 0;
@@ -87,9 +82,11 @@ export async function GET(request: NextRequest) {
     bookingId: string,
     recipientId: string,
     to: string | undefined | null,
+    category: string,
     tpl: { subject: string; html: string; text?: string },
   ) {
-    if (!emailOn || !to || disabled.has(recipientId)) return;
+    if (!emailOn || !to) return;
+    if (!(await emailAllowed(supabase as any, recipientId, category))) return;
     const { data: claimed, error: claimErr } = await (supabase as any)
       .from("booking_reminders")
       .insert({ booking_id: bookingId, recipient_id: recipientId, channel: "email" })
@@ -107,7 +104,6 @@ export async function GET(request: NextRequest) {
     body: string,
     link: string,
   ) {
-    if (disabled.has(recipientId)) return;
     const { data: claimed, error: claimErr } = await (supabase as any)
       .from("booking_reminders")
       .insert({ booking_id: bookingId, recipient_id: recipientId, channel: "in_app" })
@@ -135,6 +131,7 @@ export async function GET(request: NextRequest) {
       b.id,
       b.client_id,
       client?.email,
+      "sessions",
       emailTemplates.sessionReminder({ clientName: client?.full_name ?? "atleta", when }),
     );
     await claimAndPushInApp(
@@ -150,6 +147,7 @@ export async function GET(request: NextRequest) {
         b.id,
         trainerProfileId,
         trainerProf?.email,
+        "reminders",
         emailTemplates.sessionReminderTrainer({
           trainerName: trainerProf?.full_name ?? "trainer",
           clientName: client?.full_name ?? "cliente",
