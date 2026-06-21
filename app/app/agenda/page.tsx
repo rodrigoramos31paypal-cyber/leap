@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { getClientCredits } from "@/lib/credits";
-import { getDuoPartner } from "@/lib/duo";
+import { getDuoPartner, getPartnerDuplaCredits } from "@/lib/duo";
 import { BookingFlow } from "./booking-flow";
 import { getActiveTrainersPublic, getTrainerForClient } from "@/lib/trainer";
 import { formatDateTime } from "@/lib/utils";
@@ -134,8 +134,13 @@ export default async function AgendaPage(
   // continuam a ver a mensagem original.
   const isNewClient = (purchaseCount ?? 0) === 0;
 
-  // Par duo activo (se houver) — só para ajustar a cópia da opção "Dupla".
+  // Par duo activo (se houver) + saldo PT Dupla do par. Usado para a
+  // cópia da opção "Dupla" e para BLOQUEAR a marcação dupla quando o par
+  // não tem sessões (defesa proactiva; o servidor recusa na mesma).
   const duoPartner = credits.dupla > 0 ? await getDuoPartner(user.id) : null;
+  const partnerDuplaCredits = duoPartner
+    ? await getPartnerDuplaCredits(duoPartner.id, trainerId)
+    : null;
 
   const currentTrainer = actives.find((t) => t.id === trainerId);
   const trainerName = currentTrainer?.full_name?.trim();
@@ -183,6 +188,7 @@ export default async function AgendaPage(
           rescheduleBookingId={reschedule?.id}
           hasPartner={!!duoPartner}
           partnerName={duoPartner?.full_name}
+          partnerDuplaCredits={partnerDuplaCredits}
         />
       )}
     </div>

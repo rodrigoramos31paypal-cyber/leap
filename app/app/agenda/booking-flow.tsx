@@ -28,6 +28,7 @@ export function BookingFlow({
   rescheduleBookingId,
   hasPartner = false,
   partnerName,
+  partnerDuplaCredits = null,
 }: {
   trainerId: string;
   slotDurations: number[];
@@ -39,6 +40,9 @@ export function BookingFlow({
   /** Cliente tem uma conta ligada (par duo)? Ajusta a copia da sessao dupla. */
   hasPartner?: boolean;
   partnerName?: string | null;
+  /** Saldo PT Dupla do par (null = sem par). Se 0, a marcacao dupla e
+   *  bloqueada — ambos precisam de creditos. */
+  partnerDuplaCredits?: number | null;
 }) {
   const router = useRouter();
   // Tipo de sessao = que creditos usar.
@@ -53,6 +57,11 @@ export function BookingFlow({
   const [sessionType, setSessionType] = useState<SessionType>(
     onlyDupla ? "dupla" : "individual",
   );
+  // Par sem sessões PT Dupla → a marcação dupla não pode avançar (ambos
+  // têm de ter crédito). O servidor recusa de qualquer forma; aqui só
+  // damos o aviso e bloqueamos o botão para não enviar um pedido que falha.
+  const partnerHasNoDupla = hasPartner && (partnerDuplaCredits ?? 0) === 0;
+  const duoBlocked = sessionType === "dupla" && partnerHasNoDupla;
   const [duration, setDuration] = useState<number>(defaultDuration);
   const [date, setDate] = useState<Date>(() => startOfDay(new Date()));
   const [slots, setSlots] = useState<{ startsAt: string; endsAt: string }[]>([]);
@@ -130,6 +139,13 @@ export function BookingFlow({
 
   function confirm() {
     if (!picked) return;
+    // Guarda: nunca enviar uma marcação dupla se o par não tem saldo.
+    if (duoBlocked) {
+      setError(
+        `${partnerName ? partnerName.split(" ")[0] : "A tua conta ligada"} não tem sessões PT Dupla. Ambos precisam de crédito para marcar a dois.`,
+      );
+      return;
+    }
     setError(null);
     setPartial(null);
     setResolved(new Set());
@@ -227,14 +243,22 @@ export function BookingFlow({
               </button>
             </div>
           )}
-          {sessionType === "dupla" && (
-            <p className="mt-2 rounded-md border border-gold-200 bg-gold-50 px-3 py-2 text-xs text-ink-700 dark:border-gold-400/30 dark:bg-gold-400/10">
-              {hasPartner
-                ? `Sessão dupla — conta para ti${
-                    partnerName ? ` e ${partnerName.split(" ")[0]}` : " e a tua conta ligada"
-                  }. Gasta 1 sessão dupla a cada um.`
-                : "Sessão dupla (treino a dois). Gasta 1 sessão dupla do teu saldo."}
+          {sessionType === "dupla" && partnerHasNoDupla ? (
+            <p className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+              Não é possível marcar uma sessão PT Dupla:{" "}
+              {partnerName ? partnerName.split(" ")[0] : "a tua conta ligada"} não tem
+              sessões disponíveis. Ambos precisam de ter pelo menos 1 sessão PT Dupla.
             </p>
+          ) : (
+            sessionType === "dupla" && (
+              <p className="mt-2 rounded-md border border-gold-200 bg-gold-50 px-3 py-2 text-xs text-ink-700 dark:border-gold-400/30 dark:bg-gold-400/10">
+                {hasPartner
+                  ? `Sessão dupla — conta para ti${
+                      partnerName ? ` e ${partnerName.split(" ")[0]}` : " e a tua conta ligada"
+                    }. Gasta 1 sessão dupla a cada um.`
+                  : "Sessão dupla (treino a dois). Gasta 1 sessão dupla do teu saldo."}
+              </p>
+            )
           )}
         </div>
       )}
@@ -486,14 +510,20 @@ export function BookingFlow({
             </div>
           )}
 
-          <button onClick={confirm} disabled={pending} className="btn-gold mt-3 w-full">
+          <button
+            onClick={confirm}
+            disabled={pending || duoBlocked}
+            className="btn-gold mt-3 w-full disabled:opacity-50"
+          >
             {pending
               ? "A marcar…"
-              : rescheduleBookingId
-                ? "Confirmar reagendamento"
-                : recurring && availableCredits > 1
-                  ? `Confirmar ${Math.min(availableCredits, recurringCount)} marcações`
-                  : "Confirmar marcação"}
+              : duoBlocked
+                ? "Par sem sessões PT Dupla"
+                : rescheduleBookingId
+                  ? "Confirmar reagendamento"
+                  : recurring && availableCredits > 1
+                    ? `Confirmar ${Math.min(availableCredits, recurringCount)} marcações`
+                    : "Confirmar marcação"}
           </button>
         </div>
       )}

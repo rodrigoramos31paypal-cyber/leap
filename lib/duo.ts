@@ -59,3 +59,28 @@ export async function getDuoPartner(clientId: string): Promise<DuoPartner | null
   if (!prof) return null;
   return { id: prof.id, full_name: prof.full_name, email: prof.email };
 }
+
+/**
+ * Saldo de sessões PT Dupla (confirmadas e não expiradas) de um cliente
+ * para um treinador. Usa service role porque é chamado na app do CLIENTE
+ * para saber se o PAR tem créditos — as policies normais não deixam um
+ * cliente ler as compras do outro. Devolve só uma contagem (sem detalhe).
+ */
+export async function getPartnerDuplaCredits(
+  partnerId: string,
+  trainerId: string,
+): Promise<number> {
+  const admin = createAdminClient();
+  const { data } = await (admin as any)
+    .from("purchases")
+    .select("sessions_remaining, expires_at")
+    .eq("client_id", partnerId)
+    .eq("trainer_id", trainerId)
+    .eq("session_type", "dupla")
+    .eq("status", "confirmed")
+    .gt("sessions_remaining", 0);
+  const now = Date.now();
+  return ((data ?? []) as any[])
+    .filter((p) => !p.expires_at || new Date(p.expires_at).getTime() >= now)
+    .reduce((sum, p) => sum + Number(p.sessions_remaining ?? 0), 0);
+}
