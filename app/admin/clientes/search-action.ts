@@ -31,7 +31,7 @@
 //   • Single-owner studio: scope = único trainer → comportamento
 //     idêntico para o owner (vê todos os seus clientes).
 // ════════════════════════════════════════════════════════════════
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getCurrentProfile } from "@/lib/supabase/server";
 import { requireStaff } from "@/lib/authz";
 import { getAccessibleTrainerIds, getClientIdsInScope } from "@/lib/trainer";
 
@@ -50,27 +50,33 @@ export async function searchClientsAction(q: string): Promise<ClientHit[]> {
   const term = q.trim();
   if (term.length < 1) return [];
 
-  // C-A scope: lista de clientes acessíveis ao staff actual.
-  //   • trainer → clientes dos trainers próprios
-  //   • owner   → todos os trainers do estúdio
-  // Cached por request (React.cache em getClientIdsInScope), por isso
-  // typeahead com debounce tem 1 fetch por sessão de keystrokes.
-  const trainerIds = await getAccessibleTrainerIds();
-  const scopeIds = await getClientIdsInScope(trainerIds);
-  if (scopeIds.length === 0) return [];
-
   const supabase = await createClient();
   // Escape de wildcards do ILIKE — mesmo padrão que admin/clientes/page.tsx.
   const safe = term.replace(/[%_,()]/g, (m) => `\\${m}`);
-  const { data } = await supabase
+
+  let query = (supabase as any)
     .from("profiles")
     .select("id, full_name, email, phone")
-    .eq("role", "client")
-    .in("id", scopeIds)
-    .or(
-      `full_name.ilike.%${safe}%,email.ilike.%${safe}%,phone.ilike.%${safe}%`,
-    )
+    .eq("role", "client");
+
+  // OWNER vê TODOS os clientes (incluindo "órfãos" sem trainer/atividade —
+  // ex. acabados de registar). A RLS já permite (is_admin). Para um TRAINER
+  // não-owner mantemos o scope (não vazar PII de clientes de outro trainer).
+  const profile = await getCurrentProfile();
+  if (profile?.role !== "owner") {
+    const trainerIds = await getAccessibleTrainerIds();
+    const scopeIds = await getClientIdsInScope(trainerIds);
+    if (scopeIds.length === 0) return [];
+    query = query.in("id", scopeIds);
+  }
+
+  const { data } = await query
+    .or(`full_name.ilike.%${safe}%,email.ilike.%${safe}%,phone.ilike.%${safe}%`)
     .order("full_name")
     .limit(5);
-  return (data ?? []) as ClientHit[];
+
+  // Exclui contas anonimizadas (RGPD). email NULL fica incluído.
+  return ((data ?? []) as ClientHit[]).filter(
+    (c) => !(c.email ?? "").endsWith("@removido.invalid"),
+  );
 }
