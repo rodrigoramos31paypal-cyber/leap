@@ -12,7 +12,8 @@ import { CopyButton } from "@/components/copy-button";
 import { AvatarUploader } from "@/components/avatar-uploader";
 import { AvailabilityRow } from "@/components/availability-row";
 import { EquipaSection } from "@/app/admin/equipa/equipa-section";
-import { NotificationPrefToggle } from "@/components/notification-pref-toggle";
+import { NotificationCategoryPrefs, type CategoryPrefs } from "@/components/notification-category-prefs";
+import { TRAINER_CATEGORIES } from "@/lib/notifications-config";
 import {
   Smartphone,
   ShieldCheck,
@@ -22,15 +23,17 @@ import {
   Clock,
   Calendar as CalendarIcon,
   UserCog,
+  Bell,
 } from "lucide-react";
 import Link from "next/link";
 
 const DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
-type TabId = "perfil" | "regras" | "horarios" | "calendario" | "seguranca" | "equipa";
+type TabId = "perfil" | "notificacoes" | "regras" | "horarios" | "calendario" | "seguranca" | "equipa";
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode; ownerOnly?: boolean }[] = [
   { id: "perfil",     label: "Perfil",     icon: <User size={14} /> },
+  { id: "notificacoes", label: "Notificações", icon: <Bell size={14} /> },
   { id: "regras",     label: "Regras",     icon: <SlidersHorizontal size={14} /> },
   { id: "horarios",   label: "Horários",   icon: <Clock size={14} /> },
   { id: "calendario", label: "Calendário", icon: <CalendarIcon size={14} /> },
@@ -88,11 +91,9 @@ export default async function DefinicoesPage(
 
       <TabNav active={activeTab} isOwner={isOwner} />
 
-      {activeTab === "perfil" && (
-        <PerfilTab
-          trainer={trainer}
-          reminderOn={tabData.reminderOn}
-        />
+      {activeTab === "perfil" && <PerfilTab trainer={trainer} />}
+      {activeTab === "notificacoes" && (
+        <NotificacoesTab prefs={tabData.notifPrefs ?? {}} />
       )}
       {activeTab === "regras" && (
         <RegrasTab trainerId={trainer.id} settings={tabData.settings} />
@@ -158,14 +159,19 @@ async function loadTabData(
 ) {
   const data: any = {};
 
-  if (tab === "perfil") {
-    const { data: notifPref } = await (supabase as any)
+  if (tab === "notificacoes") {
+    const { data: prefsRows } = await (supabase as any)
       .from("notification_preferences")
-      .select("enabled")
-      .eq("user_id", userId ?? "")
-      .eq("kind", "session_reminder")
-      .maybeSingle();
-    data.reminderOn = (notifPref as any)?.enabled ?? true;
+      .select("kind, email_enabled, push_enabled")
+      .eq("user_id", userId ?? "");
+    const map: CategoryPrefs = {};
+    for (const r of (prefsRows ?? []) as any[]) {
+      map[String(r.kind)] = {
+        email: r.email_enabled !== false,
+        push: r.push_enabled !== false,
+      };
+    }
+    data.notifPrefs = map;
   }
 
   if (tab === "regras") {
@@ -224,12 +230,22 @@ async function loadTabData(
 // ════════════════════════════════════════════════════════════════
 // Tabs
 // ════════════════════════════════════════════════════════════════
+function NotificacoesTab({ prefs }: { prefs: CategoryPrefs }) {
+  return (
+    <div className="card space-y-4 p-5">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Notificações</h2>
+      <p className="text-xs text-ink-500">
+        Escolhe como queres ser avisado em cada tipo. Ativa o push no cartão do dashboard.
+      </p>
+      <NotificationCategoryPrefs categories={TRAINER_CATEGORIES} initial={prefs} />
+    </div>
+  );
+}
+
 function PerfilTab({
   trainer,
-  reminderOn,
 }: {
   trainer: NonNullable<Awaited<ReturnType<typeof getCurrentTrainer>>>;
-  reminderOn: boolean;
 }) {
   // Links partilháveis com o teu slug — o cliente que clicar fica logo
   // associado a ti. Base URL vem de NEXT_PUBLIC_APP_URL.
@@ -296,18 +312,6 @@ function PerfilTab({
           </div>
         </div>
       ) : null}
-
-      <div className="card space-y-4 p-5">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">
-          Notificações
-        </h2>
-        <NotificationPrefToggle
-          kind="session_reminder"
-          initial={reminderOn}
-          label="Lembretes de sessão"
-          desc="Recebe um email e uma notificação na app antes das tuas sessões."
-        />
-      </div>
     </div>
   );
 }

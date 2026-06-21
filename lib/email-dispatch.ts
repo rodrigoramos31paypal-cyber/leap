@@ -13,25 +13,33 @@
 //   que valida ownership (ex. create_booking, cancel_booking,
 //   create_purchase). Estas funções são sempre chamadas DEPOIS dessa
 //   RPC ter tido sucesso, por isso o id recebido é de uma entidade a
-//   que o caller tem direito. NÃO usar service role aqui para nada
-//   que seja devolvido ao utilizador (≠ caso H5).
+//   que o caller tem direito.
+//
+// GATING DE EMAIL: cada envio respeita a preferência do destinatário
+// (notification_preferences, por categoria). Fail-open: se a leitura
+// falhar, o email é enviado na mesma.
 // ════════════════════════════════════════════════════════════════
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail, emailTemplates, emailEnabled } from "@/lib/email";
+import { emailAllowed } from "@/lib/notifications-config";
 import { eur, formatDateTime } from "@/lib/utils";
 
-async function getUserEmail(userId: string): Promise<{ email: string; full_name: string } | null> {
+async function getUserEmail(
+  userId: string,
+): Promise<{ id: string; email: string; full_name: string } | null> {
   if (!emailEnabled()) return null;
   const supabase = createAdminClient();
   const { data } = await supabase
     .from("profiles")
-    .select("email, full_name")
+    .select("id, email, full_name")
     .eq("id", userId)
     .single();
-  return data ?? null;
+  return (data as any) ?? null;
 }
 
-async function getTrainerEmail(trainerId: string): Promise<{ email: string; full_name: string } | null> {
+async function getTrainerEmail(
+  trainerId: string,
+): Promise<{ id: string; email: string; full_name: string } | null> {
   if (!emailEnabled()) return null;
   const supabase = createAdminClient();
   const { data: trainer } = await supabase
@@ -59,11 +67,11 @@ export async function dispatchBookingCreated(bookingId: string) {
   ]);
   const when = formatDateTime(b.starts_at);
 
-  if (client) {
+  if (client && (await emailAllowed(supabase, client.id, "sessions"))) {
     const tpl = emailTemplates.bookingCreated({ clientName: client.full_name, when, type: b.session_type });
     await sendEmail({ to: client.email, ...tpl });
   }
-  if (admin) {
+  if (admin && (await emailAllowed(supabase, admin.id, "bookings"))) {
     const tpl = emailTemplates.adminBookingCreated({ clientName: client?.full_name ?? "Cliente", when, type: b.session_type });
     await sendEmail({ to: admin.email, ...tpl });
   }
@@ -74,18 +82,33 @@ export async function dispatchBookingCancelled(bookingId: string, refunded: bool
   const supabase = createAdminClient();
   const { data: b } = await supabase
     .from("bookings")
-    .select("starts_at, client_id")
+    .select("starts_at, client_id, trainer_id")
     .eq("id", bookingId)
     .single();
   if (!b) return;
-  const client = await getUserEmail(b.client_id);
-  if (!client) return;
-  const tpl = emailTemplates.bookingCancelled({
-    clientName: client.full_name,
-    when: formatDateTime(b.starts_at),
-    refunded,
-  });
-  await sendEmail({ to: client.email, ...tpl });
+  const when = formatDateTime(b.starts_at);
+
+  const [client, admin] = await Promise.all([
+    getUserEmail(b.client_id),
+    getTrainerEmail(b.trainer_id),
+  ]);
+
+  if (client && (await emailAllowed(supabase, client.id, "sessions"))) {
+    const tpl = emailTemplates.bookingCancelled({
+      clientName: client.full_name,
+      when,
+      refunded,
+    });
+    await sendEmail({ to: client.email, ...tpl });
+  }
+  // Email ao treinador quando um cliente cancela (categoria 'bookings').
+  if (admin && (await emailAllowed(supabase, admin.id, "bookings"))) {
+    const tpl = emailTemplates.adminBookingCancelled({
+      clientName: client?.full_name ?? "Um cliente",
+      when,
+    });
+    await sendEmail({ to: admin.email, ...tpl });
+  }
 }
 
 export async function dispatchBookingConfirmed(bookingId: string) {
@@ -99,6 +122,7 @@ export async function dispatchBookingConfirmed(bookingId: string) {
   if (!b) return;
   const client = await getUserEmail(b.client_id);
   if (!client) return;
+  if (!(await emailAllowed(supabase, client.id, "sessions"))) return;
   const tpl = emailTemplates.bookingConfirmed({
     clientName: client.full_name,
     when: formatDateTime(b.starts_at),
@@ -117,6 +141,7 @@ export async function dispatchPurchaseConfirmed(purchaseId: string) {
   if (!p) return;
   const client = await getUserEmail(p.client_id);
   if (!client) return;
+  if (!(await emailAllowed(supabase, client.id, "packs"))) return;
   const tpl = emailTemplates.purchaseConfirmed({
     clientName: client.full_name,
     packName: (p.pack_snapshot as any)?.name ?? "pack",
@@ -139,6 +164,7 @@ export async function dispatchPurchasePending(purchaseId: string) {
     getUserEmail(p.client_id),
   ]);
   if (!admin) return;
+  if (!(await emailAllowed(supabase, admin.id, "payments"))) return;
   const tpl = emailTemplates.adminPurchasePending({
     clientName: client?.full_name ?? "Cliente",
     packName: (p.pack_snapshot as any)?.name ?? "pack",

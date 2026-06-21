@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendPush, pushConfigured } from "@/lib/push";
 import { verifyBearer } from "@/lib/secrets";
+import { categoryForType, getChannelPref } from "@/lib/notifications-config";
 
 // ════════════════════════════════════════════════════════════════
 // Web Push dispatch · alvo de um Supabase Database Webhook em
@@ -39,6 +40,24 @@ export async function POST(request: NextRequest) {
   if (!userId) return NextResponse.json({ ok: true, skipped: "no_user" });
 
   const supabase = createAdminClient();
+
+  // Gating de push por categoria. O in-app (a linha em `notifications`)
+  // fica sempre; aqui só decidimos se enviamos o PUSH. Fail-open.
+  const notifType = record?.type as string | undefined;
+  if (notifType) {
+    const { data: prof } = await (supabase as any)
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .maybeSingle();
+    const role = ((prof as any)?.role ?? "client") as "client" | "trainer" | "owner";
+    const category = categoryForType(notifType, role);
+    const pref = await getChannelPref(supabase, userId, category);
+    if (!pref.push) {
+      return NextResponse.json({ ok: true, skipped: "push_disabled" });
+    }
+  }
+
   const { data: subs } = await (supabase as any)
     .from("push_subscriptions")
     .select("id, endpoint, p256dh, auth")

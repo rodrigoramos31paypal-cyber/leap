@@ -2,7 +2,8 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { changePasswordAction, updateProfileAction } from "./actions";
-import { NotificationPrefToggle } from "@/components/notification-pref-toggle";
+import { NotificationCategoryPrefs, type CategoryPrefs } from "@/components/notification-category-prefs";
+import { CLIENT_CATEGORIES } from "@/lib/notifications-config";
 import { DeleteAccountSection } from "@/components/delete-account-section";
 import { ShieldCheck, User, Bell, NotebookPen, Plus, Sparkles, KeyRound } from "lucide-react";
 import { NoteEditor } from "@/components/note-editor";
@@ -60,7 +61,7 @@ export default async function PerfilPage(
       )}
       {activeTab === "notas" && <NotasTab notes={tabData.notes ?? []} />}
       {activeTab === "notificacoes" && (
-        <NotificacoesTab reminderOn={tabData.reminderOn} creditAlertOn={tabData.creditAlertOn} />
+        <NotificacoesTab prefs={tabData.notifPrefs ?? {}} />
       )}
     </div>
   );
@@ -111,15 +112,16 @@ async function loadTabData(
   if (tab === "notificacoes") {
     const { data: prefsRows } = await (supabase as any)
       .from("notification_preferences")
-      .select("kind, enabled")
+      .select("kind, email_enabled, push_enabled")
       .eq("user_id", userId);
-    const prefMap = new Map<string, boolean>(
-      ((prefsRows ?? []) as any[]).map(
-        (r) => [String(r.kind), r.enabled !== false] as [string, boolean],
-      ),
-    );
-    data.reminderOn = prefMap.get("session_reminder") ?? true;
-    data.creditAlertOn = prefMap.get("credit_alert") ?? true;
+    const map: CategoryPrefs = {};
+    for (const r of (prefsRows ?? []) as any[]) {
+      map[String(r.kind)] = {
+        email: r.email_enabled !== false,
+        push: r.push_enabled !== false,
+      };
+    }
+    data.notifPrefs = map;
   }
 
   return data;
@@ -294,29 +296,15 @@ function NotasTab({ notes }: { notes: any[] }) {
   );
 }
 
-function NotificacoesTab({
-  reminderOn,
-  creditAlertOn,
-}: {
-  reminderOn: boolean;
-  creditAlertOn: boolean;
-}) {
+function NotificacoesTab({ prefs }: { prefs: CategoryPrefs }) {
   return (
     <div className="card space-y-4 p-5">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Notificações</h2>
-      <NotificationPrefToggle
-        kind="session_reminder"
-        initial={reminderOn}
-        label="Lembretes de sessão"
-        desc="Recebe um email e uma notificação na app antes de cada sessão."
-      />
-      <div className="border-t border-ink-900/5" />
-      <NotificationPrefToggle
-        kind="credit_alert"
-        initial={creditAlertOn}
-        label="Avisos de saldo e validade"
-        desc="Avisa-te quando as tuas sessões estão a acabar ou um pack está a expirar."
-      />
+      <p className="text-xs text-ink-500">
+        Escolhe como queres ser avisado em cada tipo. Os emails de confirmar conta e
+        recuperar password são sempre enviados.
+      </p>
+      <NotificationCategoryPrefs categories={CLIENT_CATEGORIES} initial={prefs} />
     </div>
   );
 }
