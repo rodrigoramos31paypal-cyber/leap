@@ -225,4 +225,16 @@ export const emailTemplates = {
       text: `Avalia a tua sessão de ${args.when}: ${link}`,
     };
   },
+  clientNote(args: { trainerName: string; clientName: string; when: string }) {
+    return {
+      subject: "Nova nota de cliente",
+      html: shell(
+        "Nova nota de cliente",
+        `<p style="margin:0 0 10px">Olá ${escapeHtml(args.trainerName)},</p>
+         <p style="margin:0 0 10px"><strong>${escapeHtml(args.clientName)}</strong> deixou uma nota na sessão marcada para <strong>${escapeHtml(args.when)}</strong>.</p>
+         <p style="margin:0">Vê a nota na agenda, no popover dessa sessão.</p>`,
+      ),
+      text: `${args.clientName} deixou uma nota na sessão de ${args.when}.`,
+    };
+  },
 };
