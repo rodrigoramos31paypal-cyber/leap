@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { NotebookPen, ExternalLink, Coins, Clock } from "lucide-react";
+import { NotebookPen, ExternalLink, Coins, Clock, Users } from "lucide-react";
 import { formatTime, BOOKING_STATUS } from "@/lib/utils";
 import { NoteEditor } from "@/components/note-editor";
 import {
@@ -39,6 +39,14 @@ function shortName(full?: string | null) {
 function firstNameLong(full?: string | null) {
   const first = (full ?? "").trim().split(/\s+/)[0] ?? "";
   return first.slice(0, 14);
+}
+// Sessão DUO: une os dois primeiros nomes ("Ana & João"). Para sessões
+// normais devolve só o nome do cliente. `fmt` controla o tamanho de cada
+// nome (shortName no preview, firstNameLong no bloco).
+function duoNames(b: any, fmt: (s?: string | null) => string): string {
+  const a = fmt(b?.profiles?.full_name) || "—";
+  const partner = b?.partner_profiles?.full_name;
+  return partner ? `${a} & ${fmt(partner)}` : a;
 }
 
 type Preview = {
@@ -460,7 +468,7 @@ export function BookingBlock({
             overflow: "hidden",
           }}
         >
-          {firstNameLong(b.profiles?.full_name) || "—"}
+          {duoNames(b, firstNameLong)}
         </div>
       </button>
 
@@ -485,7 +493,7 @@ export function BookingBlock({
             }}
           >
             <div className="font-semibold tabular-nums">{preview.time}</div>
-            <div className="truncate font-medium">{shortName(b.profiles?.full_name) || "—"}</div>
+            <div className="truncate font-medium">{duoNames(b, shortName)}</div>
           </div>
         </>
       )}
@@ -514,7 +522,15 @@ export function BookingBlock({
               </div>
               <div className="text-xs text-ink-500">
                 {b.profiles?.full_name ?? "—"}
+                {b.partner_profiles?.full_name && (
+                  <> &amp; {b.partner_profiles.full_name}</>
+                )}
               </div>
+              {b.partner_profiles?.full_name && (
+                <div className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-gold-100 px-2 py-0.5 text-[10px] font-semibold text-gold-700 dark:bg-gold-400/15">
+                  <Users size={10} /> Sessão dupla
+                </div>
+              )}
             </div>
             <span
               className={
