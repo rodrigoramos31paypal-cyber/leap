@@ -153,8 +153,54 @@ export async function GET(request: NextRequest) {
     if (res.ok) lowSent++;
   }
 
-  // ── 2) Packs a expirar — REMOVIDO (0067 · afinação de notificações).
-  //    Já não enviamos avisos de "pack a expirar" (in-app nem email).
+  // ── 2) Packs a expirar (janela de 7 dias, com sessões por usar) ──
+  // Reactivado: avisa o cliente (in-app + push + email) uma única vez por
+  // compra. Dedup via engagement_alerts (kind 'pack_expiring', ref_id =
+  // purchase.id). Respeita a mesma preferência 'credit_alert'.
+  for (const p of (expiring ?? []) as any[]) {
+    if (disabled.has(p.client_id)) continue;
+    const prof = profileMap.get(p.client_id);
+    if (!prof) continue;
+
+    // Já avisámos sobre ESTA compra? (uma vez por purchase.)
+    const { data: already } = await (supabase as any)
+      .from("engagement_alerts")
+      .select("id")
+      .eq("user_id", p.client_id)
+      .eq("kind", "pack_expiring")
+      .eq("ref_id", p.id)
+      .limit(1)
+      .maybeSingle();
+    if (already) continue;
+
+    await (supabase as any)
+      .from("engagement_alerts")
+      .insert({ user_id: p.client_id, kind: "pack_expiring", ref_id: p.id });
+
+    const packName = (p.pack_snapshot as any)?.name ?? "pack";
+    const when = formatDateTime(p.expires_at);
+    const remaining = p.sessions_remaining ?? 0;
+
+    // Notification INSERT → webhook dispara push automaticamente.
+    await (supabase as any).from("notifications").insert({
+      user_id: p.client_id,
+      type: "pack_expiring",
+      title: "O teu pack está a expirar",
+      body: `O pack ${packName} expira a ${when} e ainda tens ${remaining} ${
+        remaining === 1 ? "sessão" : "sessões"
+      } por usar.`,
+      link: "/app/agenda",
+    });
+
+    const tpl = emailTemplates.packExpiring({
+      clientName: prof.full_name ?? "atleta",
+      remaining,
+      when,
+      packName,
+    });
+    const res = await sendEmail({ to: prof.email, ...tpl });
+    if (res.ok) expirySent++;
+  }
 
   return NextResponse.json({
     ok: true,

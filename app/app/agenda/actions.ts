@@ -2,11 +2,13 @@
 
 import { createBooking, createRecurringBooking, type RecurringBookingResult } from "@/lib/credits";
 import { dispatchBookingCreated } from "@/lib/email-dispatch";
+import { sendEmail, emailTemplates, emailEnabled } from "@/lib/email";
 import { pushBookingToCalendars, removeBookingFromCalendars } from "@/lib/calendar-sync";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
 import { logError, userFacingRpcError } from "@/lib/errors";
 import { revalidateBookingViews } from "@/lib/revalidate";
+import { formatDateTime } from "@/lib/utils";
 import type { SessionType } from "@/types/database";
 
 const NOTE_MAX_LEN = 5000;
@@ -93,6 +95,24 @@ async function persistClientBookingNote(
         // popover desse, igual ao que já fazíamos em vista de dia.
         link: `/admin/agenda?view=week&d=${localDate}&booking=${bookingId}`,
       });
+
+      // Email ao trainer (best-effort), separado do in-app/push.
+      if (emailEnabled()) {
+        const { data: trainerProf } = await admin
+          .from("profiles")
+          .select("email, full_name")
+          .eq("id", trainerProfileId)
+          .maybeSingle();
+        const trainerEmail = (trainerProf as any)?.email as string | undefined;
+        if (trainerEmail) {
+          const tpl = emailTemplates.clientNote({
+            trainerName: (trainerProf as any)?.full_name ?? "treinador",
+            clientName: (prof as any)?.full_name ?? "Um cliente",
+            when: formatDateTime((bk as any).starts_at),
+          });
+          await sendEmail({ to: trainerEmail, ...tpl });
+        }
+      }
     } catch (e) {
       logError("persistClientBookingNote:notify", e);
     }
