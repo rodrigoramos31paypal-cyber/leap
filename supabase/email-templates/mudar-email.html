@@ -1,0 +1,35 @@
+<!--
+  Supabase Auth → Authentication → Email Templates → "Change Email Address"
+  Assunto sugerido: Confirma o teu novo email · LEAP-FITNESS STUDIO
+  Variável do botão: {{ .ConfirmationURL }} (não alterar)
+-->
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:0;padding:24px 16px;background:#faf8f4;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;color:#1a1a1a">
+  <tr><td align="center">
+    <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #e6e3dc;border-radius:12px;overflow:hidden">
+      <tr><td style="padding:24px 28px;border-bottom:1px solid #f1ede4">
+        <div style="font-weight:700;font-size:14px;letter-spacing:.06em">LEAP-FITNESS STUDIO</div>
+      </td></tr>
+      <tr><td style="padding:32px 28px">
+        <h1 style="margin:0 0 12px;font-size:20px">Confirmar novo email</h1>
+        <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#3a3a3a">
+          Para concluir a alteração do email da tua conta, confirma carregando no botão:
+        </p>
+        <table cellpadding="0" cellspacing="0"><tr><td style="border-radius:8px;background:#b8862f">
+          <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:13px 26px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none">
+            Confirmar novo email
+          </a>
+        </td></tr></table>
+        <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#8a8a8a">
+          Se o botão não funcionar, copia e cola este link no navegador:<br>
+          <a href="{{ .ConfirmationURL }}" style="color:#b8862f;word-break:break-all">{{ .ConfirmationURL }}</a>
+        </p>
+        <p style="margin:20px 0 0;font-size:13px;line-height:1.6;color:#8a8a8a">
+          Se não foste tu a pedir esta alteração, ignora este email.
+        </p>
+      </td></tr>
+      <tr><td style="padding:18px 28px;border-top:1px solid #f1ede4;font-size:12px;color:#a0a0a0">
+        LEAP-FITNESS STUDIO · este é um email automático, não respondas a esta mensagem.
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
