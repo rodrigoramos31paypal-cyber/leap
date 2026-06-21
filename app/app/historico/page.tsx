@@ -3,7 +3,7 @@ import Link from "next/link";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { eur, formatDateTime, BOOKING_STATUS, PURCHASE_STATUS } from "@/lib/utils";
 import { cancelBookingAction, rebookAction } from "./actions";
-import { CalendarPlus, RefreshCcw, NotebookPen } from "lucide-react";
+import { CalendarPlus, RefreshCcw, NotebookPen, Users } from "lucide-react";
 import { NoteEditor } from "@/components/note-editor";
 import { getMyNotesMapForBookings } from "@/lib/notes";
 
@@ -112,7 +112,7 @@ async function SessoesTab({ userId, filter }: { userId: string; filter: "todas" 
   // 3x mais rápido em mobile.
   let query = supabase
     .from("bookings")
-    .select("id, starts_at, ends_at, session_type, status")
+    .select("id, starts_at, ends_at, session_type, status, partner_client_id")
     // DUO: inclui as sessões partilhadas em que sou o parceiro.
     .or(`client_id.eq.${userId},partner_client_id.eq.${userId}`);
   if (filter === "futuras") {
@@ -140,7 +140,14 @@ async function SessoesTab({ userId, filter }: { userId: string; filter: "todas" 
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-sm font-semibold">{formatDateTime(b.starts_at)}</div>
-                <div className="text-xs text-ink-500 capitalize">{b.session_type}</div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-ink-500 capitalize">{b.session_type}</span>
+                  {b.partner_client_id && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-gold-100 px-2 py-0.5 text-[10px] font-semibold text-gold-700 dark:bg-gold-400/15">
+                      <Users size={10} /> Duo
+                    </span>
+                  )}
+                </div>
               </div>
               <StatusChip status={b.status} />
             </div>

@@ -2,7 +2,7 @@ import { redirect, notFound } from "next/navigation";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { formatDateTime, BOOKING_STATUS } from "@/lib/utils";
 import { cancelBookingAction, rebookAction } from "@/app/app/historico/actions";
-import { CalendarPlus, RefreshCcw, X, NotebookPen, ChevronRight, Star } from "lucide-react";
+import { CalendarPlus, RefreshCcw, X, NotebookPen, ChevronRight, Star, Users } from "lucide-react";
 import { BackLink } from "@/components/back-link";
 import { NoteEditor } from "@/components/note-editor";
 import { getMyNoteForBooking } from "@/lib/notes";
@@ -16,14 +16,23 @@ export default async function SessaoPage(props: { params: Promise<{ id: string }
   if (!user) redirect("/login");
 
   const supabase = await createClient();
-  const { data: b } = await supabase
+  // `as any`: o embed do par (partner_profiles) não está nos tipos
+  // gerados — lemos os dois nomes para mostrar com quem é a sessão duo.
+  const { data: b } = await (supabase as any)
     .from("bookings")
-    .select("id, starts_at, ends_at, session_type, status, client_id, trainer_id, partner_client_id")
+    .select(
+      "id, starts_at, ends_at, session_type, status, client_id, trainer_id, partner_client_id, profiles:client_id(full_name), partner_profiles:partner_client_id(full_name)",
+    )
     .eq("id", params.id)
     // DUO: o parceiro também pode abrir a sessão partilhada.
     .or(`client_id.eq.${user.id},partner_client_id.eq.${user.id}`)
     .maybeSingle();
   if (!b) notFound();
+
+  // Sessão duo: nome do OUTRO participante (relativo a quem está a ver).
+  const duoPartnerName: string | null = b.partner_client_id
+    ? (user.id === b.client_id ? b.partner_profiles?.full_name : b.profiles?.full_name) ?? null
+    : null;
 
   const note = await getMyNoteForBooking(b.id);
   const isFuture = new Date(b.starts_at).getTime() > Date.now();
@@ -59,6 +68,11 @@ export default async function SessaoPage(props: { params: Promise<{ id: string }
           <div>
             <div className="text-base font-semibold">{formatDateTime(b.starts_at)}</div>
             <div className="text-xs text-ink-500 capitalize">Sessão {b.session_type}</div>
+            {duoPartnerName && (
+              <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-gold-100 px-2 py-0.5 text-[11px] font-semibold text-gold-700 dark:bg-gold-400/15">
+                <Users size={11} /> Duo · com {duoPartnerName.split(" ")[0]}
+              </div>
+            )}
           </div>
           <span className={chipCls[b.status] ?? "chip-mute"}>
             {(BOOKING_STATUS as any)[b.status] ?? b.status}
