@@ -26,6 +26,8 @@ export function BookingFlow({
   defaultDuration,
   credits,
   rescheduleBookingId,
+  hasPartner = false,
+  partnerName,
 }: {
   trainerId: string;
   slotDurations: number[];
@@ -34,10 +36,23 @@ export function BookingFlow({
   /** Quando presente, estamos a reagendar esta marcacao: confirmar
    *  cancela a antiga e cria a nova atomicamente (sem perder a sessao). */
   rescheduleBookingId?: string;
+  /** Cliente tem uma conta ligada (par duo)? Ajusta a copia da sessao dupla. */
+  hasPartner?: boolean;
+  partnerName?: string | null;
 }) {
   const router = useRouter();
-  // Dupla esta desactivada na UI - todas as marcacoes sao individuais por agora.
-  const [sessionType] = useState<SessionType>("individual");
+  // Tipo de sessao = que creditos usar.
+  //  • so individuais  → individual (sem escolha)
+  //  • so duplos       → dupla (sem escolha; mostra aviso)
+  //  • ambos           → o cliente escolhe; por defeito individual
+  // Ao reagendar, o tipo e herdado da sessao antiga no servidor, por isso
+  // escondemos a escolha nesse modo.
+  const onlyDupla = credits.individual === 0 && credits.dupla > 0;
+  const canChooseType =
+    credits.individual > 0 && credits.dupla > 0 && !rescheduleBookingId;
+  const [sessionType, setSessionType] = useState<SessionType>(
+    onlyDupla ? "dupla" : "individual",
+  );
   const [duration, setDuration] = useState<number>(defaultDuration);
   const [date, setDate] = useState<Date>(() => startOfDay(new Date()));
   const [slots, setSlots] = useState<{ startsAt: string; endsAt: string }[]>([]);
@@ -177,6 +192,53 @@ export function BookingFlow({
 
   return (
     <div className="space-y-5">
+      {!rescheduleBookingId && (canChooseType || onlyDupla) && (
+        <div>
+          <div className="label">Tipo de sessão</div>
+          {canChooseType && (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setSessionType("individual")}
+                className={cn(
+                  "flex-1 rounded-lg border px-3 py-2 text-sm font-medium",
+                  sessionType === "individual"
+                    ? "border-gold-400 bg-gold-50 text-ink-900"
+                    : "border-ink-900/10 hover:bg-ink-900/5",
+                )}
+              >
+                Individual{" "}
+                <span className="text-xs text-ink-500">({credits.individual})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSessionType("dupla");
+                  setRecurring(false);
+                }}
+                className={cn(
+                  "flex-1 rounded-lg border px-3 py-2 text-sm font-medium",
+                  sessionType === "dupla"
+                    ? "border-gold-400 bg-gold-50 text-ink-900"
+                    : "border-ink-900/10 hover:bg-ink-900/5",
+                )}
+              >
+                Dupla <span className="text-xs text-ink-500">({credits.dupla})</span>
+              </button>
+            </div>
+          )}
+          {sessionType === "dupla" && (
+            <p className="mt-2 rounded-md border border-gold-200 bg-gold-50 px-3 py-2 text-xs text-ink-700 dark:border-gold-400/30 dark:bg-gold-400/10">
+              {hasPartner
+                ? `Sessão dupla — conta para ti${
+                    partnerName ? ` e ${partnerName.split(" ")[0]}` : " e a tua conta ligada"
+                  }. Gasta 1 sessão dupla a cada um.`
+                : "Sessão dupla (treino a dois). Gasta 1 sessão dupla do teu saldo."}
+            </p>
+          )}
+        </div>
+      )}
+
       <div>
         <div className="label">Duração</div>
         <div className="flex flex-wrap gap-2">
@@ -359,7 +421,7 @@ export function BookingFlow({
             <div className="text-xs text-ink-500">{availableCredits} restantes</div>
           </div>
 
-          {availableCredits > 1 && !rescheduleBookingId && (
+          {sessionType === "individual" && availableCredits > 1 && !rescheduleBookingId && (
             <div className="mt-3 rounded-md border border-ink-900/10 bg-bone-50 px-3 py-2 text-xs">
               <label className="flex items-start gap-2">
                 <input

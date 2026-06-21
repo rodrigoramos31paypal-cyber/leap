@@ -12,15 +12,20 @@ const METHODS: { id: PaymentMethod; label: string; helper: string }[] = [
   { id: "manual_revolut", label: "Revolut", helper: "Pagas por Revolut — confirmação manual em minutos" },
 ];
 
+type Tab = "individual" | "dupla";
+
 export function PackList({ packs }: { packs: Pack[] }) {
   const router = useRouter();
   const [picked, setPicked] = useState<Pack | null>(null);
   const [method, setMethod] = useState<PaymentMethod>("manual_mbway");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  // Separador activo — por defeito mostra sempre PT Individual.
+  const [tab, setTab] = useState<Tab>("individual");
 
   const individuals = packs.filter((p) => p.session_type === "individual");
   const duplas = packs.filter((p) => p.session_type === "dupla");
+  const shown = tab === "individual" ? individuals : duplas;
 
   function handleBuy() {
     if (!picked) return;
@@ -37,20 +42,49 @@ export function PackList({ packs }: { packs: Pack[] }) {
 
   return (
     <div className="space-y-6">
-      <PackSection
-        title="PT Individual"
-        icon={<User size={16} />}
-        packs={individuals}
-        pickedId={picked?.id}
-        onPick={setPicked}
-      />
-      <PackSection
-        title="PT Dupla"
-        icon={<Users size={16} />}
-        packs={duplas}
-        pickedId={picked?.id}
-        onPick={setPicked}
-      />
+      <div className="inline-flex w-full items-center gap-1 rounded-xl border border-ink-900/10 bg-bone-100 p-1 text-sm sm:w-auto">
+        <button
+          type="button"
+          onClick={() => setTab("individual")}
+          className={cn(
+            "inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 font-semibold transition sm:flex-none",
+            tab === "individual" ? "bg-white text-ink-900 shadow-sm dark:bg-ink-800 dark:text-bone-50" : "text-ink-500 hover:text-ink-900",
+          )}
+        >
+          <User size={16} /> PT Individual
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("dupla")}
+          className={cn(
+            "inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 font-semibold transition sm:flex-none",
+            tab === "dupla" ? "bg-white text-ink-900 shadow-sm dark:bg-ink-800 dark:text-bone-50" : "text-ink-500 hover:text-ink-900",
+          )}
+        >
+          <Users size={16} /> PT Dupla
+        </button>
+      </div>
+
+      {tab === "dupla" && (
+        <p className="rounded-lg border border-ink-900/10 bg-bone-50 px-3 py-2 text-xs text-ink-600">
+          Sessões para treinar a dois. Cada pessoa compra o seu pack — quando marcam juntos,
+          gasta 1 sessão a cada um.
+        </p>
+      )}
+
+      {shown.length === 0 ? (
+        <div className="card p-5 text-center text-sm text-ink-500">
+          {tab === "dupla"
+            ? "Este treinador ainda não tem packs PT Dupla."
+            : "Sem packs nesta categoria."}
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {shown.map((p) => (
+            <PackCard key={p.id} pack={p} active={picked?.id === p.id} onPick={setPicked} />
+          ))}
+        </div>
+      )}
 
       {picked && (
         <div className="card sticky bottom-24 z-20 p-4 md:bottom-4">
@@ -99,56 +133,38 @@ export function PackList({ packs }: { packs: Pack[] }) {
   );
 }
 
-function PackSection({
-  title,
-  icon,
-  packs,
-  pickedId,
+function PackCard({
+  pack: p,
+  active,
   onPick,
 }: {
-  title: string;
-  icon: React.ReactNode;
-  packs: Pack[];
-  pickedId?: string;
+  pack: Pack;
+  active: boolean;
   onPick: (p: Pack) => void;
 }) {
-  if (packs.length === 0) return null;
+  const perSession = p.price_cents / p.sessions / 100;
   return (
-    <section>
-      <div className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
-        {icon} {title}
+    <button
+      type="button"
+      onClick={() => onPick(p)}
+      className={cn(
+        "card relative p-4 text-left transition-all",
+        active && "border-gold-400 shadow-glow",
+      )}
+    >
+      {active && (
+        <span className="absolute right-3 top-3 grid h-6 w-6 place-items-center rounded-full bg-gold-400 text-ink-900">
+          <Check size={14} />
+        </span>
+      )}
+      <div className="text-sm font-semibold">{p.name}</div>
+      <div className="mt-1 flex items-baseline gap-1">
+        <span className="font-display text-2xl font-bold">{eur(p.price_cents)}</span>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {packs.map((p) => {
-          const active = pickedId === p.id;
-          const perSession = p.price_cents / p.sessions / 100;
-          return (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => onPick(p)}
-              className={cn(
-                "card relative p-4 text-left transition-all",
-                active && "border-gold-400 shadow-glow",
-              )}
-            >
-              {active && (
-                <span className="absolute right-3 top-3 grid h-6 w-6 place-items-center rounded-full bg-gold-400 text-ink-900">
-                  <Check size={14} />
-                </span>
-              )}
-              <div className="text-sm font-semibold">{p.name}</div>
-              <div className="mt-1 flex items-baseline gap-1">
-                <span className="font-display text-2xl font-bold">{eur(p.price_cents)}</span>
-              </div>
-              <div className="mt-1 text-xs text-ink-500">
-                {p.sessions} {p.sessions === 1 ? "sessão" : "sessões"} ·{" "}
-                {perSession.toFixed(2).replace(".", ",")}€ por sessão
-              </div>
-            </button>
-          );
-        })}
+      <div className="mt-1 text-xs text-ink-500">
+        {p.sessions} {p.sessions === 1 ? "sessão" : "sessões"} ·{" "}
+        {perSession.toFixed(2).replace(".", ",")}€ por sessão
       </div>
-    </section>
+    </button>
   );
 }
