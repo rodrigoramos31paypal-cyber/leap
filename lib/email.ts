@@ -28,7 +28,7 @@ export async function sendEmail(args: SendArgs): Promise<{ ok: boolean; error?: 
     return { ok: false, error: "disabled" };
   }
 
-  const from = process.env.NOTIFICATION_FROM_EMAIL ?? "no-reply@leap-fitness.pt";
+  const from = process.env.NOTIFICATION_FROM_EMAIL ?? "no-reply@leapfitnesstudio.com";
 
   try {
     const res = await fetch("https://api.resend.com/emails", {
