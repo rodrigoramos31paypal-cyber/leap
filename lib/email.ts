@@ -60,7 +60,7 @@ export async function sendEmail(args: SendArgs): Promise<{ ok: boolean; error?: 
 // ─── Templates ───────────────────────────────────────────────────────
 
 function shell(title: string, body: string) {
-  const appName = process.env.NEXT_PUBLIC_APP_NAME ?? "LEAP-FITNESS STUDIO";
+  const appName = process.env.NEXT_PUBLIC_APP_NAME ?? "LEAP Fitness Studio";
   return `<!doctype html>
 <html><body style="margin:0;padding:0;background:#faf8f4;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;color:#1a1a1a">
 <table width="100%" cellpadding="0" cellspacing="0" style="padding:24px 16px">

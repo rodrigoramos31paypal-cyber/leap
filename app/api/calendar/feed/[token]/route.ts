@@ -145,7 +145,7 @@ export async function GET(req: Request, props: { params: Promise<{ token: string
           start: new Date(b.starts_at),
           end: new Date(b.ends_at ?? new Date(new Date(b.starts_at).getTime() + 60 * 60 * 1000)),
           summary: `Sessão · ${clientName}`,
-          description: `LEAP-FITNESS · ${b.session_type ?? ""} · ${b.status}`,
+          description: `LEAP Fitness Studio · ${b.session_type ?? ""} · ${b.status}`,
           status: "CONFIRMED",
         });
       }
@@ -165,7 +165,7 @@ export async function GET(req: Request, props: { params: Promise<{ token: string
         uid: makeUid("booking", b.id),
         start: new Date(b.starts_at),
         end: new Date(b.ends_at ?? new Date(new Date(b.starts_at).getTime() + 60 * 60 * 1000)),
-        summary: `LEAP-FITNESS · Sessão de treino`,
+        summary: `LEAP Fitness Studio · Sessão de treino`,
         description: `Sessão ${b.session_type ?? ""} · ${b.status}`,
         status: b.status === "cancelled" ? "CANCELLED" : "CONFIRMED",
       });
@@ -175,10 +175,10 @@ export async function GET(req: Request, props: { params: Promise<{ token: string
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//LEAP-FITNESS//Portal//PT",
+    "PRODID:-//LEAP Fitness Studio//Portal//PT",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
-    `X-WR-CALNAME:LEAP-FITNESS · ${escapeIcs(profile.full_name ?? "Agenda")}`,
+    `X-WR-CALNAME:LEAP Fitness Studio · ${escapeIcs(profile.full_name ?? "Agenda")}`,
     "X-WR-TIMEZONE:Europe/Lisbon",
     "REFRESH-INTERVAL;VALUE=DURATION:PT1H",
     "X-PUBLISHED-TTL:PT1H",

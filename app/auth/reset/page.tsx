@@ -16,7 +16,7 @@ export default async function ResetPage(
       <Link href="/" className="mb-10 flex flex-col items-center gap-2">
         <Image
           src="/images/logo-slogan.png"
-          alt="LEAP-FITNESS STUDIO"
+          alt="LEAP Fitness Studio"
           width={500}
           height={375}
           priority

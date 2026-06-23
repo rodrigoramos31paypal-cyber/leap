@@ -40,7 +40,7 @@ export function TopBar({
             <Link href={homeHref} className="flex items-center gap-2">
               <Image
                 src="/images/logo.png"
-                alt="LEAP-FITNESS"
+                alt="LEAP Fitness Studio"
                 width={44}
                 height={44}
                 sizes="44px"

@@ -11,7 +11,7 @@ export default function OfflinePage() {
       <div className="max-w-sm text-center">
         <Image
           src="/images/logo.png"
-          alt="LEAP-FITNESS"
+          alt="LEAP Fitness Studio"
           width={64}
           height={64}
           className="mx-auto mb-6 h-16 w-16 dark:invert"

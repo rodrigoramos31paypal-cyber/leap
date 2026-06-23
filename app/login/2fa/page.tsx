@@ -30,7 +30,7 @@ export default async function TwoFaChallengePage(
       <Link href="/" className="mb-6 flex flex-col items-center gap-2 sm:mb-8">
         <Image
           src="/images/logo-slogan.png"
-          alt="LEAP-FITNESS STUDIO"
+          alt="LEAP Fitness Studio"
           width={500}
           height={375}
           priority
