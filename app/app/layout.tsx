@@ -42,12 +42,14 @@ export default async function ClientLayout({ children }: { children: React.React
   const flash = await consumeFlash();
 
   return (
-    <div className="min-h-screen bg-bone-50 pb-20 dark:bg-ink-900 md:pb-0">
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-bone-50 dark:bg-ink-900">
       <TopBar unread={0} userId={user.id} homeHref="/app/dashboard" />
       <ClientTopNav />
       <Toaster initial={flash} />
       <ReminderSync />
-      <main className="mx-auto max-w-6xl px-4 pt-1 pb-6">{children}</main>
+      <main className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div className="mx-auto max-w-6xl px-4 pt-1 pb-6">{children}</div>
+      </main>
       <BottomNav variant="client" />
     </div>
   );
