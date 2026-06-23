@@ -189,7 +189,7 @@ export const emailTemplates = {
           ? `<p style="margin:0 0 10px">Olá ${escapeHtml(args.clientName)},</p>
              <p style="margin:0 0 10px">Já não tens sessões disponíveis. Para continuares a treinar, compra um novo pack.</p>`
           : `<p style="margin:0 0 10px">Olá ${escapeHtml(args.clientName)},</p>
-             <p style="margin:0 0 10px">Tens apenas <strong>${args.total}</strong> ${args.total === 1 ? "sessão" : "sessões"} por usar. Renova o teu pack para não interromperes o treino.</p>`,
+             <p style="margin:0 0 10px">Tens apenas <strong>${args.total}</strong> ${args.total === 1 ? "sessão" : "sessões"} por usar. Renova o teu pack para não interromperes o teu progresso.</p>`,
       ),
       text: out ? "Ficaste sem sessões. Compra um pack." : `Restam-te ${args.total} sessões.`,
     };
