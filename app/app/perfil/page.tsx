@@ -5,7 +5,8 @@ import { changePasswordAction, updateProfileAction } from "./actions";
 import { NotificationCategoryPrefs, type CategoryPrefs } from "@/components/notification-category-prefs";
 import { CLIENT_CATEGORIES } from "@/lib/notifications-config";
 import { DeleteAccountSection } from "@/components/delete-account-section";
-import { ShieldCheck, User, Bell, NotebookPen, Plus, Sparkles, KeyRound } from "lucide-react";
+import { ShieldCheck, User, Bell, NotebookPen, Plus, Sparkles, KeyRound, CalendarDays } from "lucide-react";
+import { CalendarSubscribeCard } from "@/components/calendar-subscribe-card";
 import { NoteEditor } from "@/components/note-editor";
 import { GeneralNoteEditor } from "@/components/general-note-editor";
 import { listMyNotes } from "@/lib/notes";
@@ -57,7 +58,12 @@ export default async function PerfilPage(
       <TabNav active={activeTab} />
 
       {activeTab === "perfil" && (
-        <PerfilTab profile={tabData.profile} factors={tabData.factors ?? []} />
+        <PerfilTab
+          profile={tabData.profile}
+          factors={tabData.factors ?? []}
+          feedHttpUrl={tabData.feedHttpUrl ?? null}
+          feedWebcalUrl={tabData.feedWebcalUrl ?? null}
+        />
       )}
       {activeTab === "notas" && <NotasTab notes={tabData.notes ?? []} />}
       {activeTab === "notificacoes" && (
@@ -103,6 +109,18 @@ async function loadTabData(
     const { data: profile } = await supabase.from("profiles").select("*").eq("id", userId).single();
     data.profile = profile;
     data.factors = await listVerifiedFactors().catch(() => []);
+
+    // Feed iCal pessoal (subscrição única do calendário). Cada profile
+    // tem um calendar_feed_token; construímos a URL http + a variante
+    // webcal:// (que o iOS abre direto no app Calendário).
+    const feedToken = (profile as any)?.calendar_feed_token as string | undefined;
+    const appBase = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+    data.feedHttpUrl = feedToken && appBase
+      ? `${appBase}/api/calendar/feed/${feedToken}.ics`
+      : null;
+    data.feedWebcalUrl = data.feedHttpUrl
+      ? (data.feedHttpUrl as string).replace(/^https?:\/\//, "webcal://")
+      : null;
   }
 
   if (tab === "notas") {
@@ -127,7 +145,17 @@ async function loadTabData(
   return data;
 }
 
-function PerfilTab({ profile, factors }: { profile: any; factors: any[] }) {
+function PerfilTab({
+  profile,
+  factors,
+  feedHttpUrl,
+  feedWebcalUrl,
+}: {
+  profile: any;
+  factors: any[];
+  feedHttpUrl: string | null;
+  feedWebcalUrl: string | null;
+}) {
   const hasFactor = factors.length > 0;
   return (
     <div className="space-y-4">
@@ -146,6 +174,13 @@ function PerfilTab({ profile, factors }: { profile: any; factors: any[] }) {
         </div>
         <button type="submit" className="btn-primary w-full">Guardar</button>
       </form>
+
+      <section>
+        <h2 className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-ink-500">
+          <CalendarDays size={14} /> Calendário
+        </h2>
+        <CalendarSubscribeCard httpUrl={feedHttpUrl} webcalUrl={feedWebcalUrl} />
+      </section>
 
       <section>
         <h2 className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-ink-500">
