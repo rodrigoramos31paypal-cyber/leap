@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { NotebookPen, ExternalLink, Coins, Clock, Users } from "lucide-react";
+import { NotebookPen, StickyNote, ExternalLink, Coins, Clock, Users } from "lucide-react";
 import { formatTime, BOOKING_STATUS } from "@/lib/utils";
 import { NoteEditor } from "@/components/note-editor";
 import {
@@ -434,9 +434,9 @@ export function BookingBlock({
       {clientNote?.body && b.status !== "cancelled" && (
         <span
           title="O cliente deixou uma nota"
-          className="pointer-events-none absolute bottom-0.5 right-0.5 z-10 inline-flex items-center justify-center rounded-sm bg-ink-900/85 px-0.5 text-[7px] font-bold text-bone-50 ring-1 ring-white"
+          className="pointer-events-none absolute bottom-0.5 right-0.5 z-10 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-ink-900 text-bone-50 shadow-sm ring-1 ring-white"
         >
-          <NotebookPen size={7} />
+          <StickyNote size={9} strokeWidth={2.25} />
         </span>
       )}
       <button
