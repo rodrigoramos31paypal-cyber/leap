@@ -25,6 +25,7 @@ import {
   Bell,
 } from "lucide-react";
 import Link from "next/link";
+import { ForceUpdateButton } from "@/components/force-update-button";
 
 type TabId = "perfil" | "notificacoes" | "regras" | "horarios" | "calendario" | "seguranca" | "equipa";
 
@@ -630,6 +631,19 @@ function SegurancaTab() {
         </div>
         <button className="btn-primary">Actualizar palavra-passe</button>
       </form>
+
+      <div className="card space-y-3 p-5">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">
+          Atualização da app
+        </h2>
+        <p className="text-xs text-ink-500">
+          Força todos os dispositivos (clientes e equipa) com a app aberta a
+          recarregar para a versão mais recente. Útil após um lançamento
+          importante ou para recuperar de um problema. As apps abertas atualizam
+          em segundos; as fechadas já abrem na versão nova.
+        </p>
+        <ForceUpdateButton />
+      </div>
     </div>
   );
 }

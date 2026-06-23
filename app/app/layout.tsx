@@ -5,6 +5,7 @@ import { TopBar } from "@/components/top-bar";
 import { BottomNav } from "@/components/bottom-nav";
 import { ViewportKeyboard } from "@/components/viewport-keyboard";
 import { SwNavigator } from "@/components/sw-navigator";
+import { AppUpdater } from "@/components/app-updater";
 import { Toaster } from "@/components/toaster";
 import { ReminderSync } from "@/components/reminder-sync";
 import { ClientTopNav } from "@/components/client-top-nav";
@@ -47,6 +48,7 @@ export default async function ClientLayout({ children }: { children: React.React
     <div className="flex h-[100dvh] flex-col overflow-hidden bg-bone-50 dark:bg-ink-900">
       <ViewportKeyboard />
       <SwNavigator />
+      <AppUpdater />
       <TopBar unread={0} userId={user.id} homeHref="/app/dashboard" />
       <ClientTopNav />
       <Toaster initial={flash} />
