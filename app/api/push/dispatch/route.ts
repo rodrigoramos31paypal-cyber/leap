@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
   }
 
   const notif = {
-    title: record.title || "LEAP-FITNESS",
+    title: record.title || "LEAP Fitness Studio",
     body: record.body || "",
     url: record.link || "/",
     // id da notificação in-app → o service worker usa-o no clique para a

@@ -1,4 +1,4 @@
-// Service worker · LEAP-FITNESS portal
+// Service worker · LEAP Fitness Studio portal
 // - Estáticos (icons, manifest) → cache-first.
 // - Chunks Next.js (_next/static) → network-first (evita carregar
 //   bundles obsoletos depois de um rebuild — era a causa dos
@@ -21,7 +21,7 @@
 // v12 (jun/2026): bump para invalidar ícones PWA cacheados (cache-first
 // em /icons/) — devices que tinham um ícone antigo/placeholder em cache
 // passam a re-fetch dos ícones corretos no próximo arranque.
-const CACHE_NAME = "leap-v13";
+const CACHE_NAME = "leap-v14";
 const APP_SHELL = [
   "/",
   "/login",
@@ -142,7 +142,7 @@ self.addEventListener("push", (event) => {
   } catch (e) {
     data = {};
   }
-  const title = data.title || "LEAP-FITNESS";
+  const title = data.title || "LEAP Fitness Studio";
   const options = {
     body: data.body || "",
     icon: "/icons/icon-192.png",

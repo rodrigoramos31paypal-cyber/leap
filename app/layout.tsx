@@ -4,14 +4,14 @@ import "./globals.css";
 import { InstallPrompt } from "@/components/install-prompt";
 import { getTheme } from "@/lib/theme";
 
-const APP_NAME = "LEAP-FITNESS STUDIO";
-const APP_DESCRIPTION = "Portal de gestão de marcações, packs e sessões da LEAP-FITNESS STUDIO.";
+const APP_NAME = "LEAP Fitness Studio";
+const APP_DESCRIPTION = "Portal de gestão de marcações, packs e sessões da LEAP Fitness Studio.";
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
 
 export const metadata: Metadata = {
   metadataBase: APP_URL ? new URL(APP_URL) : undefined,
-  title: { default: APP_NAME, template: `%s · LEAP-FITNESS` },
+  title: { default: APP_NAME, template: `%s · LEAP Fitness Studio` },
   description: APP_DESCRIPTION,
   manifest: "/manifest.json",
   applicationName: "LEAP",

@@ -56,15 +56,15 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
 
   const start = new Date(booking.starts_at);
   const end = new Date(booking.ends_at);
-  const summary = `LEAP-FITNESS · Sessão ${booking.session_type}`;
+  const summary = `LEAP Fitness Studio · Sessão ${booking.session_type}`;
   const description = `Sessão de treino com ${(booking as any).profiles?.full_name ?? "cliente"} · Status: ${booking.status}`;
-  const location = "LEAP-FITNESS STUDIO";
+  const location = "LEAP Fitness Studio";
   const uid = `${booking.id}@leap-fitness.pt`;
 
   const ics = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//LEAP-FITNESS//Portal//PT",
+    "PRODID:-//LEAP Fitness Studio//Portal//PT",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",

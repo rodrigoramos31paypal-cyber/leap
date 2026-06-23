@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════
--- LEAP-FITNESS STUDIO · Schema inicial
+-- LEAP Fitness Studio · Schema inicial
 -- ════════════════════════════════════════════════════════════════
 
 -- Extensions

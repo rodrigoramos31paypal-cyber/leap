@@ -55,7 +55,7 @@ export async function startEnrollAction(formData: FormData) {
   const supabase = await createClient();
   const { data, error } = await supabase.auth.mfa.enroll({
     factorType: "totp",
-    friendlyName: "LEAP-FITNESS",
+    friendlyName: "LEAP Fitness Studio",
   });
   if (error || !data) {
     logError("startEnrollAction", error);

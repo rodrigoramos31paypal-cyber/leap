@@ -76,7 +76,7 @@ export default async function PublicTrainerPage(
     name: t.fullName,
     jobTitle: "Personal Trainer",
     url: `${appUrl}/t/${t.slug}`,
-    description: t.bio ?? `Personal Trainer na LEAP-FITNESS Studio.`,
+    description: t.bio ?? `Personal Trainer na LEAP Fitness Studio.`,
   };
   if (t.avatarUrl) personLd.image = t.avatarUrl;
   if (t.stats.avgStars && t.stats.reviewCount > 0) {
@@ -173,7 +173,7 @@ export default async function PublicTrainerPage(
       </section>
 
       <footer className="pt-4 text-center text-xs text-ink-500">
-        Página pública de {t.fullName} · <Link href="/" className="underline">LEAP-FITNESS</Link>
+        Página pública de {t.fullName} · <Link href="/" className="underline">LEAP Fitness Studio</Link>
       </footer>
     </div>
   );

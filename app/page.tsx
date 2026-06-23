@@ -15,7 +15,7 @@ export default function HomePage() {
           <Link href="/" className="flex items-center gap-2 sm:gap-3">
             <Image
               src="/images/logo.png"
-              alt="LEAP-FITNESS"
+              alt="LEAP Fitness Studio"
               width={44}
               height={44}
               priority
@@ -75,7 +75,7 @@ export default function HomePage() {
 
       <footer className="mt-auto border-t border-ink-900/10 dark:border-white/5">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6 text-xs text-ink-500 dark:text-bone-100/50">
-          <span>© {new Date().getFullYear()} LEAP-FITNESS STUDIO</span>
+          <span>© {new Date().getFullYear()} LEAP Fitness Studio</span>
           <span>Made with discipline.</span>
         </div>
       </footer>

@@ -1,4 +1,4 @@
-# LEAP-FITNESS · Auditoria de Segurança
+# LEAP Fitness Studio · Auditoria de Segurança
 
 > White-box review. IDs estáveis (`S-XX`) — runs futuros mantêm IDs e só
 > flipam Status / acrescentam novos findings.

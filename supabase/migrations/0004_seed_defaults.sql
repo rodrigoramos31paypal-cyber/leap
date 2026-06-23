@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════
--- LEAP-FITNESS STUDIO · Seed inicial
+-- LEAP Fitness Studio · Seed inicial
 -- Corre depois de teres criado o user "João" no Supabase Auth.
 -- ════════════════════════════════════════════════════════════════
 
@@ -37,7 +37,7 @@ begin
 
   -- cria trainer
   insert into trainers (profile_id, slug, bio)
-  values (v_user_id, p_slug, 'Personal Trainer · LEAP-FITNESS STUDIO')
+  values (v_user_id, p_slug, 'Personal Trainer · LEAP Fitness Studio')
   returning id into v_trainer_id;
 
   -- settings default

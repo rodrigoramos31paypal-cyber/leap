@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════
--- LEAP-FITNESS STUDIO · Row Level Security
+-- LEAP Fitness Studio · Row Level Security
 -- ════════════════════════════════════════════════════════════════
 
 alter table profiles enable row level security;

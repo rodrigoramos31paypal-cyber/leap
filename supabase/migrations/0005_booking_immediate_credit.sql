@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════
--- LEAP-FITNESS STUDIO · Booking flow update
+-- LEAP Fitness Studio · Booking flow update
 -- - Crédito é debitado IMEDIATAMENTE ao marcar (não na confirmação).
 -- - Cancelamento devolve o crédito (excepto cancelamento tardio).
 -- - confirm_booking_attendance apenas marca como confirmed.

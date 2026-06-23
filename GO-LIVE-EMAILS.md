@@ -51,7 +51,7 @@ Project → **Settings → Environment Variables**. Confirma/define:
 | Variável | Valor |
 |---|---|
 | `NEXT_PUBLIC_APP_URL` | `https://leapfitnesstudio.com` |
-| `NEXT_PUBLIC_APP_NAME` | `LEAP-FITNESS STUDIO` |
+| `NEXT_PUBLIC_APP_NAME` | `LEAP Fitness Studio` |
 | `NOTIFICATIONS_EMAIL_ENABLED` | `true` |
 | `RESEND_API_KEY` | `re_...` (do Passo 2) |
 | `NOTIFICATION_FROM_EMAIL` | `no-reply@leapfitnesstudio.com` |
@@ -84,7 +84,7 @@ Dashboard → **Authentication → Emails → SMTP Settings** → **Enable custo
 | Campo | Valor |
 |---|---|
 | Sender email | `no-reply@leapfitnesstudio.com` |
-| Sender name | `LEAP-FITNESS STUDIO` |
+| Sender name | `LEAP Fitness Studio` |
 | Host | `smtp.resend.com` |
 | Port | `465` (SSL) — ou `587` (TLS) |
 | Username | `resend` |
@@ -111,9 +111,9 @@ HTML do ficheiro correspondente e define o assunto:
 
 | Template Supabase | Ficheiro | Assunto sugerido |
 |---|---|---|
-| Confirm signup | `supabase/email-templates/confirmacao-conta.html` | Confirma a tua conta · LEAP-FITNESS STUDIO |
-| Reset password | `supabase/email-templates/recuperar-password.html` | Recuperar a tua password · LEAP-FITNESS STUDIO |
-| Change Email Address | `supabase/email-templates/mudar-email.html` | Confirma o teu novo email · LEAP-FITNESS STUDIO |
+| Confirm signup | `supabase/email-templates/confirmacao-conta.html` | Confirma a tua conta · LEAP Fitness Studio |
+| Reset password | `supabase/email-templates/recuperar-password.html` | Recuperar a tua password · LEAP Fitness Studio |
+| Change Email Address | `supabase/email-templates/mudar-email.html` | Confirma o teu novo email · LEAP Fitness Studio |
 
 Não alteres a variável `{{ .ConfirmationURL }}` dentro dos templates — é o
 link que faz o fluxo funcionar.

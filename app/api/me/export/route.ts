@@ -49,7 +49,7 @@ export async function GET() {
     ]);
 
   const wb = new ExcelJS.Workbook();
-  wb.creator = "LEAP-FITNESS STUDIO";
+  wb.creator = "LEAP Fitness Studio";
   wb.created = new Date();
 
   const sP = wb.addWorksheet("Perfil");

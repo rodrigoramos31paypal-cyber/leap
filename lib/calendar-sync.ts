@@ -163,7 +163,7 @@ async function pushGoogleEvent(token: string, calendarId: string, booking: Booki
     body: JSON.stringify({
       summary: `LEAP · Sessão ${booking.sessionType} · ${booking.clientName}`,
       description: `Sessão de PT com ${booking.clientName}`,
-      location: "LEAP-FITNESS STUDIO",
+      location: "LEAP Fitness Studio",
       start: { dateTime: booking.startsAt, timeZone: "Europe/Lisbon" },
       end: { dateTime: booking.endsAt, timeZone: "Europe/Lisbon" },
       reminders: { useDefault: false, overrides: [{ method: "popup", minutes: 60 }] },
@@ -181,7 +181,7 @@ async function pushMicrosoftEvent(token: string, booking: BookingPayload) {
     body: JSON.stringify({
       subject: `LEAP · Sessão ${booking.sessionType} · ${booking.clientName}`,
       body: { contentType: "text", content: `Sessão de PT com ${booking.clientName}` },
-      location: { displayName: "LEAP-FITNESS STUDIO" },
+      location: { displayName: "LEAP Fitness Studio" },
       start: { dateTime: booking.startsAt, timeZone: "Europe/Lisbon" },
       end: { dateTime: booking.endsAt, timeZone: "Europe/Lisbon" },
     }),
