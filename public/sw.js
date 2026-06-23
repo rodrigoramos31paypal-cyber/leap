@@ -21,7 +21,7 @@
 // v12 (jun/2026): bump para invalidar ícones PWA cacheados (cache-first
 // em /icons/) — devices que tinham um ícone antigo/placeholder em cache
 // passam a re-fetch dos ícones corretos no próximo arranque.
-const CACHE_NAME = "leap-v12";
+const CACHE_NAME = "leap-v13";
 const APP_SHELL = [
   "/",
   "/login",
@@ -171,13 +171,30 @@ self.addEventListener("notificationclick", (event) => {
       }).catch(() => {})
     : Promise.resolve();
 
+  // Resolve para URL absoluto (o `link` guardado é relativo, ex.
+  // "/app/agenda") para comparar com c.url e navegar de forma fiável.
+  const dest = new URL(target, self.location.origin).href;
+
   const focusOrOpen = self.clients
     .matchAll({ type: "window", includeUncontrolled: true })
     .then((list) => {
       for (const c of list) {
-        if (c.url.includes(target) && "focus" in c) return c.focus();
+        if (!("focus" in c)) continue;
+        // Já está na página certa → só foca.
+        if (c.url === dest) return c.focus();
+        // Janela da app já aberta noutra página: NAVEGA-a para o destino
+        // e foca. Antes só abríamos uma janela nova quando a URL não
+        // batia certo — comportamento que, numa PWA instalada, abria um
+        // separador novo (ou nada) em vez de levar o utilizador à agenda.
+        if ("navigate" in c) {
+          return c
+            .navigate(dest)
+            .then((nc) => (nc || c).focus())
+            .catch(() => c.focus());
+        }
+        return c.focus();
       }
-      if (self.clients.openWindow) return self.clients.openWindow(target);
+      if (self.clients.openWindow) return self.clients.openWindow(dest);
     });
 
   event.waitUntil(Promise.all([markRead, focusOrOpen]));

@@ -5,7 +5,10 @@
 > Severidade: Critical / High / Medium / Low / Info.
 > Status: OPEN / IN PROGRESS / FIXED / ACCEPTED.
 >
-> Último run: 2026-06-18 (re-audit white-box + S-13 / S-14 / S-15 acrescentados).
+> Último run: 2026-06-22 (re-audit white-box exaustivo. S-01..S-15 reverificados
+> e mantidos FIXED/ACCEPTED. Acrescentados S-16 (deps · npm audit) e S-17
+> (tokens OAuth de calendário em claro). Nenhum issue novo explorável a nível
+> de código encontrado.).
 
 ## Resumo executivo
 
@@ -37,6 +40,32 @@ validava só o MIME declarado pelo cliente (mitigado por bucket em origem
 separada `*.supabase.co` + `nosniff` + allowlist sem SVG; agora também
 valida magic-bytes).
 
+**Run 2026-06-22 (este run).** Re-walk completo da checklist de cobertura
+(AuthN, AuthZ/IDOR, injection, XSS, CSRF, secrets, rate-limit, exposição de
+dados, headers, deps, uploads, lógica de negócio). Confirmado que as fronteiras
+de autorização continuam de pé na **camada de dados**: todas as RPCs financeiras
+e de agenda (`adjust_credits`, `confirm_purchase`, `create_purchase`,
+`create_custom_purchase`, `cancel_booking`, `mark_no_show`,
+`confirm_booking_attendance`) validam `_is_service_or_admin()` **E**
+`_trainer_is_accessible(trainer_id)` — bloqueando IDOR cross-trainer mesmo que
+um trainer chame a action com IDs de outro trainer (verificado em
+`0027_multi_trainer_scope.sql`). As rotas que recebem um id do cliente
+(`/api/bookings/[id]/ics`, `/app/compras/[id]/manual`, ratings, notas) reforçam
+ownership com `.eq("client_id", user.id)` + RLS. O JWT é verificado
+criptograficamente (`getClaims`, ES256 local) e Supabase revalida-o em cada
+query PostgREST — `getSession()`/`getSessionUser()` (só-cookie) nunca é a única
+barreira porque a query subsequente vai com o mesmo JWT que o servidor valida.
+
+Os **dois achados novos são ambos baixos** e não exploráveis sem outra
+pré-condição: **S-16 (Low)** — `npm audit` agora reporta 7 advisories
+(postcss `<8.5.10`, uuid `<11.1.1` via exceljs, glob via eslint-config-next),
+quase todas dev/build-time; só o uuid corre em runtime (via exceljs nos exports)
+e a CVE só dispara com `buf` passado, o que o exceljs não faz. **S-17 (Info)** —
+os `access_token`/`refresh_token` de Google/Microsoft Calendar são guardados em
+claro em `calendar_integrations` (defesa-em-profundidade: cifrar em repouso).
+Nenhum dos dois foi alterado neste run — requerem decisão (bump de deps
+potencialmente breaking / mudança de schema). Ver detalhe + remediação.
+
 A correcção do S-13 não altera o fluxo normal: um staff que fez login e
 completou o 2FA está em AAL2 (ou tem cookie trusted-device), por isso
 `requireStaff`/`requireOwner` passam sem custo extra (sessões AAL2 ou
@@ -44,15 +73,30 @@ sem 2FA nem tocam na BD — `getAalInfo` é local e cached por request).
 Só a sessão AAL1-com-2FA-pendente é recusada — idêntico ao que o layout
 já fazia, agora também no boundary de dados.
 
-> **Baseline determinístico (2026-06-18):** `next@16.2.9` confirmado
-> instalado (`node_modules/next/package.json`) → **S-02 fechado na raiz**.
-> `npm audit` não pôde correr neste ambiente (rede do sandbox bloqueada);
-> correr na máquina/CI. `tsc --noEmit` não é fiável neste sandbox (o mount
-> FUSE faz leituras parciais de ficheiros UTF-8 com acentos/em-dash e
-> produz erros-fantasma "unterminated string"/JSX em ficheiros não
-> tocados); correr `npm run type-check` na máquina como fonte de verdade.
-> O fix do S-13 espelha verbatim o uso já tipado de
-> `getAalInfo`+`isDeviceTrusted` em `app/admin/layout.tsx`.
+> **Baseline determinístico (2026-06-22):** `next@^16.2.9` + `react@^19.2.7`
+> confirmados em `package.json` → **S-02 mantém-se fechado na raiz**.
+> `npm audit` correu neste run: **7 advisories (4 moderate, 3 high)**, todas
+> transitivas e nenhuma RCE/escalada — ver **S-16**:
+>   • `postcss <8.5.10` (moderate, GHSA-qx2v-qp2m-jg93, XSS no stringify) —
+>     puxado pelo `next` bundled e pela devDep directa; build-time.
+>   • `uuid <11.1.1` (moderate, GHSA-w5hq-g745-h8pq) via `exceljs`; runtime nos
+>     exports, mas a CVE só dispara com `buf` fornecido (exceljs não fornece).
+>   • `glob 10.2.0–10.4.x` (high, GHSA-5j98-mcp5-4vw2, command-injection no
+>     CLI `-c`) via `@next/eslint-plugin-next`→`eslint-config-next`; dev-only,
+>     não há invocação do CLI do glob no código.
+> Greps de baseline (sem novos sinks):
+>   • `dangerouslySetInnerHTML` → 3 usos, todos com escape verificado
+>     (`jsonLdSafe` em `/t/[slug]`, `extractSvgInline` no enroll-card, e o
+>     `<script>` do SW com nonce em `app/layout.tsx`).
+>   • `SUPABASE_SERVICE_ROLE_KEY` → 3 ficheiros server-only
+>     (`lib/supabase/server.ts`, `clientes/[id]/actions.ts`, `perfil/actions.ts`).
+>   • `.env*.local` git-ignorado e **nunca** presente no histórico git
+>     (`git log --all` limpo); zero JWTs/keys hardcoded em `app/lib/components`.
+>   • Sem `fetch()` de URL controlado pelo cliente (SSRF): calendar-sync usa
+>     endpoints fixos de Google/Microsoft, `calendar_id` é `"primary"`.
+> `tsc --noEmit` não é fiável neste sandbox (mount FUSE corrompe leituras
+> UTF-8 com acentos → erros-fantasma); correr `npm run type-check` na máquina
+> como fonte de verdade.
 
 ## Findings — Índice
 
@@ -73,6 +117,8 @@ já fazia, agora também no boundary de dados.
 | S-13 | High | CWE-306 / CWE-862 | Gate de 2FA só no `app/admin/layout.tsx` — Server Actions de staff (apagar cliente, créditos, cancelar sessões, conceder admin) invocáveis em sessão AAL1, contornando o TOTP. `requireStaff`/`requireOwner` e `is_admin()` só checavam role, não AAL. | Autenticado staff em AAL1 (password comprometida, sem 2º factor) | FIXED |
 | S-14 | Low | CWE-348 | `getRequestIp` (`lib/rate-limit.ts:141`) aceita `x-forwarded-for`/`x-real-ip` forjáveis como fallback → rotação da chave de rate-limit / bypass de brute-force se `x-vercel-forwarded-for` faltar | Anónimo (só fora do Vercel) | FIXED |
 | S-15 | Info | CWE-434 | Upload de avatar (`app/admin/definicoes/actions.ts:303-315`) valida só o `file.type` declarado pelo cliente, sem magic-bytes | Autenticado staff (próprio trainer) | FIXED |
+| S-16 | Low | CWE-1395 / CWE-1104 | `npm audit`: 7 advisories transitivas (`postcss<8.5.10`, `uuid<11.1.1` via exceljs, `glob` via eslint-config-next). Build/dev-time na maioria; uuid em runtime mas não disparável (exceljs não passa `buf`) | Anónimo (teórico) / dev | OPEN |
+| S-17 | Info | CWE-312 | Tokens OAuth de calendário (`access_token`/`refresh_token` Google/Microsoft) guardados em claro em `calendar_integrations` (`api/integrations/[provider]/callback/route.ts:67-79`) | Requer compromisso da BD / service-role | OPEN (defesa-em-profundidade) |
 
 ## Controlos JÁ em vigor (não voltam a ser flagged)
 
@@ -568,6 +614,95 @@ funciona como antes.
 
 ---
 
+### S-16 · Advisories transitivas no `npm audit` `[Low → OPEN]`
+
+**Ficheiro/linhas:** `package.json` / `package-lock.json` (deps transitivas).
+
+**Vulnerabilidade:** `npm audit` (2026-06-22) reporta 7 advisories:
+
+| Pacote | Sev | Advisory | Caminho | Runtime? |
+|--------|-----|----------|---------|----------|
+| `postcss <8.5.10` | moderate | GHSA-qx2v-qp2m-jg93 (XSS via `</style>` no stringify) | `next` bundled + devDep directa | Não — build/SSG only |
+| `uuid <11.1.1` | moderate | GHSA-w5hq-g745-h8pq (OOB write `v3/v5/v6` quando `buf` fornecido) | `exceljs` → `uuid` | Sim, mas não disparável |
+| `glob 10.2.0–10.4.x` | high | GHSA-5j98-mcp5-4vw2 (command-injection no CLI `-c/--cmd`) | `eslint-config-next` → `@next/eslint-plugin-next` → `glob` | Não — dev/lint only |
+
+**Análise de explorabilidade (porque é Low e não High):**
+
+- **postcss** só processa CSS em build-time (Tailwind/Next). Um atacante teria
+  de injectar CSS malicioso no pipeline de build — não há input de utilizador
+  no CSS. Sem superfície em runtime.
+- **uuid** corre em runtime (gera UIDs nos XLSX de `/api/me/export` e
+  `/api/relatorios/export`), MAS a CVE só afecta `uuid.v3/v5/v6` **quando se
+  passa um buffer `buf`**; o exceljs chama `uuid.v4()` sem `buf`. Caminho não
+  alcançável → impacto efectivo nulo, mas convém sair da versão vulnerável.
+- **glob** é o CLI (`glob -c`), invocado só pelo lint do Next em dev/CI. O
+  código da app nunca invoca o CLI do glob. Não exposto em produção.
+
+**Impacto:** nenhum exploit directo na app em produção. É dívida de supply-chain
+— mantê-las verde evita um false-negative em auditoria automática e fecha a
+janela caso um destes pacotes passe a ser usado num caminho alcançável.
+
+**Fix sugerido (a confirmar — alguns bumps são marcados "breaking" pelo npm):**
+
+```bash
+# 1) Bumps minor/patch seguros (postcss directo + transitive overrides)
+npm i -D postcss@^8.5.10
+
+# 2) exceljs traz uuid antigo. Forçar uuid recente via overrides no package.json:
+#    "overrides": { "uuid": "^11.1.1" }
+#    (exceljs usa só uuid.v4(), compatível com 11.x → baixo risco de regressão)
+
+# 3) glob (dev): vem do eslint-config-next; sobe quando o eslint-config-next
+#    actualizar. Alternativa: "overrides": { "glob": "^11.0.0" } (verificar lint).
+
+npm audit            # alvo: 0 advisories high; moderates residuais documentados
+npm run type-check   # garantir que os overrides não partem tipos
+npm run build        # garantir que postcss/glob novos não partem o build
+```
+
+**Como verificar:** `npm audit --omit=dev` deve ficar sem o `uuid`/`postcss`
+runtime; `npm audit` total sem highs. Correr `build` + `type-check` limpos.
+
+**Nota:** estes bumps NÃO foram aplicados neste run — `npm audit fix --force`
+proposto pelo npm instalava `next@9.3.3` (downgrade catastrófico) e `exceljs@3`.
+A remediação correcta é via `overrides` cirúrgicos acima, que exigem teste de
+build na máquina antes do push. Ver "Ordem de remediação".
+
+---
+
+### S-17 · Tokens OAuth de calendário guardados em claro `[Info → OPEN]`
+
+**Ficheiro/linhas:** `app/api/integrations/[provider]/callback/route.ts:67-79`
+(insert), `lib/calendar-sync.ts` (leitura/uso).
+
+**Vulnerabilidade:** após o fluxo OAuth, o `access_token` e o `refresh_token`
+de Google Calendar / Microsoft Graph são gravados **em claro** na coluna
+`calendar_integrations.access_token` / `.refresh_token`. O `refresh_token`
+é de longa duração — quem o ler obtém acesso persistente ao calendário do
+trainer (ler/escrever eventos) até à revogação no lado do provider.
+
+**Caminho de ataque (requer pré-condição):** não é explorável a partir do
+exterior por si só. Requer que o atacante já tenha (a) a `SUPABASE_SERVICE_ROLE_KEY`
+(que faz bypass de RLS), ou (b) uma SQL injection com leitura arbitrária noutro
+ponto (não encontrada), ou (c) acesso a um backup/dump da BD. Nesse cenário,
+os tokens em claro elevam o blast-radius de "dados da app" para "calendários
+externos dos trainers".
+
+**Mitigações já presentes:** RLS na tabela restringe SELECT ao próprio user;
+a coluna nunca é devolvida ao browser; o service-role está confinado a 3
+ficheiros server-only. Por isso **Info**, não Medium.
+
+**Fix sugerido (defesa-em-profundidade, a confirmar — mudança de schema):**
+cifrar em repouso com `pgcrypto`/`pgsodium` (ou Supabase Vault) e decifrar só
+no servidor no momento do refresh; ou, no mínimo, guardar apenas o
+`refresh_token` cifrado e derivar o `access_token` on-demand. Como é mudança
+de schema + migração de dados existentes, fica para decisão do Rodrigo.
+
+**Como verificar:** após o fix, `select access_token from calendar_integrations
+limit 1;` devolve ciphertext, não um JWT/token legível.
+
+---
+
 ## Ordem de remediação sugerida
 
 1. **S-01 · S-03 · S-04 · S-06 · S-07 · S-08** — FIXED no run anterior.
@@ -581,9 +716,15 @@ funciona como antes.
    re-testar o fluxo AAL1 antes do próximo release.
 7. **S-14 (Low)** — FIXED neste run. `getRequestIp` pinado a
    `x-vercel-forwarded-for` (fail-closed em prod sem o header).
-8. **S-15 (Info)** — FIXED neste run. Magic-bytes no upload de avatar.
-9. **S-05 · S-09** — ACCEPTED, monitor (trade-offs de PERF deliberados;
-   alterá-los mudaria comportamento — não tocados).
+8. **S-15 (Info)** — FIXED no run anterior. Magic-bytes no upload de avatar.
+9. **S-16 (Low) — OPEN, próximo PR.** Bumps via `overrides` cirúrgicos
+   (`uuid@^11.1.1`, `postcss@^8.5.10`, `glob@^11`) + `npm audit`/`build`/
+   `type-check` limpos. NÃO usar `npm audit fix --force` (faz downgrade do
+   Next/exceljs). Prioridade sobre S-17 por fechar os 3 highs do audit.
+10. **S-17 (Info) — OPEN, backlog.** Cifrar tokens OAuth de calendário em
+    repouso (pgsodium/Vault). Mudança de schema → planear migração.
+11. **S-05 · S-09** — ACCEPTED, monitor (trade-offs de PERF deliberados;
+    alterá-los mudaria comportamento — não tocados).
 
 ## Como reproduzir o baseline determinístico
 

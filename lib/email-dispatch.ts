@@ -155,20 +155,35 @@ export async function dispatchPurchasePending(purchaseId: string) {
   const supabase = createAdminClient();
   const { data: p } = await supabase
     .from("purchases")
-    .select("client_id, trainer_id, amount_cents, pack_snapshot")
+    .select("client_id, amount_cents, pack_snapshot")
     .eq("id", purchaseId)
     .single();
   if (!p) return;
-  const [admin, client] = await Promise.all([
-    getTrainerEmail(p.trainer_id),
+
+  // Avisa toda a equipa (owner + trainers), não só o trainer dono da
+  // purchase — um "Admin" (owner sem trainer próprio) também tem de
+  // saber que há um pagamento a confirmar. Espelha o fan-out do
+  // trigger notify_admin_on_purchase (migration 0102).
+  const [{ data: staff }, client] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id, email, full_name")
+      .in("role", ["owner", "trainer"]),
     getUserEmail(p.client_id),
   ]);
-  if (!admin) return;
-  if (!(await emailAllowed(supabase, admin.id, "payments"))) return;
+  if (!staff || staff.length === 0) return;
+
   const tpl = emailTemplates.adminPurchasePending({
     clientName: client?.full_name ?? "Cliente",
     packName: (p.pack_snapshot as any)?.name ?? "pack",
     amountEur: eur(p.amount_cents),
   });
-  await sendEmail({ to: admin.email, ...tpl });
+
+  await Promise.all(
+    (staff as { id: string; email: string | null }[]).map(async (s) => {
+      if (!s.email) return;
+      if (!(await emailAllowed(supabase, s.id, "payments"))) return;
+      await sendEmail({ to: s.email, ...tpl }).catch(() => {});
+    }),
+  );
 }
