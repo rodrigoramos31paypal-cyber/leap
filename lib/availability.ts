@@ -74,15 +74,19 @@ export async function getAvailableSlots(args: {
       .eq("trainer_id", trainerId)
       .eq("day_of_week", dow)
       .eq("active", true),
-    supabase
+    (supabase as any)
       .from("trainer_settings")
-      .select("buffer_between_sessions_min")
+      .select("buffer_between_sessions_min, min_booking_notice_hours")
       .eq("trainer_id", trainerId)
       .single(),
   ]);
 
   if (!avail || avail.length === 0) return [];
   const buffer = settings?.buffer_between_sessions_min ?? 0;
+  // Antecedência mínima de marcação (cliente). Slots a menos de N horas
+  // do agora não são oferecidos. Default 12h; 0 = sem mínimo.
+  const noticeHraw = Number((settings as any)?.min_booking_notice_hours);
+  const noticeHours = Number.isFinite(noticeHraw) && noticeHraw >= 0 ? noticeHraw : 12;
 
   // marcações ativas + bloqueios
   // SEC/CORRECÇÃO: lê de `public_busy_times` (vista) e NÃO de `bookings`.
@@ -150,6 +154,7 @@ export async function getAvailableSlots(args: {
   const slotMs = durationMin * 60_000;
   const stepMs = (durationMin + buffer) * 60_000;
   const now = Date.now();
+  const bookableFrom = now + noticeHours * 3_600_000;
 
   for (const a of avail) {
     const [sh, sm] = a.start_time.split(":").map(Number);
@@ -158,7 +163,7 @@ export async function getAvailableSlots(args: {
     const endBoundary = wallToUtc(y, mo, d, eh, em).getTime();
 
     for (let t = startBoundary; t + slotMs <= endBoundary; t += stepMs) {
-      if (t <= now) continue;
+      if (t < bookableFrom) continue;
       const slotEnd = t + slotMs;
       const overlaps = busy.some((b) => !(slotEnd <= b.start || t >= b.end));
       if (overlaps) continue;
@@ -168,4 +173,33 @@ export async function getAvailableSlots(args: {
 
   slots.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
   return slots;
+}
+
+
+// ════════════════════════════════════════════════════════════════
+// Antecedência mínima de marcação (defesa server-side).
+// Devolve uma mensagem de erro amigável se `startsAtIso` for demasiado
+// cedo face à regra do trainer; caso contrário null. Usado pelas server
+// actions do CLIENTE (app/app/agenda) — os admins marcam por outro
+// caminho e não passam por aqui.
+// ════════════════════════════════════════════════════════════════
+export async function bookingNoticeError(
+  trainerId: string,
+  startsAtIso: string,
+): Promise<string | null> {
+  const supabase = await createClient();
+  const { data } = await (supabase as any)
+    .from("trainer_settings")
+    .select("min_booking_notice_hours")
+    .eq("trainer_id", trainerId)
+    .maybeSingle();
+  const raw = Number((data as any)?.min_booking_notice_hours);
+  const hours = Number.isFinite(raw) && raw >= 0 ? raw : 12;
+  if (hours <= 0) return null;
+  const startMs = new Date(startsAtIso).getTime();
+  if (!Number.isFinite(startMs)) return null;
+  if (startMs < Date.now() + hours * 3_600_000) {
+    return `As marcações têm de ser feitas com pelo menos ${hours}h de antecedência.`;
+  }
+  return null;
 }

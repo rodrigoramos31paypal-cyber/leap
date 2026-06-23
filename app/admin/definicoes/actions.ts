@@ -120,6 +120,7 @@ export async function saveSettingsAction(formData: FormData) {
       slot_durations_min: durations,
       default_slot_duration_min: Number(formData.get("default_duration") ?? 45),
       cancellation_window_hours: Number(formData.get("cancellation_window") ?? 12),
+      min_booking_notice_hours: Number(formData.get("min_booking_notice") ?? 12),
       low_credits_threshold: Number(formData.get("low_threshold") ?? 2),
       default_pack_validity_days: validity ? Number(validity) : null,
       buffer_between_sessions_min: Number(formData.get("buffer") ?? 0),

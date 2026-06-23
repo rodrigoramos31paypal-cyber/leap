@@ -1,6 +1,7 @@
 "use server";
 
 import { createBooking, createRecurringBooking, type RecurringBookingResult } from "@/lib/credits";
+import { bookingNoticeError } from "@/lib/availability";
 import { dispatchBookingCreated, emailStudioStaff } from "@/lib/email-dispatch";
 import { emailTemplates } from "@/lib/email";
 import { pushBookingToCalendars, removeBookingFromCalendars } from "@/lib/calendar-sync";
@@ -132,6 +133,11 @@ export async function bookAction({
   note?: string;
 }): Promise<{ ok?: true; error?: string; pending?: boolean }> {
   try {
+    const noticeErr = await bookingNoticeError(trainerId, startsAtIso);
+    if (noticeErr) {
+      await setFlash(noticeErr, "error");
+      return { error: noticeErr };
+    }
     const bookingId = await createBooking({
       trainerId,
       startsAt: new Date(startsAtIso),
@@ -192,6 +198,21 @@ export async function rescheduleAction({
   note?: string;
 }): Promise<{ ok?: true; error?: string; pending?: boolean }> {
   const supabase = await createClient();
+  // Antecedência mínima também se aplica ao novo horário do reagendamento.
+  {
+    const { data: ob } = await supabase
+      .from("bookings")
+      .select("trainer_id")
+      .eq("id", oldBookingId)
+      .maybeSingle();
+    const noticeErr = ob
+      ? await bookingNoticeError((ob as any).trainer_id, startsAtIso)
+      : null;
+    if (noticeErr) {
+      await setFlash(noticeErr, "error");
+      return { error: noticeErr };
+    }
+  }
   // RPC atómica: devolve crédito da antiga, cancela-a e cria a nova.
   const { data: newId, error } = await (supabase as any).rpc("reschedule_booking", {
     p_old_booking_id: oldBookingId,
@@ -251,6 +272,11 @@ export async function bookRecurringAction({
   note?: string;
 }): Promise<{ ok?: true; error?: string; result?: RecurringBookingResult }> {
   try {
+    const noticeErr = await bookingNoticeError(trainerId, startsAtIso);
+    if (noticeErr) {
+      await setFlash(noticeErr, "error");
+      return { error: noticeErr };
+    }
     const result = await createRecurringBooking({
       trainerId,
       startsAt: new Date(startsAtIso),

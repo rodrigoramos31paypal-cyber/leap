@@ -361,6 +361,16 @@ function RegrasTab({
           />
         </div>
         <div>
+          <label className="label">Antecedência mínima de marcação (horas)</label>
+          <input
+            name="min_booking_notice"
+            type="number"
+            min={0}
+            defaultValue={settings?.min_booking_notice_hours ?? 12}
+            className="input"
+          />
+        </div>
+        <div>
           <label className="label">Aviso a partir de (sessões)</label>
           <input
             name="low_threshold"
