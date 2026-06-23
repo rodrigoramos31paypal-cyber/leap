@@ -2,7 +2,7 @@
 
 import { createBooking, createRecurringBooking, type RecurringBookingResult } from "@/lib/credits";
 import { bookingNoticeError } from "@/lib/availability";
-import { dispatchBookingCreated, emailStudioStaff } from "@/lib/email-dispatch";
+import { dispatchBookingCreated, dispatchRecurringBookingCreated, emailStudioStaff } from "@/lib/email-dispatch";
 import { emailTemplates } from "@/lib/email";
 import { pushBookingToCalendars, removeBookingFromCalendars } from "@/lib/calendar-sync";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
@@ -291,10 +291,13 @@ export async function bookRecurringAction({
     // anexa-a a CADA marcação (mesmo conteúdo); o trainer recebe UMA
     // notificação por sessão (paridade com o caminho single-shot).
     if (result.booking_ids.length > 0) {
-      const tasks: Promise<unknown>[] = result.booking_ids.flatMap((id) => [
-        dispatchBookingCreated(id),
-        pushBookingToCalendars(id),
-      ]);
+      const tasks: Promise<unknown>[] = [
+        // UM único email para toda a série (poupa quota Resend) — lista
+        // todas as datas/horas escolhidas, em vez de 1 email por sessão.
+        dispatchRecurringBookingCreated(result.booking_ids),
+        // Calendário continua por sessão (eventos individuais).
+        ...result.booking_ids.map((id) => pushBookingToCalendars(id)),
+      ];
       if (note && note.trim()) {
         for (const id of result.booking_ids) {
           tasks.push(persistClientBookingNote(id, note));
