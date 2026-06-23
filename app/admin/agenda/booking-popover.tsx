@@ -643,7 +643,7 @@ export function BookingBlock({
               {cancelOpen && (
                 <form action={cancelAdminAction} className="space-y-2">
                   <input type="hidden" name="bookingId" value={b.id} />
-                  <label className="block text-xs font-medium text-ink-600">
+                  <label className="block text-xs font-medium text-ink-600 dark:text-bone-100">
                     Motivo (opcional)
                   </label>
                   <textarea
@@ -651,7 +651,7 @@ export function BookingBlock({
                     rows={2}
                     maxLength={500}
                     placeholder="Ex: trainer indisponível"
-                    className="w-full rounded-md border border-ink-900/10 px-2 py-1.5 text-xs"
+                    className="w-full rounded-md border border-ink-900/15 bg-white px-2 py-1.5 text-xs text-ink-900 placeholder-ink-500/60 focus:border-gold-400 focus:outline-none focus:ring-2 focus:ring-gold-400/30 dark:border-white/15 dark:bg-ink-800 dark:text-bone-50 dark:placeholder-bone-100/40"
                   />
                   <button className="w-full rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700">
                     Confirmar cancelamento
