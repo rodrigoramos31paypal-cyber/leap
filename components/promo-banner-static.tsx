@@ -26,7 +26,7 @@ function safeHref(url: string | null | undefined): string | undefined {
 export function PromoBannerStatic({ banner }: { banner: PromoBanner | null }) {
   if (!banner) return null;
   const content = (
-    <div className="relative flex h-28 overflow-hidden rounded-2xl bg-ink-900 text-bone-50 md:h-auto md:aspect-[3/1]">
+    <div className="relative flex h-28 w-full overflow-hidden rounded-2xl bg-ink-900 text-bone-50 md:h-auto md:aspect-[3/1]">
       {banner.image_url && (
         <Image
           src={banner.image_url}

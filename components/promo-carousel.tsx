@@ -140,7 +140,7 @@ function PromoCard({ b }: { b: PromoBanner }) {
 
   return (
     <div
-      className="relative flex h-28 overflow-hidden rounded-2xl bg-ink-900 text-bone-50 transition active:scale-[0.99] md:h-auto md:aspect-[3/1]"
+      className="relative flex h-28 w-full overflow-hidden rounded-2xl bg-ink-900 text-bone-50 transition active:scale-[0.99] md:h-auto md:aspect-[3/1]"
       style={styleObj}
     >
       {b.image_url && (
