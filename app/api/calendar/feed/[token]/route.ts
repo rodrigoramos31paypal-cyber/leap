@@ -154,6 +154,20 @@ export async function GET(req: Request, props: { params: Promise<{ token: string
   }
 
   const now = new Date();
+
+  // Regista o último fetch do feed. Só um cliente de calendário
+  // (iOS/Google/etc.) conhece o token e bate neste endpoint — o browser
+  // ao tocar em "Subscrever" abre o app Calendário, que faz logo o 1.º
+  // fetch. Assim conseguimos mostrar ao cliente que a subscrição está
+  // ativa. Best-effort: nunca bloqueia nem falha o feed.
+  try {
+    await admin
+      .from("profiles")
+      .update({ calendar_feed_last_fetched_at: now.toISOString() } as any)
+      .eq("id", profile.id);
+  } catch {
+    // ignora — o feed é o que importa
+  }
   const rangeStart = new Date(now.getTime() - PAST_DAYS * 86_400_000);
   const rangeEnd = new Date(now.getTime() + FUTURE_DAYS * 86_400_000);
 

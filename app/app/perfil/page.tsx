@@ -63,6 +63,7 @@ export default async function PerfilPage(
           factors={tabData.factors ?? []}
           feedHttpUrl={tabData.feedHttpUrl ?? null}
           feedWebcalUrl={tabData.feedWebcalUrl ?? null}
+          feedLastFetchedAt={(tabData.profile as any)?.calendar_feed_last_fetched_at ?? null}
         />
       )}
       {activeTab === "notas" && <NotasTab notes={tabData.notes ?? []} />}
@@ -150,11 +151,13 @@ function PerfilTab({
   factors,
   feedHttpUrl,
   feedWebcalUrl,
+  feedLastFetchedAt,
 }: {
   profile: any;
   factors: any[];
   feedHttpUrl: string | null;
   feedWebcalUrl: string | null;
+  feedLastFetchedAt: string | null;
 }) {
   const hasFactor = factors.length > 0;
   return (
@@ -179,7 +182,7 @@ function PerfilTab({
         <h2 className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-ink-500">
           <CalendarDays size={14} /> Calendário
         </h2>
-        <CalendarSubscribeCard httpUrl={feedHttpUrl} webcalUrl={feedWebcalUrl} />
+        <CalendarSubscribeCard httpUrl={feedHttpUrl} webcalUrl={feedWebcalUrl} lastFetchedAt={feedLastFetchedAt} />
       </section>
 
       <section>
