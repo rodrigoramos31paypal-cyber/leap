@@ -5,23 +5,15 @@ Gerador de ícones PWA (Android + iOS) e splash screens iOS.
 Fonte: public/images/logo.png (192x192, RGBA, hexágono LEAP em escuro
 sobre transparência).
 
-Saída: public/icons/
-  • icon-192.png             ← Android (any) — fundo branco + logo preto
-  • icon-512.png             ← Android (any)
-  • icon-maskable-v2-192.png ← Android (maskable) — sangria total branca,
-                                logo dentro da safe-zone interior (~75%)
-  • icon-maskable-v2-512.png ← idem
-  • apple-touch-120.png      ← iPhone @2x
-  • apple-touch-152.png      ← iPad
-  • apple-touch-167.png      ← iPad Pro
-  • apple-touch-180.png      ← iPhone @3x
-  • apple-touch.png          ← alias 180 (compatibilidade legacy)
-  • splash-{ratio}.png       ← iOS startup images (5 dimensões)
+Estratégia: composição IDÊNTICA em todos os ficheiros — fundo branco
+sólido + logo escuro centrado a `LOGO_RATIO`. Garante que, depois de
+qualquer máscara (iOS rounded-rect, Android circle/squircle/rounded-
+rect/...), o conteúdo visível é igual em qualquer dispositivo.
 
-Estratégia: o logo fonte já é escuro sobre transparência → compomos
-directamente sobre canvas BG_LIGHT (branco). Para "any" mantém margem
-visível; para maskable o logo cobre ~75% (resto = BG branco sangrado).
+Saída em public/icons/ — manifest.json e app/layout.tsx já referenciam
+todos estes nomes.
 """
+import base64, io
 from PIL import Image
 from pathlib import Path
 
@@ -29,15 +21,15 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "public" / "images" / "logo.png"
 OUT = ROOT / "public" / "icons"
 
-BG_LIGHT = (255, 255, 255, 255)   # branco — pedido do cliente
+BG_LIGHT = (255, 255, 255, 255)
+# Escala UNIFORME em todos os ícones. ≤80% respeita a safe-zone do
+# maskable; deixa também margem confortável para o rounded-rect do iOS.
+LOGO_RATIO = 0.72
 
 def load_logo_dark() -> Image.Image:
-    """Lê o logo da fonte (já é escuro sobre transparência)."""
     return Image.open(SRC).convert("RGBA")
 
 def composite(size: int, ratio: float, logo: Image.Image) -> Image.Image:
-    """Canvas size x size com BG_LIGHT e logo preto centrado a `ratio`
-    da largura."""
     canvas = Image.new("RGBA", (size, size), BG_LIGHT)
     target = int(size * ratio)
     resized = logo.resize((target, target), Image.LANCZOS)
@@ -46,48 +38,70 @@ def composite(size: int, ratio: float, logo: Image.Image) -> Image.Image:
     return canvas
 
 def save_rgb(img: Image.Image, path: Path) -> None:
-    """Achata para RGB (sem alpha) sobre BG_LIGHT e grava."""
     bg = Image.new("RGB", img.size, BG_LIGHT[:3])
     bg.paste(img, mask=img.split()[3] if img.mode == "RGBA" else None)
     bg.save(path, format="PNG", optimize=True)
-    print(f"  • {path.relative_to(ROOT)}  ({img.size[0]}x{img.size[1]})")
+    print(f"  - {path.relative_to(ROOT)}  ({img.size[0]}x{img.size[1]})")
+
+def write_svg(path: Path, logo: Image.Image) -> None:
+    """SVG 192x192 com mesma composição (fundo branco + logo embebido)."""
+    buf = io.BytesIO()
+    logo.save(buf, format="PNG", optimize=True)
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    inset = (1 - LOGO_RATIO) * 100 / 2
+    svg = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">\n'
+        '  <rect width="192" height="192" fill="#ffffff"/>\n'
+        f'  <image x="{inset:.2f}%" y="{inset:.2f}%" '
+        f'width="{LOGO_RATIO*100:.2f}%" height="{LOGO_RATIO*100:.2f}%" '
+        f'preserveAspectRatio="xMidYMid meet" '
+        f'href="data:image/png;base64,{b64}"/>\n'
+        '</svg>\n'
+    )
+    path.write_text(svg, encoding="utf-8")
+    print(f"  - {path.relative_to(ROOT)}  (SVG)")
 
 def main():
     if not SRC.exists():
-        raise SystemExit(f"Logo fonte não encontrado: {SRC}")
+        raise SystemExit(f"Logo nao encontrado: {SRC}")
     OUT.mkdir(parents=True, exist_ok=True)
     logo = load_logo_dark()
 
-    print("Android · purpose=any (margem ~22%, logo ~78%)")
-    for size in (192, 512):
-        save_rgb(composite(size, 0.78, logo), OUT / f"icon-{size}.png")
+    print(f"Escala uniforme: logo a {int(LOGO_RATIO*100)}% do canvas")
 
-    print("Android · purpose=maskable (sangria total, safe-zone ~75%)")
+    print("Android (any)")
     for size in (192, 512):
-        # Logo dentro de 75% para sobreviver a qualquer máscara
-        # (círculo, squircle, rounded-rect). Resto = BG sangrado.
-        save_rgb(composite(size, 0.75, logo), OUT / f"icon-maskable-v2-{size}.png")
+        save_rgb(composite(size, LOGO_RATIO, logo), OUT / f"icon-{size}.png")
 
-    print("iOS · apple-touch-icons (iOS aplica rounded-rect, logo ~80%)")
+    print("Android (maskable)")
+    for size in (192, 512):
+        save_rgb(composite(size, LOGO_RATIO, logo), OUT / f"icon-maskable-v2-{size}.png")
+
+    print("iOS apple-touch")
     for size in (120, 152, 167, 180):
-        save_rgb(composite(size, 0.80, logo), OUT / f"apple-touch-{size}.png")
-    # Alias legacy
-    save_rgb(composite(180, 0.80, logo), OUT / "apple-touch.png")
+        save_rgb(composite(size, LOGO_RATIO, logo), OUT / f"apple-touch-{size}.png")
+    save_rgb(composite(180, LOGO_RATIO, logo), OUT / "apple-touch.png")
 
-    print("iOS · splash screens (fundo branco + logo centrado ~30%)")
+    print("Favicon")
+    save_rgb(composite(32, LOGO_RATIO, logo), OUT / "favicon.png")
+    save_rgb(composite(16, LOGO_RATIO, logo), OUT / "favicon-16.png")
+
+    print("iOS splash (logo discreto, ~36% do lado menor)")
     splashes = [
-        (1242, 2688),  # iPhone 11 Pro Max / XS Max
-        (1284, 2778),  # iPhone 14 Plus / 12 Pro Max
-        (1170, 2532),  # iPhone 14 / 12 / 13
-        (828, 1792),   # iPhone 11 / XR
-        (750, 1334),   # iPhone SE 2nd/3rd gen
+        (1242, 2688), (1284, 2778), (1170, 2532),
+        (828, 1792), (750, 1334),
     ]
     for w, h in splashes:
         canvas = Image.new("RGBA", (w, h), BG_LIGHT)
-        target = int(min(w, h) * 0.30)
+        target = int(min(w, h) * (LOGO_RATIO / 2))
         resized = logo.resize((target, target), Image.LANCZOS)
         canvas.alpha_composite(resized, ((w - target) // 2, (h - target) // 2))
         save_rgb(canvas, OUT / f"splash-{w}x{h}.png")
+
+    print("SVG")
+    write_svg(OUT / "icon.svg", logo)
+    write_svg(OUT / "icon-maskable.svg", logo)
 
     print("\nFeito.")
 
