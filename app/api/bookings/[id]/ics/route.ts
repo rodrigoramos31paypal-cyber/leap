@@ -6,6 +6,49 @@ function toIcsDate(d: Date) {
   return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 }
 
+// Converte um instante (UTC) para a hora-de-parede de Europe/Lisbon no
+// formato ICS local (YYYYMMDDTHHMMSS, sem Z) — usado com TZID=Europe/Lisbon.
+function toLisbonLocalIcs(d: Date) {
+  const f = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Lisbon",
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const p: Record<string, string> = {};
+  for (const part of f.formatToParts(d)) p[part.type] = part.value;
+  return `${p.year}${p.month}${p.day}T${p.hour}${p.minute}${p.second}`;
+}
+
+// VTIMEZONE Europe/Lisbon (regras UE: WEST = UTC+1 no verão, WET = UTC+0).
+// Permite que iOS/Android resolvam DTSTART;TZID=Europe/Lisbon sem
+// ambiguidade — corrige sessões a aparecer 1h/1 dia ao lado.
+const LISBON_VTIMEZONE = [
+  "BEGIN:VTIMEZONE",
+  "TZID:Europe/Lisbon",
+  "X-LIC-LOCATION:Europe/Lisbon",
+  "BEGIN:DAYLIGHT",
+  "TZOFFSETFROM:+0000",
+  "TZOFFSETTO:+0100",
+  "TZNAME:WEST",
+  "DTSTART:19700329T010000",
+  "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU",
+  "END:DAYLIGHT",
+  "BEGIN:STANDARD",
+  "TZOFFSETFROM:+0100",
+  "TZOFFSETTO:+0000",
+  "TZNAME:WET",
+  "DTSTART:19701025T020000",
+  "RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU",
+  "END:STANDARD",
+  "END:VTIMEZONE",
+];
+
+
 function escapeIcs(s: string) {
   return s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
 }
@@ -67,11 +110,12 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
     "PRODID:-//LEAP Fitness Studio//Portal//PT",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
+    ...LISBON_VTIMEZONE,
     "BEGIN:VEVENT",
     `UID:${uid}`,
     `DTSTAMP:${toIcsDate(new Date())}`,
-    `DTSTART:${toIcsDate(start)}`,
-    `DTEND:${toIcsDate(end)}`,
+    `DTSTART;TZID=Europe/Lisbon:${toLisbonLocalIcs(start)}`,
+    `DTEND;TZID=Europe/Lisbon:${toLisbonLocalIcs(end)}`,
     `SUMMARY:${escapeIcs(summary)}`,
     `DESCRIPTION:${escapeIcs(description)}`,
     `LOCATION:${escapeIcs(location)}`,
