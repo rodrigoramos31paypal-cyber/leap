@@ -7,6 +7,7 @@ import { BackLink } from "@/components/back-link";
 import { NoteEditor } from "@/components/note-editor";
 import { getMyNoteForBooking } from "@/lib/notes";
 import { getMyRatingForBooking } from "@/lib/ratings";
+import { signBookingIcs } from "@/lib/calendar-token";
 
 // Página de uma sessão específica (cliente). Opções: adicionar ao
 // calendário, reagendar, cancelar, avaliar e as minhas notas.
@@ -83,7 +84,7 @@ export default async function SessaoPage(props: { params: Promise<{ id: string }
       {canModify ? (
         <div className="space-y-2">
           <a
-            href={`/api/bookings/${b.id}/ics`}
+            href={`/api/bookings/${b.id}/ics?t=${signBookingIcs(b.id)}`}
             className="card flex items-center gap-3 p-4 hover:border-gold-400"
           >
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-bone-100 text-ink-700">

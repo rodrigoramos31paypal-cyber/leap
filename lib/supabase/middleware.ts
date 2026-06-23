@@ -147,6 +147,10 @@ export async function updateSession(
     // iOS Calendar / Google Calendar não enviam cookies de sessão, e
     // o redirect para /login do middleware faz a validação falhar.
     path.startsWith("/api/calendar/feed") ||
+    // .ics de UMA marcação ("Adicionar ao calendário"): o iOS busca o
+    // ficheiro sem cookies → sem isto era redirecionado para /login. A
+    // rota valida um token HMAC na URL (ver lib/calendar-token).
+    (path.startsWith("/api/bookings/") && path.endsWith("/ics")) ||
     // Página pública do trainer (/t/<slug>) — indexável e partilhável.
     // Sem isto, utilizadores anónimos eram redirecionados para /login.
     path.startsWith("/t/") ||
