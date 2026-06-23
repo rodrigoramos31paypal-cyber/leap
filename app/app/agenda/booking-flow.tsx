@@ -351,7 +351,7 @@ export function BookingFlow({
             <button
               type="button"
               onClick={() => setNoteOpen(true)}
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-gold-600 hover:text-gold-700"
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-ink-900/20 py-2.5 text-sm font-medium text-gold-600 hover:bg-gold-50 dark:border-white/15 dark:hover:bg-white/5"
             >
               <NotebookPen size={14} /> Adicionar nota para o trainer (opcional)
             </button>
@@ -443,7 +443,7 @@ export function BookingFlow({
       })()}
 
       {picked && !partial && (
-        <div className="card sticky bottom-24 z-20 p-4 md:bottom-4">
+        <div className="card p-4">
           <div className="flex items-center justify-between text-sm">
             <div>
               <div className="font-semibold">Sessão {sessionType} · {duration} min</div>
