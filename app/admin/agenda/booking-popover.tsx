@@ -63,6 +63,7 @@ export function BookingBlock({
   b,
   note,
   clientNote,
+  teamNotes,
   style,
   draggable = false,
   rowTops,
@@ -78,6 +79,8 @@ export function BookingBlock({
   note?: { body: string } | null;
   /** Nota escrita pelo cliente para esta sessão (read-only, RLS 0078). */
   clientNote?: { body: string } | null;
+  /** Notas de colegas da equipa nesta sessão (read-only, RLS 0101). */
+  teamNotes?: { authorName: string; body: string }[];
   style: React.CSSProperties;
   draggable?: boolean;
   // Layout de altura variável (24 horas), partilhado com a grelha em
@@ -431,7 +434,7 @@ export function BookingBlock({
       {clientNote?.body && b.status !== "cancelled" && (
         <span
           title="O cliente deixou uma nota"
-          className="pointer-events-none absolute left-0.5 top-0.5 z-10 inline-flex items-center justify-center rounded-sm bg-ink-900/85 px-0.5 text-[7px] font-bold text-bone-50 ring-1 ring-white"
+          className="pointer-events-none absolute bottom-0.5 right-0.5 z-10 inline-flex items-center justify-center rounded-sm bg-ink-900/85 px-0.5 text-[7px] font-bold text-bone-50 ring-1 ring-white"
         >
           <NotebookPen size={7} />
         </span>
@@ -774,6 +777,24 @@ export function BookingBlock({
               <p className="whitespace-pre-wrap text-xs text-ink-700 dark:text-bone-100">
                 {clientNote.body}
               </p>
+            </div>
+          )}
+
+          {teamNotes && teamNotes.length > 0 && (
+            <div className="mb-3 space-y-2">
+              {teamNotes.map((tn, i) => (
+                <div
+                  key={i}
+                  className="rounded-lg border border-ink-900/10 bg-bone-50 p-3 dark:border-white/10 dark:bg-white/[0.03]"
+                >
+                  <div className="mb-1 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+                    <NotebookPen size={11} /> Nota · {tn.authorName}
+                  </div>
+                  <p className="whitespace-pre-wrap text-xs text-ink-700 dark:text-bone-100">
+                    {tn.body}
+                  </p>
+                </div>
+              ))}
             </div>
           )}
 
