@@ -6,6 +6,7 @@ import { cancelBookingAction, rebookAction } from "./actions";
 import { CalendarPlus, RefreshCcw, NotebookPen, Users } from "lucide-react";
 import { NoteEditor } from "@/components/note-editor";
 import { getMyNotesMapForBookings } from "@/lib/notes";
+import { signBookingIcs } from "@/lib/calendar-token";
 
 export default async function HistoricoPage(
   props: {
@@ -154,7 +155,7 @@ async function SessoesTab({ userId, filter }: { userId: string; filter: "todas" 
             {canModify && (
               <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <a
-                  href={`/api/bookings/${b.id}/ics`}
+                  href={`/api/bookings/${b.id}/ics?t=${signBookingIcs(b.id)}`}
                   className="btn-outline inline-flex items-center justify-center gap-1.5 text-xs"
                 >
                   <CalendarPlus size={14} /> Adicionar ao calendário

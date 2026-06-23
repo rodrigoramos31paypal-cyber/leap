@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { verifyBookingIcs } from "@/lib/calendar-token";
 
 function toIcsDate(d: Date) {
   return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
@@ -9,13 +10,31 @@ function escapeIcs(s: string) {
   return s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
 }
 
-export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return new NextResponse("Unauthorized", { status: 401 });
 
-  const { data: booking } = await supabase
+  // Dois caminhos de acesso:
+  //  (A) Token HMAC na URL (?t=…): o iOS/Calendário busca o .ics SEM
+  //      cookies, por isso a página assina o id e mete o token na URL.
+  //      O token é a capability → usamos o admin client (sem RLS) para
+  //      ler a marcação, sem precisar de sessão.
+  //  (B) Sessão (cookie): fluxo normal in-app — valida ownership.
+  const token = new URL(req.url).searchParams.get("t");
+  const tokenOk = verifyBookingIcs(params.id, token);
+
+  let db: any;
+  let user: { id: string } | null = null;
+  if (tokenOk) {
+    db = createAdminClient();
+  } else {
+    const supabase = await createClient();
+    const auth = await supabase.auth.getUser();
+    user = auth.data.user;
+    if (!user) return new NextResponse("Unauthorized", { status: 401 });
+    db = supabase;
+  }
+
+  const { data: booking } = await db
     .from("bookings")
     .select("id, starts_at, ends_at, session_type, status, client_id, trainer_id, profiles:client_id(full_name)")
     .eq("id", params.id)
@@ -23,9 +42,10 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
 
   if (!booking) return new NextResponse("Not found", { status: 404 });
 
-  // verifica acesso (cliente próprio ou trainer)
-  if (booking.client_id !== user.id) {
-    const { data: trainer } = await supabase
+  // No caminho de sessão, valida acesso (cliente próprio ou trainer).
+  // No caminho de token, o próprio token já autoriza esta marcação.
+  if (!tokenOk && user && booking.client_id !== user.id) {
+    const { data: trainer } = await db
       .from("trainers")
       .select("id")
       .eq("profile_id", user.id)
