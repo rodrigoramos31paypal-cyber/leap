@@ -434,9 +434,9 @@ export function BookingBlock({
       {clientNote?.body && b.status !== "cancelled" && (
         <span
           title="O cliente deixou uma nota"
-          className="pointer-events-none absolute bottom-0.5 right-0.5 z-10 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-ink-900 text-bone-50 shadow-sm ring-1 ring-white"
+          className="pointer-events-none absolute bottom-0.5 right-0.5 z-10 text-ink-900 dark:text-bone-50"
         >
-          <StickyNote size={9} strokeWidth={2.25} />
+          <StickyNote size={12} strokeWidth={2} />
         </span>
       )}
       <button
