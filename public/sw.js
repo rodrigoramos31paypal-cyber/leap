@@ -52,7 +52,7 @@
 // (/app/dashboard) em vez do destino (ex.: /app/agenda do "Pack ativo").
 // Agora a navegação pendente é PERSISTIDA na Cache API (sobrevive a
 // reinícios do SW) numa cache dedicada que o `activate` nunca apaga.
-const CACHE_NAME = "leap-v20";
+const CACHE_NAME = "leap-v21";
 
 // Cache dedicada (NÃO versionada) para a navegação pendente de um push
 // tocado com a app fechada. Mantida à parte de CACHE_NAME para não ser
@@ -260,22 +260,25 @@ self.addEventListener("notificationclick", (event) => {
   const focusOrOpen = self.clients
     .matchAll({ type: "window", includeUncontrolled: true })
     .then(async (list) => {
+      // PERSISTE SEMPRE o destino na Cache ANTES de focar/abrir. A app lê
+      // esta cache ao montar E sempre que volta a estar visível, por isso
+      // o deep-link funciona mesmo que o postMessage abaixo se perca (comum
+      // no iOS ao trazer uma PWA congelada para a frente) ou que o SW seja
+      // reiniciado num cold start lento.
+      await setPendingNav(dest);
       const client = list.find((c) => "focus" in c);
       if (client) {
-        // App aberta/em segundo plano: foca e PEDE À APP para navegar via
-        // postMessage. O router interno do Next navega de forma fiável —
-        // ao contrário de WindowClient.navigate(), sem efeito no iOS PWA.
+        // App aberta/em segundo plano: foca e (best-effort) PEDE À APP para
+        // navegar via postMessage. Se a mensagem se perder, o re-check da
+        // cache no visibilitychange trata na mesma.
         try {
           await client.focus();
         } catch (e) {}
         client.postMessage({ type: "navigate", url: dest });
         return;
       }
-      // App fechada: PERSISTE o destino na Cache (sobrevive a reinícios do
-      // SW — crucial no iOS/Android, que matam o SW depois do clique) e abre.
-      // A app, ao montar, lê este destino (via "get-pending-nav" ou lendo a
-      // cache diretamente) e navega para lá.
-      await setPendingNav(dest);
+      // App fechada: abre (o iOS abre no start_url; a app lê a cache e
+      // redireciona para o destino real ao montar).
       if (self.clients.openWindow) {
         const w = await self.clients.openWindow(dest);
         if (w) {

@@ -5,6 +5,7 @@ import { TopBar } from "@/components/top-bar";
 import { BottomNav } from "@/components/bottom-nav";
 import { AdminNavItem } from "@/components/admin-nav-item";
 import { Toaster } from "@/components/toaster";
+import { AppUpdater } from "@/components/app-updater";
 import { consumeFlash } from "@/lib/flash";
 import { getAalInfo, isDeviceTrusted } from "@/lib/mfa";
 import { LayoutDashboard, Calendar, Users, CreditCard, BarChart3, Settings, Package, NotebookPen, Images, Store } from "lucide-react";
@@ -68,6 +69,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         wide
       />
       <Toaster initial={flash} />
+      <AppUpdater />
       <div className="mx-auto flex w-full max-w-7xl flex-1 overflow-hidden md:gap-6 md:px-4 md:py-6">
         <aside className="hidden md:block md:w-56 md:shrink-0 md:overflow-y-auto">
           <nav className="space-y-1">

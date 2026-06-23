@@ -445,3 +445,26 @@ export async function removeTrainerAvatarAction(formData: FormData) {
   revalidatePath("/admin/definicoes");
   revalidatePath(`/t/[slug]`, "page");
 }
+
+// ════════════════════════════════════════════════════════════════
+// Kill-switch · forçar atualização da PWA em todos os dispositivos.
+// Bumpa app_config.force_reload_at (0109). As apps abertas (clientes e
+// staff) ouvem este valor via realtime/poll (componente AppUpdater) e
+// recarregam para a versão mais recente — sem o utilizador ter de
+// fechar/reabrir a app. requireStaff() é o boundary de autorização;
+// a escrita usa service role porque app_config não tem policy de UPDATE.
+// ════════════════════════════════════════════════════════════════
+export async function forceAppReloadAction(): Promise<{ ok: boolean }> {
+  const profile = await requireStaff();
+  const admin = createAdminClient();
+  const nowIso = new Date().toISOString();
+  const { error } = await (admin as any)
+    .from("app_config")
+    .update({ force_reload_at: nowIso, updated_at: nowIso, updated_by: profile.id })
+    .eq("id", true);
+  if (error) {
+    logError("forceAppReloadAction", error);
+    return { ok: false };
+  }
+  return { ok: true };
+}
