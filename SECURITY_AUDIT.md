@@ -5,10 +5,13 @@
 > Severidade: Critical / High / Medium / Low / Info.
 > Status: OPEN / IN PROGRESS / FIXED / ACCEPTED.
 >
-> Último run: 2026-06-22 (re-audit white-box exaustivo. S-01..S-15 reverificados
-> e mantidos FIXED/ACCEPTED. Acrescentados S-16 (deps · npm audit) e S-17
-> (tokens OAuth de calendário em claro). Nenhum issue novo explorável a nível
-> de código encontrado.).
+> Último run: 2026-06-23 (re-audit white-box exaustivo. S-01..S-15 reverificados
+> e mantidos FIXED/ACCEPTED; S-16 e S-17 confirmados ainda OPEN. **Novo achado
+> material: S-18 (Medium) — broken access control / mass-assignment na tabela
+> `profiles`: um cliente pode auto-modificar `banned` (self-unban) e `trainer_id`
+> (self-rescope) via PostgREST directo. FIXED neste run** com a migration
+> `0110_protect_profile_banned_and_trainer.sql` (estende o trigger
+> `protect_profile_role`). Run anterior 2026-06-22 acrescentou S-16/S-17.
 
 ## Resumo executivo
 
@@ -21,7 +24,21 @@ activo em todas as tabelas sensíveis e os RPCs críticos são
 `_trainer_is_accessible`, ownership por `auth.uid()`) — verificado em
 0015/0042 neste run.
 
-Neste run (2026-06-18) o achado material é **S-13 (High)**: o gate de
+**Run 2026-06-23 (este run).** O achado material novo é **S-18 (Medium)**:
+a policy RLS `profiles: self update` (0003) permite ao utilizador escrever
+**qualquer coluna** da sua própria linha, e o único guard de coluna
+(`protect_profile_role`) só protegia `role`. As colunas `banned` (0066) e
+`trainer_id` (0001) ficaram desprotegidas → um cliente suspenso anula a sua
+própria suspensão (`PATCH /rest/v1/profiles?id=eq.<self> {"banned":false}`
+com a anon key pública) e volta a comprar packs; e pode auto-associar-se a
+um trainer arbitrário (`trainer_id`), injectando-se no scope/PII de outro
+trainer via `_client_is_accessible`. **Fechado neste run** com a migration
+`0110` que estende o trigger para bloquear self-write de `banned`/`trainer_id`
+(staff-only) mantendo `role` owner-only. Restantes fronteiras (RPCs
+financeiras/agenda com `_is_service_or_admin()` + `_trainer_is_accessible()`,
+RLS, CSP nonce, 2FA no boundary de dados S-13) reverificadas e de pé.
+
+O achado material do run de 2026-06-18 foi **S-13 (High)**: o gate de
 **2FA estava implementado SÓ no `app/admin/layout.tsx`**. Como as Server
 Actions são endpoints POST que NÃO renderizam o layout, uma sessão
 **AAL1** (password correcta, sem TOTP — exactamente o cenário que o 2FA
@@ -119,6 +136,7 @@ já fazia, agora também no boundary de dados.
 | S-15 | Info | CWE-434 | Upload de avatar (`app/admin/definicoes/actions.ts:303-315`) valida só o `file.type` declarado pelo cliente, sem magic-bytes | Autenticado staff (próprio trainer) | FIXED |
 | S-16 | Low | CWE-1395 / CWE-1104 | `npm audit`: 7 advisories transitivas (`postcss<8.5.10`, `uuid<11.1.1` via exceljs, `glob` via eslint-config-next). Build/dev-time na maioria; uuid em runtime mas não disparável (exceljs não passa `buf`) | Anónimo (teórico) / dev | OPEN |
 | S-17 | Info | CWE-312 | Tokens OAuth de calendário (`access_token`/`refresh_token` Google/Microsoft) guardados em claro em `calendar_integrations` (`api/integrations/[provider]/callback/route.ts:67-79`) | Requer compromisso da BD / service-role | OPEN (defesa-em-profundidade) |
+| S-18 | Medium | CWE-639 / CWE-915 | `profiles: self update` (RLS, 0003) permite self-write de `banned` (self-unban → contorna a suspensão de compras) e `trainer_id` (self-rescope → injecção no scope/PII de outro trainer); trigger só protegia `role` | Autenticado low-priv (só anon key pública + JWT próprio) | FIXED (migration 0110) |
 
 ## Controlos JÁ em vigor (não voltam a ser flagged)
 
@@ -138,9 +156,13 @@ Lista do que está **bem feito** para evitar re-flag em runs futuros.
   `getClientIdsInScope`, e `_trainer_is_accessible(trainer_id)` em RLS
   policies. `searchClientsAction` (C-A audit) e a pesquisa em
   `/admin/clientes?q=` (S-01 audit) filtram por scope.
-- **RLS activo em todas as tabelas** (84 migrations) com policies por papel
+- **RLS activo em todas as tabelas** (110 migrations) com policies por papel
   (`supabase/migrations/0003_rls_policies.sql` + hardening em 0015, 0027,
-  0028, 0029, 0030, 0049, 0078, 0081).
+  0028, 0029, 0030, 0049, 0078, 0081, 0083, 0110).
+- **Colunas sensíveis de `profiles` protegidas por trigger** contra self-write
+  via PostgREST: `role` owner-only (0050), `banned`/`trainer_id` staff-only
+  (0110, S-18). A self-update policy permanece por-linha, mas estas colunas já
+  não são mass-assignáveis pelo próprio cliente.
 - **CSP nonce-based** (`lib/security-headers.ts`) com `'strict-dynamic'`,
   `frame-ancestors 'none'`, `form-action 'self'`, `upgrade-insecure-requests`.
   HSTS 2 anos + preload, X-Frame-Options DENY, X-Content-Type-Options nosniff,
@@ -703,6 +725,103 @@ limit 1;` devolve ciphertext, não um JWT/token legível.
 
 ---
 
+### S-18 · Self-write de colunas sensíveis de `profiles` via PostgREST `[Medium → FIXED]`
+
+**Ficheiro/linhas:** `supabase/migrations/0003_rls_policies.sql:26-28` (policy
+`profiles: self update`), `:38-50` (trigger `protect_profile_role` — só `role`);
+coluna `banned` introduzida em `0066_ban_client_purchases.sql:26`; consumo do
+`banned` em `create_purchase` (`0066:55-58`); consumo do `trainer_id` em
+`_client_is_accessible` (`0083_client_scope_rpcs.sql:63-72`).
+
+**Vulnerabilidade:** a policy de self-update é
+
+```sql
+create policy "profiles: self update" on profiles
+  for update using (id = auth.uid()) with check (id = auth.uid());
+```
+
+— ou seja, qualquer utilizador pode escrever **qualquer coluna** da sua própria
+linha. Postgres RLS não faz restrição por coluna; a única defesa de coluna é o
+trigger `protect_profile_role`, que **só bloqueia mudanças a `role`**. As
+colunas de segurança `banned` e `trainer_id` ficaram desprotegidas.
+
+A `anon key` (`NEXT_PUBLIC_SUPABASE_ANON_KEY`) está, por construção, no bundle do
+browser, e qualquer cliente autenticado tem um JWT válido. Logo o atacante fala
+**directamente com o PostgREST do Supabase**, sem passar pela app Next:
+
+**Ataque 1 — self-unban (contorna a suspensão de compras).** O painel pode
+"suspender" um cliente (`set_client_banned`); a suspensão é aplicada em
+`create_purchase` (`not _is_service_or_admin() and ... banned` → recusa). Um
+cliente suspenso anula-a:
+
+```bash
+curl -X PATCH 'https://<proj>.supabase.co/rest/v1/profiles?id=eq.<MEU_UID>' \
+  -H "apikey: <ANON_KEY>" -H "Authorization: Bearer <MEU_JWT>" \
+  -H "Content-Type: application/json" -H "Prefer: return=minimal" \
+  -d '{"banned": false}'
+```
+
+A self-update policy aceita (`id = auth.uid()`), o trigger ignora `banned` →
+suspensão anulada, cliente volta a comprar packs. O controlo de suspensão fica
+inútil contra um cliente minimamente técnico (ex.: suspenso por chargebacks /
+abuso / dívida).
+
+**Ataque 2 — self-rescope (`trainer_id`).** `_client_is_accessible` (0083) usa
+a união `profiles.trainer_id` para decidir que clientes "pertencem" a um
+trainer. Um cliente faz `{"trainer_id": "<id de outro trainer>"}` e:
+
+- injecta-se no scope do trainer B → passa a aparecer nas listas/PII de B e
+  fica sujeito às acções de B (`set_client_banned`, `anonymize_client_account`,
+  grants); e/ou
+- foge do scope do seu próprio trainer (esconde-se das listas dele).
+
+`trainer_id` só é legitimamente escrito no **signup** (trigger
+`handle_new_user`, 0046 — um INSERT, que não dispara este trigger BEFORE
+UPDATE) e nunca por código de cliente — por isso bloqueá-lo no UPDATE não
+quebra nenhum fluxo.
+
+**Impacto:** quebra de um controlo de negócio deliberado (suspensão) +
+integridade do scoping multi-tenant / exposição de PII cross-trainer. Não é
+takeover de conta (não muda `role` — esse já está protegido), daí **Medium**.
+
+**Exploitability:** autenticado low-priv; um único `PATCH` HTTP com a anon key
+pública e o JWT próprio. Sem ferramentas especiais.
+
+**Fix aplicado (2026-06-23):** migration `0110_protect_profile_banned_and_trainer.sql`
+estende `protect_profile_role` para também recusar mudanças a `banned` e
+`trainer_id` quando o caller é um utilizador autenticado que não é staff:
+
+```sql
+if auth.uid() is null then return new; end if;           -- service/signup
+if new.role       is distinct from old.role       and not is_owner() then raise ... end if;
+if new.banned     is distinct from old.banned     and not is_admin() then raise ... end if;
+if new.trainer_id is distinct from old.trainer_id and not is_admin() then raise ... end if;
+```
+
+Caminhos legítimos mantêm-se: service role/signup (`auth.uid() IS NULL`),
+owner a editar contas (`is_owner`/`is_admin`), trainer a (des)suspender cliente
+do seu scope via a RPC `set_client_banned` (SECURITY DEFINER corre com o
+`auth.uid()` do trainer → `is_admin()` true; o scope cross-trainer já é
+validado dentro da RPC por `_client_is_accessible`), e o cliente a editar
+`full_name`/`phone`/`email` (nenhuma coluna protegida muda).
+
+**Verificação:**
+1. Suspender um cliente no painel. Como esse cliente, correr o `curl` do Ataque
+   1 → resposta `403`/`401` do PostgREST com `Apenas staff pode alterar o
+   estado de suspensão da conta.` (antes: `204`, `banned` ficava `false`).
+2. `PATCH ... {"trainer_id":"<outro>"}` como cliente → recusado.
+3. `PATCH ... {"full_name":"Novo Nome"}` como cliente → continua a funcionar.
+4. No painel, suspender/reactivar um cliente (owner e trainer-no-scope) →
+   continua a funcionar (a RPC passa o trigger por `is_admin()`).
+5. Signup novo via `/registar?trainer=<id>` → `profiles.trainer_id` continua a
+   ser populado (é INSERT, não passa pelo trigger).
+
+**Aplicar:** correr a migration no Supabase (Dashboard → SQL Editor → colar
+`0110_...sql` → Run), ou via CLI de migrations. **Até ser aplicada na BD, S-18
+permanece explorável** — o ficheiro de migration por si só não fecha o buraco.
+
+---
+
 ## Ordem de remediação sugerida
 
 1. **S-01 · S-03 · S-04 · S-06 · S-07 · S-08** — FIXED no run anterior.
@@ -721,9 +840,13 @@ limit 1;` devolve ciphertext, não um JWT/token legível.
    (`uuid@^11.1.1`, `postcss@^8.5.10`, `glob@^11`) + `npm audit`/`build`/
    `type-check` limpos. NÃO usar `npm audit fix --force` (faz downgrade do
    Next/exceljs). Prioridade sobre S-17 por fechar os 3 highs do audit.
-10. **S-17 (Info) — OPEN, backlog.** Cifrar tokens OAuth de calendário em
+10. **S-18 (Medium)** — FIXED neste run (2026-06-23) via migration `0110`.
+    **Prioridade: aplicar a migration na BD de produção** (Supabase SQL Editor
+    ou CLI) — o fix só fecha o buraco depois de correr no Postgres. Re-testar
+    self-unban antes do próximo release.
+11. **S-17 (Info) — OPEN, backlog.** Cifrar tokens OAuth de calendário em
     repouso (pgsodium/Vault). Mudança de schema → planear migração.
-11. **S-05 · S-09** — ACCEPTED, monitor (trade-offs de PERF deliberados;
+12. **S-05 · S-09** — ACCEPTED, monitor (trade-offs de PERF deliberados;
     alterá-los mudaria comportamento — não tocados).
 
 ## Como reproduzir o baseline determinístico
