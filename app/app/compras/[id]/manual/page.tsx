@@ -42,8 +42,10 @@ export default async function ManualPaymentPage(props: { params: Promise<{ id: s
     }
   }
 
-  // contacto do PT (config futura — por agora hard-coded apenas como exemplo)
-  const ptPhone = process.env.NEXT_PUBLIC_PT_MBWAY_PHONE ?? "9XX XXX XXX";
+  // Numero MB WAY do estúdio. Configurável via NEXT_PUBLIC_PT_MBWAY_PHONE
+  // (Vercel → Environment Variables); o default é o número real para que
+  // funcione mesmo sem a env definida.
+  const ptPhone = process.env.NEXT_PUBLIC_PT_MBWAY_PHONE ?? "912 478 768";
 
   const isConfirmed = purchase.status === "confirmed";
   const isPending = purchase.status === "awaiting_confirmation";
