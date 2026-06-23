@@ -44,12 +44,42 @@
 // (que abre o start_url), o clique passa a (a) postMessage para a app
 // navegar pelo router interno quando já está aberta, e (b) guardar a
 // navegação pendente para a app pedir ao montar (cold start via push).
-const CACHE_NAME = "leap-v19";
+// v20 (jun/2026): deep-link de push em COLD START perdia-se. A navegação
+// pendente vivia numa variável em memória (`pendingNav`); como o iOS/Android
+// matam o SW agressivamente após o `notificationclick`, em arranques lentos
+// o SW reiniciava (módulo re-avaliado → pendingNav=null) ANTES de a app
+// pedir "get-pending-nav", deixando o utilizador preso no start_url
+// (/app/dashboard) em vez do destino (ex.: /app/agenda do "Pack ativo").
+// Agora a navegação pendente é PERSISTIDA na Cache API (sobrevive a
+// reinícios do SW) numa cache dedicada que o `activate` nunca apaga.
+const CACHE_NAME = "leap-v20";
 
-// Navegação pendente de um push tocado com a app fechada. O iOS abre a
-// PWA no start_url (/app/dashboard); ao montar, a app pede esta via
-// "get-pending-nav" e redireciona para o destino real.
-let pendingNav = null;
+// Cache dedicada (NÃO versionada) para a navegação pendente de um push
+// tocado com a app fechada. Mantida à parte de CACHE_NAME para não ser
+// apagada quando a versão sobe no `activate`.
+const NAV_CACHE = "leap-nav";
+const PENDING_NAV_KEY = "/__leap_pending_nav__";
+
+async function setPendingNav(dest) {
+  try {
+    const c = await caches.open(NAV_CACHE);
+    await c.put(PENDING_NAV_KEY, new Response(dest, { headers: { "content-type": "text/plain" } }));
+  } catch (e) {}
+}
+
+// Lê e CONSOME (apaga) a navegação pendente. Devolve null se não houver.
+async function takePendingNav() {
+  try {
+    const c = await caches.open(NAV_CACHE);
+    const res = await c.match(PENDING_NAV_KEY);
+    if (!res) return null;
+    await c.delete(PENDING_NAV_KEY);
+    return await res.text();
+  } catch (e) {
+    return null;
+  }
+}
+
 const APP_SHELL = [
   "/",
   "/login",
@@ -81,7 +111,11 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+      Promise.all(
+        keys
+          .filter((k) => k !== CACHE_NAME && k !== NAV_CACHE)
+          .map((k) => caches.delete(k))
+      )
     )
   );
   self.clients.claim();
@@ -237,8 +271,11 @@ self.addEventListener("notificationclick", (event) => {
         client.postMessage({ type: "navigate", url: dest });
         return;
       }
-      // App fechada: guarda o destino (a app pede-o ao montar) e abre.
-      pendingNav = dest;
+      // App fechada: PERSISTE o destino na Cache (sobrevive a reinícios do
+      // SW — crucial no iOS/Android, que matam o SW depois do clique) e abre.
+      // A app, ao montar, lê este destino (via "get-pending-nav" ou lendo a
+      // cache diretamente) e navega para lá.
+      await setPendingNav(dest);
       if (self.clients.openWindow) {
         const w = await self.clients.openWindow(dest);
         if (w) {
@@ -253,15 +290,18 @@ self.addEventListener("notificationclick", (event) => {
 });
 
 // A app, ao montar, pergunta se há navegação pendente (cold start via
-// push). Respondemos com o destino e limpamos. event.source é o cliente
-// que perguntou.
+// push). Respondemos com o destino persistido na Cache e consumimo-lo.
+// event.source é o cliente que perguntou.
 self.addEventListener("message", (event) => {
   const data = event.data || {};
-  if (data.type === "get-pending-nav" && pendingNav) {
-    const url = pendingNav;
-    pendingNav = null;
-    if (event.source && "postMessage" in event.source) {
-      event.source.postMessage({ type: "navigate", url });
-    }
+  if (data.type === "get-pending-nav") {
+    event.waitUntil(
+      (async () => {
+        const url = await takePendingNav();
+        if (url && event.source && "postMessage" in event.source) {
+          event.source.postMessage({ type: "navigate", url });
+        }
+      })()
+    );
   }
 });
