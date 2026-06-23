@@ -30,7 +30,10 @@
 // v16 (jun/2026): URL nova p/ o ícone 180 (apple-touch-180.png) — o
 // iOS cacheia o apple-touch-icon por URL e re-adicionar não limpa;
 // um URL novo força fetch fresco no iPhone.
-const CACHE_NAME = "leap-v16";
+// v17 (jun/2026): ícone maskable Android com fundo full-bleed +
+// logo dentro da safe-zone (antes aparecia minúsculo num quadrado
+// cinzento). Ficheiros novos → fetch fresco no re-install.
+const CACHE_NAME = "leap-v17";
 const APP_SHELL = [
   "/",
   "/login",
@@ -48,8 +51,8 @@ const APP_SHELL = [
   "/icons/apple-touch-120.png",
   "/icons/apple-touch-152.png",
   "/icons/apple-touch-167.png",
-  "/icons/icon-maskable-192.png",
-  "/icons/icon-maskable-512.png",
+  "/icons/icon-maskable-v2-192.png",
+  "/icons/icon-maskable-v2-512.png",
 ];
 
 self.addEventListener("install", (event) => {
