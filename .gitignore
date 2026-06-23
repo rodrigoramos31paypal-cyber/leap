@@ -50,3 +50,7 @@ tsc-output.txt
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# FUSE mount orphans (deleted-but-open file handles from remote/container edits)
+.fuse_hidden*
+**/.fuse_hidden*
