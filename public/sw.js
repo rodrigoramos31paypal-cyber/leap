@@ -21,7 +21,13 @@
 // v12 (jun/2026): bump para invalidar ícones PWA cacheados (cache-first
 // em /icons/) — devices que tinham um ícone antigo/placeholder em cache
 // passam a re-fetch dos ícones corretos no próximo arranque.
-const CACHE_NAME = "leap-v14";
+// v15 (jun/2026): ÍCONE DO HOME-SCREEN intermitente (50/50). O iOS busca o
+// apple-touch-icon no momento do "Adicionar ao ecrã principal" com um
+// timeout curto; como o apple-touch.png NÃO estava no precache, o SW tinha
+// de ir à rede e em ligações lentas o iOS desistia e gerava o tile "L"
+// fallback. Agora precache de TODOS os ícones de instalação + /icons/ em
+// stale-while-revalidate (responde já do cache, actualiza em background).
+const CACHE_NAME = "leap-v15";
 const APP_SHELL = [
   "/",
   "/login",
@@ -32,6 +38,14 @@ const APP_SHELL = [
   "/icons/icon-512.png",
   "/icons/icon.svg",
   "/icons/favicon.ico",
+  // Ícones que o iOS/Android pedem ao "Adicionar ao ecrã principal" —
+  // precache garante resposta imediata do cache no momento da instalação.
+  "/icons/apple-touch.png",
+  "/icons/apple-touch-120.png",
+  "/icons/apple-touch-152.png",
+  "/icons/apple-touch-167.png",
+  "/icons/icon-maskable-192.png",
+  "/icons/icon-maskable-512.png",
 ];
 
 self.addEventListener("install", (event) => {
@@ -77,18 +91,29 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Estáticos imutáveis (icons, manifest) — cache-first
+  // Ícones e manifest — stale-while-revalidate.
+  // Responde JÁ a partir do cache (instantâneo — crucial para o iOS
+  // apanhar o apple-touch-icon dentro do seu timeout curto ao instalar)
+  // e, em paralelo, vai à rede actualizar o cache. Assim o ícone está
+  // sempre disponível de imediato MAS nunca fica preso numa versão antiga.
   if (
     url.pathname.startsWith("/icons/") ||
     url.pathname === "/manifest.json"
   ) {
     event.respondWith(
-      caches.match(req).then((cached) =>
-        cached ||
-        fetch(req).then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then((c) => c.put(req, copy));
-          return res;
+      caches.open(CACHE_NAME).then((cache) =>
+        cache.match(req).then((cached) => {
+          const network = fetch(req)
+            .then((res) => {
+              if (res && res.ok) cache.put(req, res.clone());
+              return res;
+            })
+            .catch(() => cached);
+          if (cached) {
+            event.waitUntil(network.catch(() => {}));
+            return cached;
+          }
+          return network;
         })
       )
     );
