@@ -16,10 +16,12 @@ export type SessionNote = {
 /** Obtém a nota do autor para um booking (ou null). */
 export async function getMyNoteForBooking(bookingId: string): Promise<SessionNote | null> {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
   const { data } = await supabase
     .from("session_notes")
     .select("*")
     .eq("booking_id", bookingId)
+    .eq("author_id", user?.id ?? "")
     .maybeSingle();
   return ((data as unknown) as SessionNote) ?? null;
 }
@@ -40,6 +42,8 @@ export async function listMyNotes(opts?: {
 }) {
   const include = opts?.include ?? "full";
   const supabase = await createClient();
+  const { data: { user: _me } } = await supabase.auth.getUser();
+  const uid = _me?.id ?? "";
   const cols =
     include === "meta"
       ? "id, booking_id, subject_id, created_at, updated_at, bookings:booking_id(id, starts_at, client_id, profiles:client_id(full_name, email, phone)), subject:subject_id(id, full_name, email, phone)"
@@ -61,6 +65,7 @@ export async function listMyNotes(opts?: {
         .from("session_notes")
         .select(cols)
         .eq("subject_id", cid)
+        .eq("author_id", uid)
         .is("booking_id", null)
         .order("created_at", { ascending: false })
         .limit(lim),
@@ -69,6 +74,7 @@ export async function listMyNotes(opts?: {
             .from("session_notes")
             .select(cols)
             .in("booking_id", bookingIds)
+            .eq("author_id", uid)
             .order("created_at", { ascending: false })
             .limit(lim)
         : Promise.resolve({ data: [] as any[] }),
@@ -83,6 +89,7 @@ export async function listMyNotes(opts?: {
   const { data } = await supabase
     .from("session_notes")
     .select(cols)
+    .eq("author_id", uid)
     .order("created_at", { ascending: false })
     .limit(opts?.limit ?? 100);
   return (data ?? []) as any[];
@@ -191,12 +198,52 @@ export async function getMyNotesMapForBookings(bookingIds: string[]): Promise<Ma
   const map = new Map<string, SessionNote>();
   if (bookingIds.length === 0) return map;
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
   const { data } = await supabase
     .from("session_notes")
     .select("booking_id, body")
-    .in("booking_id", bookingIds);
+    .in("booking_id", bookingIds)
+    .eq("author_id", user?.id ?? "");
   for (const row of (data ?? []) as unknown as SessionNote[]) {
     if (row.booking_id) map.set(row.booking_id, row);
+  }
+  return map;
+}
+
+/**
+ * Notas da EQUIPA por marcação: notas escritas por outros membros do
+ * estúdio (NÃO o cliente, NÃO o próprio leitor) para um conjunto de
+ * marcações. Read-only — usado na agenda para que qualquer admin/owner
+ * veja as notas que os colegas deixaram numa sessão. Depende da policy
+ * 0101 (is_admin lê todas as notas no seu âmbito).
+ */
+export async function getTeamNotesByBookings(
+  bookings: { id: string; clientId: string }[],
+): Promise<Map<string, { authorName: string; body: string }[]>> {
+  const map = new Map<string, { authorName: string; body: string }[]>();
+  if (bookings.length === 0) return map;
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const meId = user?.id;
+  const clientIdByBooking = new Map(bookings.map((b) => [b.id, b.clientId]));
+  const { data } = await supabase
+    .from("session_notes")
+    .select("booking_id, author_id, body, author:author_id(full_name)")
+    .in(
+      "booking_id",
+      bookings.map((b) => b.id),
+    );
+  for (const row of (data ?? []) as any[]) {
+    const bid = row.booking_id as string | null;
+    if (!bid) continue;
+    // A nota do próprio cliente é mostrada à parte ("Nota do cliente").
+    if (row.author_id === clientIdByBooking.get(bid)) continue;
+    // A minha própria nota é editável em "Minhas notas".
+    if (meId && row.author_id === meId) continue;
+    const authorName = (row.author?.full_name as string | undefined) ?? "Equipa";
+    const arr = map.get(bid) ?? [];
+    arr.push({ authorName, body: row.body as string });
+    map.set(bid, arr);
   }
   return map;
 }
