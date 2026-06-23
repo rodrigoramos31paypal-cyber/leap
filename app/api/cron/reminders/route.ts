@@ -71,6 +71,14 @@ export async function GET(request: NextRequest) {
   const trainerProfMap = new Map((trainerProfiles ?? []).map((p: any) => [p.id, p]));
   const trainerToProfile = new Map((trainers ?? []).map((t: any) => [t.id, t.profile_id]));
 
+  // Toda a equipa (owner + trainer) — para espalhar o EMAIL do lembrete
+  // do dia a todos os admins, não só ao trainer da sessão. O in-app/push
+  // já é espalhado pelo trigger fanout_staff_notifications (migration 0103).
+  const { data: staffProfiles } = await supabase
+    .from("profiles")
+    .select("id, full_name, email")
+    .in("role", ["owner", "trainer"]);
+
   // Gating por canal/categoria: o in-app é sempre enviado; o email é
   // filtrado por emailAllowed (cliente→'sessions', treinador→'reminders');
   // o push é filtrado no /api/push/dispatch.
@@ -161,6 +169,26 @@ export async function GET(request: NextRequest) {
         `Sessão com ${client?.full_name ?? "cliente"} a ${when}.`,
         "/admin/agenda",
       );
+
+      // EMAIL do lembrete à restante equipa (owner/admins sem trainer
+      // próprio). O in-app/push deles já vem do trigger da migration
+      // 0103 ao inserir a notificação do trainer acima — aqui só falta
+      // o email. Idempotente: claimAndSendEmail reclama uma linha por
+      // destinatário; o trainer (já tratado) é saltado pelo claim.
+      for (const s of staffProfiles ?? []) {
+        if ((s as any).id === trainerProfileId) continue;
+        await claimAndSendEmail(
+          b.id,
+          (s as any).id,
+          (s as any).email,
+          "reminders",
+          emailTemplates.sessionReminderTrainer({
+            trainerName: (s as any).full_name?.split(" ")[0] ?? "equipa",
+            clientName: client?.full_name ?? "cliente",
+            when,
+          }),
+        );
+      }
     }
   }
 
