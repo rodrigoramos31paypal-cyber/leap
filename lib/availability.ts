@@ -95,21 +95,42 @@ export async function getAvailableSlots(args: {
   // bloqueavam os slots e apareciam horários que se sobrepunham. A vista
   // expõe apenas os intervalos ocupados (sem identidade) a authenticated.
   // (`as any` porque a vista não está nos tipos gerados — ver 0064.)
-  const [{ data: bookings }, { data: blocks }] = await Promise.all([
-    (supabase as any)
-      .from("public_busy_times")
-      .select("starts_at, ends_at")
-      .eq("trainer_id", trainerId)
-      .gte("starts_at", dayStart.toISOString())
-      .lt("starts_at", dayEnd.toISOString()),
-    // SEC: lê da vista pública (sem `reason`) — base table é admin-only.
-    supabase
-      .from("public_blocked_times")
-      .select("starts_at, ends_at")
-      .eq("trainer_id", trainerId)
-      .lt("starts_at", dayEnd.toISOString())
-      .gt("ends_at", dayStart.toISOString()),
-  ]);
+  // ── Bloqueios RECORRENTES (semanais) ────────────────────────────
+  // Repetem-se no mesmo dia-da-semana/horas até serem removidos. Não se
+  // aplicam num dia concreto se houver um "skip" para essa data (o
+  // trainer limpou/ajustou a recorrência nesse dia).
+  const dateStr = `${y}-${String(mo + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+
+  // PERF (P-22): estes 4 reads (marcações + bloqueios + recorrentes +
+  // skips) são todos independentes — eram 2 batches Promise.all em série.
+  // Fundidos num único Promise.all → poupa 1 round-trip por chamada a
+  // getAvailableSlots (i.e. por troca de dia no fluxo de marcação).
+  const [{ data: bookings }, { data: blocks }, { data: recurring }, { data: skips }] =
+    await Promise.all([
+      (supabase as any)
+        .from("public_busy_times")
+        .select("starts_at, ends_at")
+        .eq("trainer_id", trainerId)
+        .gte("starts_at", dayStart.toISOString())
+        .lt("starts_at", dayEnd.toISOString()),
+      // SEC: lê da vista pública (sem `reason`) — base table é admin-only.
+      supabase
+        .from("public_blocked_times")
+        .select("starts_at, ends_at")
+        .eq("trainer_id", trainerId)
+        .lt("starts_at", dayEnd.toISOString())
+        .gt("ends_at", dayStart.toISOString()),
+      (supabase as any)
+        .from("public_recurring_blocks")
+        .select("start_time, end_time")
+        .eq("trainer_id", trainerId)
+        .eq("day_of_week", dow),
+      (supabase as any)
+        .from("public_recurring_block_skips")
+        .select("skip_date")
+        .eq("trainer_id", trainerId)
+        .eq("skip_date", dateStr),
+    ]);
 
   const busy: Array<{ start: number; end: number }> = [];
   for (const b of bookings ?? []) {
@@ -122,23 +143,6 @@ export async function getAvailableSlots(args: {
     busy.push({ start: new Date(b.starts_at!).getTime(), end: new Date(b.ends_at!).getTime() });
   }
 
-  // ── Bloqueios RECORRENTES (semanais) ────────────────────────────
-  // Repetem-se no mesmo dia-da-semana/horas até serem removidos. Não se
-  // aplicam num dia concreto se houver um "skip" para essa data (o
-  // trainer limpou/ajustou a recorrência nesse dia).
-  const dateStr = `${y}-${String(mo + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-  const [{ data: recurring }, { data: skips }] = await Promise.all([
-    (supabase as any)
-      .from("public_recurring_blocks")
-      .select("start_time, end_time")
-      .eq("trainer_id", trainerId)
-      .eq("day_of_week", dow),
-    (supabase as any)
-      .from("public_recurring_block_skips")
-      .select("skip_date")
-      .eq("trainer_id", trainerId)
-      .eq("skip_date", dateStr),
-  ]);
   if (((skips ?? []) as any[]).length === 0) {
     for (const rb of (recurring ?? []) as any[]) {
       const [rsh, rsm] = String(rb.start_time).split(":").map(Number);
