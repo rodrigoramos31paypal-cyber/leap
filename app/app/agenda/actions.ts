@@ -115,6 +115,77 @@ async function persistClientBookingNote(
   }
 }
 
+// Série recorrente: guarda a MESMA nota em TODAS as sessões (para o
+// trainer a ver em cada uma), mas envia UMA só notificação + UM só email
+// à equipa — em vez de um por sessão. Poupa quota Resend. O deep-link da
+// notificação aponta para a 1ª sessão da série.
+async function persistClientSeriesNote(bookingIds: string[], rawNote: string): Promise<void> {
+  const body = rawNote.trim().slice(0, NOTE_MAX_LEN);
+  if (!body || bookingIds.length === 0) return;
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // 1) Persiste em cada sessão (delete-then-insert por sessão).
+    for (const id of bookingIds) {
+      await supabase
+        .from("session_notes")
+        .delete()
+        .eq("booking_id", id)
+        .eq("author_id", user.id);
+      const { error: insErr } = await supabase
+        .from("session_notes")
+        .insert({ booking_id: id, author_id: user.id, body });
+      if (insErr) logError("persistClientSeriesNote:insert", insErr);
+    }
+
+    // 2) Notifica a equipa UMA só vez (âncora na 1ª sessão).
+    try {
+      const firstId = bookingIds[0];
+      const { data: bk } = await supabase
+        .from("bookings")
+        .select("trainer_id, starts_at")
+        .eq("id", firstId)
+        .maybeSingle();
+      if (!bk) return;
+      const admin = createAdminClient();
+      const [{ data: tr }, { data: prof }] = await Promise.all([
+        admin.from("trainers").select("profile_id").eq("id", (bk as any).trainer_id).maybeSingle(),
+        admin.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
+      ]);
+      const trainerProfileId = (tr as any)?.profile_id as string | undefined;
+      if (!trainerProfileId) return;
+      const name = ((prof as any)?.full_name ?? "").split(" ")[0] || "Um cliente";
+      const localDate = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Europe/Lisbon",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date((bk as any).starts_at));
+      await (admin as any).from("notifications").insert({
+        user_id: trainerProfileId,
+        type: "client_note",
+        title: "Nova nota de cliente",
+        body: `${name} deixou uma nota em ${bookingIds.length} sessões marcadas.`,
+        link: `/admin/agenda?view=week&d=${localDate}&booking=${firstId}`,
+      });
+      await emailStudioStaff(
+        "notes",
+        emailTemplates.clientNote({
+          trainerName: "equipa",
+          clientName: (prof as any)?.full_name ?? "Um cliente",
+          when: formatDateTime((bk as any).starts_at),
+        }),
+      );
+    } catch (e) {
+      logError("persistClientSeriesNote:notify", e);
+    }
+  } catch (e) {
+    logError("persistClientSeriesNote", e);
+  }
+}
+
 // NOTA (C3): a leitura de slots passou a Route Handler GET /api/slots
 // (cacheável + paralelizável). A antiga `getSlotsAction` foi removida.
 
@@ -299,9 +370,8 @@ export async function bookRecurringAction({
         ...result.booking_ids.map((id) => pushBookingToCalendars(id)),
       ];
       if (note && note.trim()) {
-        for (const id of result.booking_ids) {
-          tasks.push(persistClientBookingNote(id, note));
-        }
+        // Nota guardada em TODAS as sessões + UMA só notificação/email.
+        tasks.push(persistClientSeriesNote(result.booking_ids, note));
       }
       await Promise.allSettled(tasks);
       revalidateBookingViews();
