@@ -34,7 +34,15 @@ export const metadata: Metadata = {
       { url: "/icons/favicon.png", sizes: "32x32", type: "image/png" },
       { url: "/icons/favicon-16.png", sizes: "16x16", type: "image/png" },
     ],
-    apple: [{ url: "/icons/apple-touch.png", sizes: "180x180" }],
+    // Múltiplas dimensões → o iOS escolhe a correspondência exacta por
+    // dispositivo (iPhone @2x=120, iPad=152, iPad Pro=167, iPhone @3x=180)
+    // em vez de reescalar uma única imagem. Reduz o risco de fallback.
+    apple: [
+      { url: "/icons/apple-touch-120.png", sizes: "120x120" },
+      { url: "/icons/apple-touch-152.png", sizes: "152x152" },
+      { url: "/icons/apple-touch-167.png", sizes: "167x167" },
+      { url: "/icons/apple-touch.png", sizes: "180x180" },
+    ],
     shortcut: ["/icons/favicon.ico"],
   },
   openGraph: {
