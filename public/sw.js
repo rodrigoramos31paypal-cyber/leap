@@ -27,7 +27,10 @@
 // de ir à rede e em ligações lentas o iOS desistia e gerava o tile "L"
 // fallback. Agora precache de TODOS os ícones de instalação + /icons/ em
 // stale-while-revalidate (responde já do cache, actualiza em background).
-const CACHE_NAME = "leap-v15";
+// v16 (jun/2026): URL nova p/ o ícone 180 (apple-touch-180.png) — o
+// iOS cacheia o apple-touch-icon por URL e re-adicionar não limpa;
+// um URL novo força fetch fresco no iPhone.
+const CACHE_NAME = "leap-v16";
 const APP_SHELL = [
   "/",
   "/login",
@@ -41,6 +44,7 @@ const APP_SHELL = [
   // Ícones que o iOS/Android pedem ao "Adicionar ao ecrã principal" —
   // precache garante resposta imediata do cache no momento da instalação.
   "/icons/apple-touch.png",
+  "/icons/apple-touch-180.png",
   "/icons/apple-touch-120.png",
   "/icons/apple-touch-152.png",
   "/icons/apple-touch-167.png",
