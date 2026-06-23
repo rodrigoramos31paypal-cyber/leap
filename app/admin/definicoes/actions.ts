@@ -133,7 +133,20 @@ export async function saveSettingsAction(formData: FormData) {
   revalidatePath("/admin/definicoes");
 }
 
-export async function addAvailabilityAction(formData: FormData) {
+// Resultado serializável devolvido às chamadas do editor de horários. O
+// editor (client) usa-o para fazer updates otimistas e mostrar toasts —
+// já não dependemos do flash/cookie (que só aparecia na próxima navegação
+// e dava a sensação de "não atualizou").
+export type AvailResult =
+  | { ok: true; id?: string }
+  | { ok: false; error: string };
+
+// Deteta sobreposição entre [aStart,aEnd) e [bStart,bEnd) (strings "HH:MM").
+function timesOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string) {
+  return aStart < bEnd && aEnd > bStart;
+}
+
+export async function addAvailabilityAction(formData: FormData): Promise<AvailResult> {
   const profile = await requireStaff();
   const supabase = await createClient();
   const trainerId = String(formData.get("trainerId") ?? "");
@@ -141,8 +154,7 @@ export async function addAvailabilityAction(formData: FormData) {
   // _trainer_is_accessible(trainer_id), mas espelhamos o cheque ao
   // nível da app para não dependermos de a policy continuar perfeita.
   if (profile.role !== "owner" && trainerId !== (await getCurrentTrainerId())) {
-    await setFlash("Sem permissão.", "error");
-    return;
+    return { ok: false, error: "Sem permissão." };
   }
   const dayOfWeek = Number(formData.get("day_of_week") ?? 1);
   const startTime = String(formData.get("start_time") ?? "07:00");
@@ -151,94 +163,109 @@ export async function addAvailabilityAction(formData: FormData) {
   // Validação de intervalo: início < fim. Comparar como strings "HH:MM"
   // funciona porque o formato é fixo e lexicograficamente ordenável.
   if (startTime >= endTime) {
-    await setFlash("A hora de início tem de ser anterior à hora de fim", "error");
-    revalidatePath("/admin/definicoes");
-    return;
+    return { ok: false, error: "A hora de início tem de ser anterior à hora de fim" };
   }
 
-  // Regra: 1 horário por dia da semana. Defesa em profundidade — a UI
-  // já filtra o dropdown, mas o action também rejeita duplicados para
-  // que um submit direto (curl, JS modificado) não consiga inserir.
-  const { data: existing } = await supabase
+  // Vários intervalos por dia são permitidos (ex.: turno da manhã + da
+  // tarde). Só rejeitamos SOBREPOSIÇÕES no mesmo dia — defesa em
+  // profundidade para além da validação no cliente.
+  const { data: sameDay } = await supabase
     .from("trainer_availability")
-    .select("id")
+    .select("start_time, end_time")
     .eq("trainer_id", trainerId)
-    .eq("day_of_week", dayOfWeek)
-    .maybeSingle();
-
-  if (existing) {
-    const DAYS_PT = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
-    await setFlash(
-      `Já existe um horário para ${DAYS_PT[dayOfWeek] ?? "este dia"}. Elimina o atual antes de adicionar outro.`,
-      "error",
-    );
-    revalidatePath("/admin/definicoes");
-    return;
+    .eq("day_of_week", dayOfWeek);
+  for (const r of (sameDay ?? []) as any[]) {
+    if (timesOverlap(startTime, endTime, String(r.start_time).slice(0, 5), String(r.end_time).slice(0, 5))) {
+      return { ok: false, error: "Este intervalo sobrepõe-se a outro nesse dia." };
+    }
   }
 
-  const { error } = await supabase.from("trainer_availability").insert({
-    trainer_id: trainerId,
-    day_of_week: dayOfWeek,
-    start_time: startTime,
-    end_time: endTime,
-  });
-  if (error) { logError("addAvailabilityAction", error); await setFlash("Não foi possível adicionar disponibilidade", "error"); }
-  else await setFlash("Disponibilidade adicionada");
+  const { data, error } = await supabase
+    .from("trainer_availability")
+    .insert({
+      trainer_id: trainerId,
+      day_of_week: dayOfWeek,
+      start_time: startTime,
+      end_time: endTime,
+    })
+    .select("id")
+    .single();
+  if (error) {
+    logError("addAvailabilityAction", error);
+    return { ok: false, error: "Não foi possível adicionar disponibilidade" };
+  }
   revalidateAvailabilityViews();
+  return { ok: true, id: (data as any)?.id };
 }
 
-export async function updateAvailabilityAction(formData: FormData) {
+export async function updateAvailabilityAction(formData: FormData): Promise<AvailResult> {
   const profile = await requireStaff();
   const supabase = await createClient();
   const id = String(formData.get("id") ?? "");
   const startTime = String(formData.get("start_time") ?? "07:00");
   const endTime = String(formData.get("end_time") ?? "21:00");
-  if (!id) return;
+  if (!id) return { ok: false, error: "Horário inválido" };
   // H-4: variante por `id` — vai buscar o trainer_id da linha e valida.
   const { data: row } = await supabase
     .from("trainer_availability")
-    .select("trainer_id")
+    .select("trainer_id, day_of_week")
     .eq("id", id)
     .maybeSingle();
-  if (!row) { await setFlash("Horário não encontrado", "error"); return; }
+  if (!row) return { ok: false, error: "Horário não encontrado" };
   if (profile.role !== "owner" && row.trainer_id !== (await getCurrentTrainerId())) {
-    await setFlash("Sem permissão.", "error");
-    return;
+    return { ok: false, error: "Sem permissão." };
   }
   if (startTime >= endTime) {
-    await setFlash("A hora de início tem de ser anterior à hora de fim", "error");
-    revalidatePath("/admin/definicoes");
-    return;
+    return { ok: false, error: "A hora de início tem de ser anterior à hora de fim" };
   }
+
+  // Sobreposição com OUTROS intervalos do mesmo dia (exclui o próprio).
+  const { data: sameDay } = await supabase
+    .from("trainer_availability")
+    .select("id, start_time, end_time")
+    .eq("trainer_id", row.trainer_id)
+    .eq("day_of_week", (row as any).day_of_week);
+  for (const r of (sameDay ?? []) as any[]) {
+    if (r.id === id) continue;
+    if (timesOverlap(startTime, endTime, String(r.start_time).slice(0, 5), String(r.end_time).slice(0, 5))) {
+      return { ok: false, error: "Este intervalo sobrepõe-se a outro nesse dia." };
+    }
+  }
+
   const { error } = await supabase
     .from("trainer_availability")
     .update({ start_time: startTime, end_time: endTime })
     .eq("id", id);
-  if (error) { logError("updateAvailabilityAction", error); await setFlash("Não foi possível guardar o horário", "error"); }
-  else await setFlash("Horário actualizado");
+  if (error) {
+    logError("updateAvailabilityAction", error);
+    return { ok: false, error: "Não foi possível guardar o horário" };
+  }
   revalidateAvailabilityViews();
+  return { ok: true };
 }
 
-export async function deleteAvailabilityAction(formData: FormData) {
+export async function deleteAvailabilityAction(formData: FormData): Promise<AvailResult> {
   const profile = await requireStaff();
   const supabase = await createClient();
   const id = String(formData.get("id") ?? "");
-  if (!id) return;
+  if (!id) return { ok: false, error: "Horário inválido" };
   // H-4: variante por `id`.
   const { data: row } = await supabase
     .from("trainer_availability")
     .select("trainer_id")
     .eq("id", id)
     .maybeSingle();
-  if (!row) { await setFlash("Horário não encontrado", "error"); return; }
+  if (!row) return { ok: false, error: "Horário não encontrado" };
   if (profile.role !== "owner" && row.trainer_id !== (await getCurrentTrainerId())) {
-    await setFlash("Sem permissão.", "error");
-    return;
+    return { ok: false, error: "Sem permissão." };
   }
   const { error } = await supabase.from("trainer_availability").delete().eq("id", id);
-  if (error) { logError("deleteAvailabilityAction", error); await setFlash("Não foi possível remover", "error"); }
-  else await setFlash("Disponibilidade removida");
+  if (error) {
+    logError("deleteAvailabilityAction", error);
+    return { ok: false, error: "Não foi possível remover" };
+  }
   revalidateAvailabilityViews();
+  return { ok: true };
 }
 
 export async function deleteBlockAction(formData: FormData) {

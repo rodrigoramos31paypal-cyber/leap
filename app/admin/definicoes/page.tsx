@@ -2,7 +2,6 @@ import { createClient, getCurrentProfile } from "@/lib/supabase/server";
 import {
   saveSettingsAction,
   saveTrainerBioAction,
-  addAvailabilityAction,
   deleteBlockAction,
   changeStaffPasswordAction,
 } from "./actions";
@@ -10,7 +9,7 @@ import { googleEnabled, microsoftEnabled } from "@/lib/calendar-sync";
 import { getCurrentTrainer } from "@/lib/trainer";
 import { CopyButton } from "@/components/copy-button";
 import { AvatarUploader } from "@/components/avatar-uploader";
-import { AvailabilityRow } from "@/components/availability-row";
+import { WeeklyScheduleEditor } from "@/components/weekly-schedule-editor";
 import { EquipaSection } from "@/app/admin/equipa/equipa-section";
 import { NotificationCategoryPrefs, type CategoryPrefs } from "@/components/notification-category-prefs";
 import { TRAINER_CATEGORIES } from "@/lib/notifications-config";
@@ -26,8 +25,6 @@ import {
   Bell,
 } from "lucide-react";
 import Link from "next/link";
-
-const DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
 type TabId = "perfil" | "notificacoes" | "regras" | "horarios" | "calendario" | "seguranca" | "equipa";
 
@@ -452,22 +449,6 @@ function HorariosTab({
   availability: any[];
   blocks: any[];
 }) {
-  // Regra: 1 horário por dia da semana. Filtramos do dropdown os dias usados.
-  const usedDays = new Set(availability.map((a: any) => a.day_of_week));
-  const availableDays = DAYS.map((d, i) => ({ d, i })).filter((x) => !usedDays.has(x.i));
-
-  const timeOptions = Array.from({ length: 72 }, (_, k) => {
-    const total = 6 * 60 + k * 15;
-    const h = Math.floor(total / 60);
-    const m = total % 60;
-    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-  });
-  const ORDER_PT = [1, 2, 3, 4, 5, 6, 0];
-  const sortedAvailability = [...availability].sort(
-    (a: any, b: any) =>
-      ORDER_PT.indexOf(a.day_of_week) - ORDER_PT.indexOf(b.day_of_week),
-  );
-
   return (
     <div className="space-y-5">
       <div className="card p-5">
@@ -475,52 +456,11 @@ function HorariosTab({
           Horários disponíveis
         </h2>
         <p className="mt-1 text-xs text-ink-500">
-          Apenas um intervalo por dia. Para mudar, elimina o atual e adiciona um novo.
+          Define os intervalos em que aceitas marcações. Podes ter mais do que um
+          intervalo por dia (ex.: manhã e tarde). As alterações são guardadas
+          automaticamente.
         </p>
-        <ul className="mt-3 space-y-2">
-          {sortedAvailability.length === 0 && (
-            <li className="text-sm text-ink-500">Sem horários definidos.</li>
-          )}
-          {sortedAvailability.map((a: any) => (
-            <AvailabilityRow
-              key={a.id}
-              id={a.id}
-              dayOfWeek={a.day_of_week}
-              startTime={a.start_time}
-              endTime={a.end_time}
-            />
-          ))}
-        </ul>
-
-        {availableDays.length === 0 ? (
-          <p className="mt-4 rounded-md bg-bone-100 px-3 py-2 text-xs text-ink-600 dark:bg-white/[0.04]">
-            Todos os dias da semana já têm horário definido.
-          </p>
-        ) : (
-          <form action={addAvailabilityAction} className="mt-4 grid gap-2 sm:grid-cols-4">
-            <input type="hidden" name="trainerId" value={trainerId} />
-            <select
-              name="day_of_week"
-              className="input"
-              defaultValue={String(availableDays[0]?.i ?? 1)}
-            >
-              {availableDays.map(({ d, i }) => (
-                <option key={i} value={i}>{d}</option>
-              ))}
-            </select>
-            <select name="start_time" required defaultValue="07:00" className="input tabular-nums">
-              {timeOptions.slice(0, -1).map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-            <select name="end_time" required defaultValue="21:00" className="input tabular-nums">
-              {timeOptions.slice(1).map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-            <button className="btn-primary">Adicionar</button>
-          </form>
-        )}
+        <WeeklyScheduleEditor trainerId={trainerId} initial={availability} />
       </div>
 
       <div className="card p-5">
