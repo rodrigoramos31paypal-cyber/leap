@@ -17,10 +17,11 @@ import { unenrollAction } from "./seguranca/actions";
 
 // "seguranca" foi absorvida pela tab "Perfil" — 2FA + mudança de
 // palavra-passe + apagar conta estão agora no mesmo ecrã.
-type TabId = "perfil" | "notas" | "notificacoes";
+type TabId = "perfil" | "calendario" | "notas" | "notificacoes";
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: "perfil",       label: "Perfil",       icon: <User size={14} /> },
+  { id: "calendario",   label: "Calendário",   icon: <CalendarDays size={14} /> },
   { id: "notas",        label: "Notas",        icon: <NotebookPen size={14} /> },
   { id: "notificacoes", label: "Notificações", icon: <Bell size={14} /> },
 ];
@@ -38,7 +39,7 @@ export default async function PerfilPage(
 
   const activeTab: TabId = ((): TabId => {
     const t = searchParams.tab;
-    if (t === "notas" || t === "notificacoes") return t;
+    if (t === "calendario" || t === "notas" || t === "notificacoes") return t;
     return "perfil";
   })();
 
@@ -58,12 +59,13 @@ export default async function PerfilPage(
       <TabNav active={activeTab} />
 
       {activeTab === "perfil" && (
-        <PerfilTab
-          profile={tabData.profile}
-          factors={tabData.factors ?? []}
+        <PerfilTab profile={tabData.profile} factors={tabData.factors ?? []} />
+      )}
+      {activeTab === "calendario" && (
+        <CalendarioTab
           feedHttpUrl={tabData.feedHttpUrl ?? null}
           feedWebcalUrl={tabData.feedWebcalUrl ?? null}
-          feedLastFetchedAt={(tabData.profile as any)?.calendar_feed_last_fetched_at ?? null}
+          feedLastFetchedAt={tabData.feedLastFetchedAt ?? null}
         />
       )}
       {activeTab === "notas" && <NotasTab notes={tabData.notes ?? []} />}
@@ -110,10 +112,18 @@ async function loadTabData(
     const { data: profile } = await supabase.from("profiles").select("*").eq("id", userId).single();
     data.profile = profile;
     data.factors = await listVerifiedFactors().catch(() => []);
+  }
 
+  if (tab === "calendario") {
     // Feed iCal pessoal (subscrição única do calendário). Cada profile
     // tem um calendar_feed_token; construímos a URL http + a variante
-    // webcal:// (que o iOS abre direto no app Calendário).
+    // webcal:// (que o iOS abre direto no app Calendário). O
+    // calendar_feed_last_fetched_at dá-nos o estado da subscrição.
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("calendar_feed_token, calendar_feed_last_fetched_at")
+      .eq("id", userId)
+      .single();
     const feedToken = (profile as any)?.calendar_feed_token as string | undefined;
     const appBase = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
     data.feedHttpUrl = feedToken && appBase
@@ -122,6 +132,7 @@ async function loadTabData(
     data.feedWebcalUrl = data.feedHttpUrl
       ? (data.feedHttpUrl as string).replace(/^https?:\/\//, "webcal://")
       : null;
+    data.feedLastFetchedAt = (profile as any)?.calendar_feed_last_fetched_at ?? null;
   }
 
   if (tab === "notas") {
@@ -146,19 +157,7 @@ async function loadTabData(
   return data;
 }
 
-function PerfilTab({
-  profile,
-  factors,
-  feedHttpUrl,
-  feedWebcalUrl,
-  feedLastFetchedAt,
-}: {
-  profile: any;
-  factors: any[];
-  feedHttpUrl: string | null;
-  feedWebcalUrl: string | null;
-  feedLastFetchedAt: string | null;
-}) {
+function PerfilTab({ profile, factors }: { profile: any; factors: any[] }) {
   const hasFactor = factors.length > 0;
   return (
     <div className="space-y-4">
@@ -177,13 +176,6 @@ function PerfilTab({
         </div>
         <button type="submit" className="btn-primary w-full">Guardar</button>
       </form>
-
-      <section>
-        <h2 className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-ink-500">
-          <CalendarDays size={14} /> Calendário
-        </h2>
-        <CalendarSubscribeCard httpUrl={feedHttpUrl} webcalUrl={feedWebcalUrl} lastFetchedAt={feedLastFetchedAt} />
-      </section>
 
       <section>
         <h2 className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-ink-500">
@@ -277,6 +269,30 @@ function PerfilTab({
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-500">Apagar conta</h2>
         <DeleteAccountSection />
       </div>
+    </div>
+  );
+}
+
+function CalendarioTab({
+  feedHttpUrl,
+  feedWebcalUrl,
+  feedLastFetchedAt,
+}: {
+  feedHttpUrl: string | null;
+  feedWebcalUrl: string | null;
+  feedLastFetchedAt: string | null;
+}) {
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-ink-500">
+        Sincroniza as tuas sessões com o calendário do telemóvel. Subscreves uma vez e
+        ficam sempre atualizadas.
+      </p>
+      <CalendarSubscribeCard
+        httpUrl={feedHttpUrl}
+        webcalUrl={feedWebcalUrl}
+        lastFetchedAt={feedLastFetchedAt}
+      />
     </div>
   );
 }
