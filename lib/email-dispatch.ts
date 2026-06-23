@@ -88,6 +88,42 @@ export async function dispatchBookingCreated(bookingId: string) {
   );
 }
 
+// ────────────────────────────────────────────────────────────────
+// Marcação RECORRENTE: UM único email (por destinatário) a confirmar
+// TODAS as sessões da série, em vez de um por sessão — poupa quota
+// Resend. Lista cada data/hora escolhida. Calendário continua a ser
+// sincronizado por sessão (eventos individuais) no caller.
+// ────────────────────────────────────────────────────────────────
+export async function dispatchRecurringBookingCreated(bookingIds: string[]) {
+  if (!emailEnabled()) return;
+  if (!bookingIds || bookingIds.length === 0) return;
+  // 1 sessão não é "série" — usa o caminho normal.
+  if (bookingIds.length === 1) return dispatchBookingCreated(bookingIds[0]);
+
+  const supabase = createAdminClient();
+  const { data: rows } = await supabase
+    .from("bookings")
+    .select("starts_at, session_type, client_id")
+    .in("id", bookingIds)
+    .order("starts_at", { ascending: true });
+  const bookings = (rows ?? []) as { starts_at: string; session_type: string; client_id: string }[];
+  if (bookings.length === 0) return;
+
+  const clientId = bookings[0].client_id;
+  const type = bookings[0].session_type;
+  const sessions = bookings.map((b) => formatDateTime(b.starts_at));
+
+  const client = await getUserEmail(clientId);
+  if (client && (await emailAllowed(supabase, client.id, "sessions"))) {
+    const tpl = emailTemplates.recurringBookingCreated({ clientName: client.full_name, type, sessions });
+    await sendEmail({ to: client.email, ...tpl });
+  }
+  await emailStudioStaff(
+    "bookings",
+    emailTemplates.adminRecurringBookingCreated({ clientName: client?.full_name ?? "Cliente", type, sessions }),
+  );
+}
+
 export async function dispatchBookingCancelled(bookingId: string, refunded: boolean) {
   if (!emailEnabled()) return;
   const supabase = createAdminClient();

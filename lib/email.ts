@@ -248,4 +248,34 @@ export const emailTemplates = {
       text: `${args.clientName} cancelou a sessão de ${args.when}.`,
     };
   },
+  recurringBookingCreated(args: { clientName: string; type: string; sessions: string[] }) {
+    const items = args.sessions.map((s) => `<li style="margin:0 0 4px">${escapeHtml(s)}</li>`).join("");
+    return {
+      subject: `${args.sessions.length} sessões marcadas`,
+      html: shell(
+        `${args.sessions.length} sessões marcadas`,
+        `<p style="margin:0 0 10px">Olá ${escapeHtml(args.clientName)},</p>
+         <p style="margin:0 0 10px">Ficaram marcadas <strong>${args.sessions.length} sessões ${escapeHtml(args.type)}</strong> nos seguintes horários:</p>
+         <ul style="margin:0 0 10px;padding-left:18px">${items}</ul>
+         <p style="margin:0">Vê todas as tuas marcações no portal.</p>`,
+      ),
+      text:
+        `${args.sessions.length} sessões ${args.type} marcadas:\n` +
+        args.sessions.map((s) => `- ${s}`).join("\n"),
+    };
+  },
+  adminRecurringBookingCreated(args: { clientName: string; type: string; sessions: string[] }) {
+    const items = args.sessions.map((s) => `<li style="margin:0 0 4px">${escapeHtml(s)}</li>`).join("");
+    return {
+      subject: `Nova marcação recorrente · ${args.sessions.length} sessões`,
+      html: shell(
+        "Nova marcação recorrente",
+        `<p style="margin:0 0 10px"><strong>${escapeHtml(args.clientName)}</strong> marcou <strong>${args.sessions.length} sessões ${escapeHtml(args.type)}</strong>:</p>
+         <ul style="margin:0 0 10px;padding-left:18px">${items}</ul>`,
+      ),
+      text:
+        `${args.clientName} marcou ${args.sessions.length} sessões ${args.type}:\n` +
+        args.sessions.map((s) => `- ${s}`).join("\n"),
+    };
+  },
 };
