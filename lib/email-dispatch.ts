@@ -37,18 +37,31 @@ async function getUserEmail(
   return (data as any) ?? null;
 }
 
-async function getTrainerEmail(
-  trainerId: string,
-): Promise<{ id: string; email: string; full_name: string } | null> {
-  if (!emailEnabled()) return null;
+// ────────────────────────────────────────────────────────────────
+// Envia um email a TODA a equipa (owner + trainer), respeitando a
+// preferência de cada um para a categoria. Espelha, no canal email, o
+// fan-out que o trigger fanout_staff_notifications (migration 0103) faz
+// no canal in-app/push — para que os "Admins" (owner sem trainer
+// próprio, ex. leaptreinos) recebam também os emails de equipa.
+// Best-effort por destinatário: uma falha não trava as outras.
+// ────────────────────────────────────────────────────────────────
+export async function emailStudioStaff(
+  category: string,
+  tpl: { subject: string; html: string; text?: string },
+) {
+  if (!emailEnabled()) return;
   const supabase = createAdminClient();
-  const { data: trainer } = await supabase
-    .from("trainers")
-    .select("profile_id")
-    .eq("id", trainerId)
-    .single();
-  if (!trainer?.profile_id) return null;
-  return getUserEmail(trainer.profile_id);
+  const { data: staff } = await supabase
+    .from("profiles")
+    .select("id, email")
+    .in("role", ["owner", "trainer"]);
+  await Promise.all(
+    ((staff ?? []) as { id: string; email: string | null }[]).map(async (s) => {
+      if (!s.email) return;
+      if (!(await emailAllowed(supabase, s.id, category))) return;
+      await sendEmail({ to: s.email!, ...tpl }).catch(() => {});
+    }),
+  );
 }
 
 export async function dispatchBookingCreated(bookingId: string) {
@@ -61,20 +74,18 @@ export async function dispatchBookingCreated(bookingId: string) {
     .single();
   if (!b) return;
 
-  const [client, admin] = await Promise.all([
-    getUserEmail(b.client_id),
-    getTrainerEmail(b.trainer_id),
-  ]);
+  const client = await getUserEmail(b.client_id);
   const when = formatDateTime(b.starts_at);
 
   if (client && (await emailAllowed(supabase, client.id, "sessions"))) {
     const tpl = emailTemplates.bookingCreated({ clientName: client.full_name, when, type: b.session_type });
     await sendEmail({ to: client.email, ...tpl });
   }
-  if (admin && (await emailAllowed(supabase, admin.id, "bookings"))) {
-    const tpl = emailTemplates.adminBookingCreated({ clientName: client?.full_name ?? "Cliente", when, type: b.session_type });
-    await sendEmail({ to: admin.email, ...tpl });
-  }
+  // Toda a equipa (owner + trainers), não só o trainer da sessão.
+  await emailStudioStaff(
+    "bookings",
+    emailTemplates.adminBookingCreated({ clientName: client?.full_name ?? "Cliente", when, type: b.session_type }),
+  );
 }
 
 export async function dispatchBookingCancelled(bookingId: string, refunded: boolean) {
@@ -88,10 +99,7 @@ export async function dispatchBookingCancelled(bookingId: string, refunded: bool
   if (!b) return;
   const when = formatDateTime(b.starts_at);
 
-  const [client, admin] = await Promise.all([
-    getUserEmail(b.client_id),
-    getTrainerEmail(b.trainer_id),
-  ]);
+  const client = await getUserEmail(b.client_id);
 
   if (client && (await emailAllowed(supabase, client.id, "sessions"))) {
     const tpl = emailTemplates.bookingCancelled({
@@ -101,14 +109,14 @@ export async function dispatchBookingCancelled(bookingId: string, refunded: bool
     });
     await sendEmail({ to: client.email, ...tpl });
   }
-  // Email ao treinador quando um cliente cancela (categoria 'bookings').
-  if (admin && (await emailAllowed(supabase, admin.id, "bookings"))) {
-    const tpl = emailTemplates.adminBookingCancelled({
+  // Email a toda a equipa quando um cliente cancela (categoria 'bookings').
+  await emailStudioStaff(
+    "bookings",
+    emailTemplates.adminBookingCancelled({
       clientName: client?.full_name ?? "Um cliente",
       when,
-    });
-    await sendEmail({ to: admin.email, ...tpl });
-  }
+    }),
+  );
 }
 
 export async function dispatchBookingConfirmed(bookingId: string) {
@@ -162,28 +170,14 @@ export async function dispatchPurchasePending(purchaseId: string) {
 
   // Avisa toda a equipa (owner + trainers), não só o trainer dono da
   // purchase — um "Admin" (owner sem trainer próprio) também tem de
-  // saber que há um pagamento a confirmar. Espelha o fan-out do
-  // trigger notify_admin_on_purchase (migration 0102).
-  const [{ data: staff }, client] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("id, email, full_name")
-      .in("role", ["owner", "trainer"]),
-    getUserEmail(p.client_id),
-  ]);
-  if (!staff || staff.length === 0) return;
-
-  const tpl = emailTemplates.adminPurchasePending({
-    clientName: client?.full_name ?? "Cliente",
-    packName: (p.pack_snapshot as any)?.name ?? "pack",
-    amountEur: eur(p.amount_cents),
-  });
-
-  await Promise.all(
-    (staff as { id: string; email: string | null }[]).map(async (s) => {
-      if (!s.email) return;
-      if (!(await emailAllowed(supabase, s.id, "payments"))) return;
-      await sendEmail({ to: s.email, ...tpl }).catch(() => {});
+  // saber que há um pagamento a confirmar.
+  const client = await getUserEmail(p.client_id);
+  await emailStudioStaff(
+    "payments",
+    emailTemplates.adminPurchasePending({
+      clientName: client?.full_name ?? "Cliente",
+      packName: (p.pack_snapshot as any)?.name ?? "pack",
+      amountEur: eur(p.amount_cents),
     }),
   );
 }

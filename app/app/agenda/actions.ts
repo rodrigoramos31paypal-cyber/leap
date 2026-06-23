@@ -1,8 +1,8 @@
 "use server";
 
 import { createBooking, createRecurringBooking, type RecurringBookingResult } from "@/lib/credits";
-import { dispatchBookingCreated } from "@/lib/email-dispatch";
-import { sendEmail, emailTemplates, emailEnabled } from "@/lib/email";
+import { dispatchBookingCreated, emailStudioStaff } from "@/lib/email-dispatch";
+import { emailTemplates } from "@/lib/email";
 import { pushBookingToCalendars, removeBookingFromCalendars } from "@/lib/calendar-sync";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
@@ -96,23 +96,16 @@ async function persistClientBookingNote(
         link: `/admin/agenda?view=week&d=${localDate}&booking=${bookingId}`,
       });
 
-      // Email ao trainer (best-effort), separado do in-app/push.
-      if (emailEnabled()) {
-        const { data: trainerProf } = await admin
-          .from("profiles")
-          .select("email, full_name")
-          .eq("id", trainerProfileId)
-          .maybeSingle();
-        const trainerEmail = (trainerProf as any)?.email as string | undefined;
-        if (trainerEmail) {
-          const tpl = emailTemplates.clientNote({
-            trainerName: (trainerProf as any)?.full_name ?? "treinador",
-            clientName: (prof as any)?.full_name ?? "Um cliente",
-            when: formatDateTime((bk as any).starts_at),
-          });
-          await sendEmail({ to: trainerEmail, ...tpl });
-        }
-      }
+      // Email a TODA a equipa (owner + trainers), best-effort, separado
+      // do in-app/push (esse é espalhado pelo trigger da migration 0103).
+      await emailStudioStaff(
+        "notes",
+        emailTemplates.clientNote({
+          trainerName: "equipa",
+          clientName: (prof as any)?.full_name ?? "Um cliente",
+          when: formatDateTime((bk as any).starts_at),
+        }),
+      );
     } catch (e) {
       logError("persistClientBookingNote:notify", e);
     }
