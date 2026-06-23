@@ -118,7 +118,7 @@ export default async function ClientDashboard() {
           <div className="flex items-center gap-2 font-semibold">
             <AlertCircle size={16} /> Restam {credits.total} {pluralize(credits.total, "sessão", "sessões")}
           </div>
-          <p className="mt-1">Considera renovar o teu pack para não interromperes o treino.</p>
+          <p className="mt-1">Considera renovar o teu pack para não interromperes o teu progresso.</p>
         </div>
       )}
 
