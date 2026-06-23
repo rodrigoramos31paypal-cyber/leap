@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { createClient, getSessionUser, getCurrentProfile } from "@/lib/supabase/server";
 import { TopBar } from "@/components/top-bar";
 import { BottomNav } from "@/components/bottom-nav";
+import { ViewportKeyboard } from "@/components/viewport-keyboard";
 import { Toaster } from "@/components/toaster";
 import { ReminderSync } from "@/components/reminder-sync";
 import { ClientTopNav } from "@/components/client-top-nav";
@@ -42,7 +43,11 @@ export default async function ClientLayout({ children }: { children: React.React
   const flash = await consumeFlash();
 
   return (
-    <div className="flex h-[100dvh] flex-col overflow-hidden bg-bone-50 dark:bg-ink-900">
+    <div
+      className="flex flex-col overflow-hidden bg-bone-50 dark:bg-ink-900"
+      style={{ height: "calc(100dvh - var(--kb, 0px))" }}
+    >
+      <ViewportKeyboard />
       <TopBar unread={0} userId={user.id} homeHref="/app/dashboard" />
       <ClientTopNav />
       <Toaster initial={flash} />
