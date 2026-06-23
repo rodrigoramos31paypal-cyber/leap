@@ -5,6 +5,13 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// Fuso do estúdio. As datas/horas de sessões são timestamptz e TÊM de ser
+// mostradas sempre na hora do estúdio (Europe/Lisbon), independentemente
+// de onde o código corre. Sem isto, o formatador usa o fuso do runtime:
+// no servidor (Vercel = UTC) uma sessão das 20:00 de Lisboa aparecia como
+// 19:00 (uma hora a menos) nas páginas SSR e nos emails.
+const STUDIO_TZ = "Europe/Lisbon";
+
 export function eur(cents: number): string {
   return new Intl.NumberFormat("pt-PT", {
     style: "currency",
@@ -20,6 +27,7 @@ export function eurFromEuros(euros: number): string {
 export function formatDate(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
   return new Intl.DateTimeFormat("pt-PT", {
+    timeZone: STUDIO_TZ,
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -29,6 +37,7 @@ export function formatDate(date: Date | string): string {
 export function formatDateTime(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
   return new Intl.DateTimeFormat("pt-PT", {
+    timeZone: STUDIO_TZ,
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -41,6 +50,7 @@ export function formatDateTime(date: Date | string): string {
 export function formatTime(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
   return new Intl.DateTimeFormat("pt-PT", {
+    timeZone: STUDIO_TZ,
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
