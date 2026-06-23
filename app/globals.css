@@ -28,6 +28,15 @@ html {
   scrollbar-gutter: stable;
 }
 
+/* Teclado virtual aberto (marcado por ViewportKeyboard): esconde a barra
+   de navegação inferior. Sem isto, em iOS PWA a barra "flutuava" a meio do
+   ecrã com um espaço branco por baixo quando o teclado abria numa página
+   de conteúdo curto. Esconder a barra enquanto se escreve elimina o
+   artefacto e dá mais espaço ao campo de texto. */
+html.kb-open #app-bottom-nav {
+  display: none;
+}
+
 /* iOS Safari: input[type="date"] tem largura intrínseca baseada no
    conteúdo (placeholder + ícone do calendário) e ignora frequentemente
    `width: 100%` em layouts apertados, "saltando" para fora do viewport.

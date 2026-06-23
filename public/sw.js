@@ -39,7 +39,17 @@
 // suportado → rejeitava e só focava a página atual, nunca levava à agenda.
 // Agora tenta navigate() e, se falhar/não existir, recorre a openWindow()
 // (que no iOS navega a janela da PWA para o destino).
-const CACHE_NAME = "leap-v18";
+// v19 (jun/2026): deep-link da notificação fiável no iOS. Em vez de
+// WindowClient.navigate() (sem efeito no iOS standalone) ou openWindow
+// (que abre o start_url), o clique passa a (a) postMessage para a app
+// navegar pelo router interno quando já está aberta, e (b) guardar a
+// navegação pendente para a app pedir ao montar (cold start via push).
+const CACHE_NAME = "leap-v19";
+
+// Navegação pendente de um push tocado com a app fechada. O iOS abre a
+// PWA no start_url (/app/dashboard); ao montar, a app pede esta via
+// "get-pending-nav" e redireciona para o destino real.
+let pendingNav = null;
 const APP_SHELL = [
   "/",
   "/login",
@@ -209,33 +219,49 @@ self.addEventListener("notificationclick", (event) => {
       }).catch(() => {})
     : Promise.resolve();
 
-  // Resolve para URL absoluto (o `link` guardado é relativo, ex.
-  // "/app/agenda") para comparar com c.url e navegar de forma fiável.
+  // O `link` guardado é relativo (ex. "/app/agenda"); resolvemos para
+  // absoluto só para comparar com c.url. À app enviamos o caminho relativo.
   const dest = new URL(target, self.location.origin).href;
 
   const focusOrOpen = self.clients
     .matchAll({ type: "window", includeUncontrolled: true })
     .then(async (list) => {
-      // 1) Já existe uma janela exatamente no destino → só foca.
-      for (const c of list) {
-        if ("focus" in c && c.url === dest) return c.focus();
-      }
-      // 2) Janela da app aberta noutra página → tenta navegá-la. Se o
-      //    navigate() não existir ou rejeitar (iOS standalone), cai para o
-      //    openWindow() em baixo.
-      for (const c of list) {
-        if (!("focus" in c) || !("navigate" in c)) continue;
+      const client = list.find((c) => "focus" in c);
+      if (client) {
+        // App aberta/em segundo plano: foca e PEDE À APP para navegar via
+        // postMessage. O router interno do Next navega de forma fiável —
+        // ao contrário de WindowClient.navigate(), sem efeito no iOS PWA.
         try {
-          const nc = await c.navigate(dest);
-          return (nc || c).focus();
-        } catch (e) {
-          break;
+          await client.focus();
+        } catch (e) {}
+        client.postMessage({ type: "navigate", url: dest });
+        return;
+      }
+      // App fechada: guarda o destino (a app pede-o ao montar) e abre.
+      pendingNav = dest;
+      if (self.clients.openWindow) {
+        const w = await self.clients.openWindow(dest);
+        if (w) {
+          try {
+            w.postMessage({ type: "navigate", url: dest });
+          } catch (e) {}
         }
       }
-      // 3) Fallback fiável: app fechada OU iOS standalone sem navigate().
-      //    openWindow() no iOS navega a própria janela da PWA para o destino.
-      if (self.clients.openWindow) return self.clients.openWindow(dest);
     });
 
   event.waitUntil(Promise.all([markRead, focusOrOpen]));
+});
+
+// A app, ao montar, pergunta se há navegação pendente (cold start via
+// push). Respondemos com o destino e limpamos. event.source é o cliente
+// que perguntou.
+self.addEventListener("message", (event) => {
+  const data = event.data || {};
+  if (data.type === "get-pending-nav" && pendingNav) {
+    const url = pendingNav;
+    pendingNav = null;
+    if (event.source && "postMessage" in event.source) {
+      event.source.postMessage({ type: "navigate", url });
+    }
+  }
 });
