@@ -62,7 +62,11 @@ export async function sendEmail(args: SendArgs): Promise<{ ok: boolean; error?: 
 // URL base usada para o logo nos emails. Resend envia sempre em produção,
 // por isso assumimos o domínio do .env (com fallback para o público).
 const EMAIL_APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://leapfitnesstudio.com").replace(/\/$/, "");
-const LOGO_URL = `${EMAIL_APP_URL}/images/logo.png`;
+// Logo dos emails: variante com BADGE CLARO OPACO cozido no PNG.
+// Os clientes em dark mode (Outlook, Gmail) só recolorem cores de fundo CSS
+// e texto — nunca imagens. Um logo transparente preto desaparecia no cartão
+// escurecido; esta versão fica sempre visível em light e dark mode.
+const LOGO_URL = `${EMAIL_APP_URL}/images/email-logo.png`;
 // Marca: nome canónico em "Title Case". NÃO usamos NEXT_PUBLIC_APP_NAME
 // aqui — historicamente esse env veio como "LEAP-FITNESS STUDIO" e
 // poluía o cabeçalho. Mantém-se hardcoded para garantir consistência.
@@ -144,14 +148,16 @@ export const emailTemplates = {
     };
   },
   purchaseConfirmed(args: { clientName: string; packName: string; sessions: number }) {
+    // CTA removido: o iOS não permite abrir a PWA instalada a partir de um link
+    // de email (sem URL scheme/Universal Links para PWAs); o link só abria o
+    // browser e exigia novo login. O texto remete para o portal.
     return {
       subject: "Pack ativo",
       html: shell(
         "Pack ativo",
         `<p style="margin:0 0 12px">Olá ${escapeHtml(args.clientName)},</p>
          <p style="margin:0 0 12px">O teu pack <strong>${escapeHtml(args.packName)}</strong> foi ativado.</p>
-         <p style="margin:0 0 18px">Tens <strong>${args.sessions} ${args.sessions === 1 ? "sessão" : "sessões"}</strong> disponíveis para marcar.</p>`,
-        { label: "Marcar sessão", href: `${EMAIL_APP_URL}/app/agenda` },
+         <p style="margin:0 0 18px">Tens <strong>${args.sessions} ${args.sessions === 1 ? "sessão" : "sessões"}</strong> disponíveis para marcar no portal.</p>`,
       ),
       text: `${args.packName} ativo (${args.sessions} sessões). Marca em ${EMAIL_APP_URL}/app/agenda`,
     };
