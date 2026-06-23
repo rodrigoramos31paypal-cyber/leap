@@ -25,6 +25,7 @@ export const TRAINER_CATEGORIES: NotifCategory[] = [
   { key: "bookings", label: "Marcações", desc: "Cliente marcou ou cancelou uma sessão." },
   { key: "payments", label: "Pagamentos", desc: "Compras de packs a aguardar confirmação." },
   { key: "notes", label: "Notas de clientes", desc: "Cliente deixou uma nota numa sessão." },
+  { key: "signups", label: "Novos registos", desc: "Um cliente criou uma conta. Só in-app/push (sem email)." },
   { key: "reminders", label: "Lembretes", desc: "Lembrete das sessões do dia." },
 ];
 
@@ -41,6 +42,10 @@ type Role = "client" | "trainer" | "owner";
  * do destinatário. `null` = sem categoria conhecida → nunca bloqueia.
  */
 export function categoryForType(type: string, role: Role): string | null {
+  // ORDEM (jun/2026): tipos staff específicos ANTES do catch-all `_admin`.
+  // `new_signup_admin` cai na própria categoria `signups`, não em
+  // `bookings`, senão o toggle de Marcações silenciava também os registos.
+  if (type === "new_signup_admin") return "signups";
   if (type.endsWith("_admin")) return "bookings"; // booking_created_admin / booking_cancelled_admin
   if (type === "payment_pending") return "payments";
   if (type === "client_note") return "notes";
