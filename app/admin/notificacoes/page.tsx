@@ -1,26 +1,25 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { NotificationsList } from "@/components/notifications-list";
 
 export default async function AdminNotificationsPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // PERF (P-13): getSessionUser lê só o cookie (sem round-trip ao GoTrue);
+  // o middleware já validou o JWT. Antes era supabase.auth.getUser().
+  const user = await getSessionUser();
   if (!user) redirect("/login");
 
+  const supabase = await createClient();
+
   // BUG-FIX (#7): apenas as 10 mais recentes para não carregar centenas.
+  // PERF (P-14): o UPDATE "marcar como lido" saiu daqui — o admin layout
+  // (`app/admin/layout.tsx`) já o faz quando o path é /admin/notificacoes.
+  // Esta página é agora só leitura.
   const { data: notifs } = await supabase
     .from("notifications")
     .select("id, type, title, body, link, created_at")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
     .limit(10);
-
-  // marca todas como lidas ao abrir
-  await supabase
-    .from("notifications")
-    .update({ read_at: new Date().toISOString() })
-    .eq("user_id", user.id)
-    .is("read_at", null);
 
   return (
     <div className="space-y-5">

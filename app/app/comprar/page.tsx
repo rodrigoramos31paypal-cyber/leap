@@ -13,8 +13,15 @@ export default async function BuyPackPage(props: { searchParams: Promise<{ train
 
   const supabase = await createClient();
 
-  const actives = await getActiveTrainersPublic();
-  const preselected = searchParams.trainer ?? (await getTrainerForClient(user.id));
+  // PERF (P-16): getActiveTrainersPublic e getTrainerForClient são
+  // independentes — corriam em série. Paralelizadas (mesmo padrão do
+  // /app/agenda). getTrainerForClient só é preciso quando NÃO vem
+  // ?trainer= na URL → poupa 1 round-trip no caminho comum.
+  const [actives, fallbackTrainer] = await Promise.all([
+    getActiveTrainersPublic(),
+    searchParams.trainer ? Promise.resolve(null) : getTrainerForClient(user.id),
+  ]);
+  const preselected = searchParams.trainer ?? fallbackTrainer;
   const trainerId = preselected && actives.some((t) => t.id === preselected) ? preselected : null;
 
   // se há mais que 1 e não há preferência → mostra picker
