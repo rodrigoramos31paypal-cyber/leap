@@ -33,7 +33,13 @@
 // v17 (jun/2026): ícone maskable Android com fundo full-bleed +
 // logo dentro da safe-zone (antes aparecia minúsculo num quadrado
 // cinzento). Ficheiros novos → fetch fresco no re-install.
-const CACHE_NAME = "leap-v17";
+// v18 (jun/2026): REGRESSÃO do deep-link da notificação. O handler
+// notificationclick passou (v13) a usar WindowClient.navigate() quando a
+// PWA já estava aberta noutra página. No iOS standalone navigate() NÃO é
+// suportado → rejeitava e só focava a página atual, nunca levava à agenda.
+// Agora tenta navigate() e, se falhar/não existir, recorre a openWindow()
+// (que no iOS navega a janela da PWA para o destino).
+const CACHE_NAME = "leap-v18";
 const APP_SHELL = [
   "/",
   "/login",
@@ -209,23 +215,25 @@ self.addEventListener("notificationclick", (event) => {
 
   const focusOrOpen = self.clients
     .matchAll({ type: "window", includeUncontrolled: true })
-    .then((list) => {
+    .then(async (list) => {
+      // 1) Já existe uma janela exatamente no destino → só foca.
       for (const c of list) {
-        if (!("focus" in c)) continue;
-        // Já está na página certa → só foca.
-        if (c.url === dest) return c.focus();
-        // Janela da app já aberta noutra página: NAVEGA-a para o destino
-        // e foca. Antes só abríamos uma janela nova quando a URL não
-        // batia certo — comportamento que, numa PWA instalada, abria um
-        // separador novo (ou nada) em vez de levar o utilizador à agenda.
-        if ("navigate" in c) {
-          return c
-            .navigate(dest)
-            .then((nc) => (nc || c).focus())
-            .catch(() => c.focus());
-        }
-        return c.focus();
+        if ("focus" in c && c.url === dest) return c.focus();
       }
+      // 2) Janela da app aberta noutra página → tenta navegá-la. Se o
+      //    navigate() não existir ou rejeitar (iOS standalone), cai para o
+      //    openWindow() em baixo.
+      for (const c of list) {
+        if (!("focus" in c) || !("navigate" in c)) continue;
+        try {
+          const nc = await c.navigate(dest);
+          return (nc || c).focus();
+        } catch (e) {
+          break;
+        }
+      }
+      // 3) Fallback fiável: app fechada OU iOS standalone sem navigate().
+      //    openWindow() no iOS navega a própria janela da PWA para o destino.
       if (self.clients.openWindow) return self.clients.openWindow(dest);
     });
 
