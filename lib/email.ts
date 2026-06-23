@@ -59,22 +59,43 @@ export async function sendEmail(args: SendArgs): Promise<{ ok: boolean; error?: 
 
 // ─── Templates ───────────────────────────────────────────────────────
 
-function shell(title: string, body: string) {
-  const appName = process.env.NEXT_PUBLIC_APP_NAME ?? "LEAP Fitness Studio";
+// URL base usada para o logo nos emails. Resend envia sempre em produção,
+// por isso assumimos o domínio do .env (com fallback para o público).
+const EMAIL_APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://leapfitnesstudio.com").replace(/\/$/, "");
+const LOGO_URL = `${EMAIL_APP_URL}/images/logo.png`;
+// Marca: nome canónico em "Title Case". NÃO usamos NEXT_PUBLIC_APP_NAME
+// aqui — historicamente esse env veio como "LEAP-FITNESS STUDIO" e
+// poluía o cabeçalho. Mantém-se hardcoded para garantir consistência.
+const BRAND_NAME = "LEAP Fitness Studio";
+
+function shell(title: string, body: string, cta?: { label: string; href: string }) {
+  // Botão CTA opcional. Renderizado como bulletproof button (table-based)
+  // para Outlook e clientes mais antigos.
+  const ctaHtml = cta
+    ? `<table cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 4px"><tr><td style="border-radius:10px;background:#caa14a">
+         <a href="${escapeHtml(cta.href)}" style="display:inline-block;padding:13px 28px;font-size:15px;font-weight:600;color:#1a1a1a;text-decoration:none;border-radius:10px">
+           ${escapeHtml(cta.label)}
+         </a>
+       </td></tr></table>`
+    : "";
+
   return `<!doctype html>
 <html><body style="margin:0;padding:0;background:#faf8f4;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;color:#1a1a1a">
-<table width="100%" cellpadding="0" cellspacing="0" style="padding:24px 16px">
+<table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px;background:#faf8f4">
   <tr><td align="center">
-    <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#fff;border:1px solid #e6e3dc;border-radius:12px;overflow:hidden">
-      <tr><td style="padding:24px 28px;border-bottom:1px solid #f1ede4">
-        <div style="font-weight:700;font-size:14px;letter-spacing:.04em">${escapeHtml(appName)}</div>
+    <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #ece8de;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(26,26,26,0.04)">
+      <tr><td align="center" style="padding:28px 28px 8px;background:#ffffff">
+        <img src="${escapeHtml(LOGO_URL)}" alt="${escapeHtml(BRAND_NAME)}" width="56" height="56" style="display:block;width:56px;height:56px;border:0;outline:none;text-decoration:none" />
+        <div style="margin-top:10px;font-weight:700;font-size:13px;letter-spacing:.08em;color:#1a1a1a;text-transform:uppercase">${escapeHtml(BRAND_NAME)}</div>
       </td></tr>
-      <tr><td style="padding:28px">
-        <h1 style="margin:0 0 12px 0;font-size:20px;font-weight:800">${escapeHtml(title)}</h1>
-        ${body}
+      <tr><td style="padding:8px 36px 4px"><div style="height:1px;background:#f1ede4;line-height:1px;font-size:0">&nbsp;</div></td></tr>
+      <tr><td style="padding:24px 36px 32px">
+        <h1 style="margin:0 0 14px;font-size:22px;font-weight:800;line-height:1.25;color:#1a1a1a">${escapeHtml(title)}</h1>
+        <div style="font-size:15px;line-height:1.6;color:#3a3a3a">${body}</div>
+        ${ctaHtml}
       </td></tr>
-      <tr><td style="padding:18px 28px;background:#faf8f4;color:#7a7466;font-size:11px;line-height:1.5">
-        Este é um email automático. Se tiveres dúvidas responde a esta mensagem.
+      <tr><td style="padding:18px 36px;background:#faf8f4;color:#7a7466;font-size:11px;line-height:1.6;border-top:1px solid #f1ede4">
+        ${escapeHtml(BRAND_NAME)} · este é um email automático. Se tiveres dúvidas responde a esta mensagem.
       </td></tr>
     </table>
   </td></tr>
@@ -127,11 +148,12 @@ export const emailTemplates = {
       subject: "Pack ativo",
       html: shell(
         "Pack ativo",
-        `<p style="margin:0 0 10px">Olá ${escapeHtml(args.clientName)},</p>
-         <p style="margin:0 0 10px">O pack <strong>${escapeHtml(args.packName)}</strong> foi ativado.</p>
-         <p style="margin:0"><strong>${args.sessions} sessões</strong> disponíveis para marcar.</p>`,
+        `<p style="margin:0 0 12px">Olá ${escapeHtml(args.clientName)},</p>
+         <p style="margin:0 0 12px">O teu pack <strong>${escapeHtml(args.packName)}</strong> foi ativado.</p>
+         <p style="margin:0 0 18px">Tens <strong>${args.sessions} ${args.sessions === 1 ? "sessão" : "sessões"}</strong> disponíveis para marcar.</p>`,
+        { label: "Marcar sessão", href: `${EMAIL_APP_URL}/app/agenda` },
       ),
-      text: `${args.packName} ativo (${args.sessions} sessões).`,
+      text: `${args.packName} ativo (${args.sessions} sessões). Marca em ${EMAIL_APP_URL}/app/agenda`,
     };
   },
   adminBookingCreated(args: { clientName: string; when: string; type: string }) {
