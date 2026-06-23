@@ -27,28 +27,34 @@ export default async function ClientDetail(props: { params: Promise<{ id: string
   const profileId = profile.id;
   const isDeleted = (profile.email ?? "").endsWith("@removido.invalid");
 
+  // PERF (P-18): só as colunas consumidas pelo render (antes `*`, que trazia
+  // o pack_snapshot pesado + dezenas de colunas nunca lidas em ambas as tabelas).
   const [trainerIds, credits, { data: purchasesRaw }, { data: bookingsRaw }] =
     await Promise.all([
       getAccessibleTrainerIds(),
       getClientCredits(profileId),
       supabase
         .from("purchases")
-        .select("*")
+        .select("id, pack_snapshot, created_at, amount_cents, sessions_remaining, sessions_total")
         .eq("client_id", profileId)
         .order("created_at", { ascending: false })
         .limit(20),
       supabase
         .from("bookings")
-        .select("*")
+        .select("id, starts_at, session_type, status")
         .eq("client_id", profileId)
         .order("starts_at", { ascending: false })
         .limit(20),
     ]);
   const purchases = (purchasesRaw ?? []) as any[];
   const bookings = (bookingsRaw ?? []) as any[];
-  const clientNotesMap = await getClientNotesMapForBookings(bookings.map((b: any) => b.id), params.id);
+  const bookingIds = bookings.map((b: any) => b.id);
 
-  const [{ data: packsRaw }, notesMap] = await Promise.all([
+  // PERF (P-19): packs (depende de trainerIds), as duas notes-maps (dependem
+  // dos bookingIds) e o duoPartner (depende só do profileId) já têm todos os
+  // inputs resolvidos pelo batch acima — eram 3 estágios em série, agora um
+  // único Promise.all. Poupa 2 round-trips por carregamento da ficha.
+  const [{ data: packsRaw }, clientNotesMap, notesMap, duoPartner] = await Promise.all([
     supabase
       .from("packs")
       .select("id, name, session_type, sessions, price_cents, validity_days, trainer_id")
@@ -56,10 +62,11 @@ export default async function ClientDetail(props: { params: Promise<{ id: string
       .eq("active", true)
       .order("session_type")
       .order("sort_order"),
-    getMyNotesMapForBookings(bookings.map((b) => b.id)),
+    getClientNotesMapForBookings(bookingIds, params.id),
+    getMyNotesMapForBookings(bookingIds),
+    isDeleted ? Promise.resolve(null) : getDuoPartner(profileId),
   ]);
   const packs = (packsRaw ?? []) as any[];
-  const duoPartner = isDeleted ? null : await getDuoPartner(profileId);
 
   return (
     <div className="space-y-5">

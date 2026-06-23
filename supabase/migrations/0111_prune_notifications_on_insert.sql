@@ -65,6 +65,21 @@ create trigger trg_prune_notifications
   after insert on notifications
   for each row execute procedure prune_notifications_keep_recent();
 
+-- ── Backfill one-time ────────────────────────────────────────────
+-- O trigger só poda no PRÓXIMO insert de cada user. Quem já tem >10
+-- linhas (sobretudo admins, que nunca podavam) ficaria com o bug de
+-- "apagar traz a 11.ª de volta" até receber uma notificação nova.
+-- Esta limpeza única alinha já toda a tabela com KEEP=10.
+delete from notifications n
+using (
+  select id,
+         row_number() over (
+           partition by user_id order by created_at desc, id desc
+         ) as rn
+  from notifications
+) ranked
+where ranked.id = n.id and ranked.rn > 10;
+
 comment on function prune_notifications_keep_recent() is
   'P-27 (perf, jun/2026): mantém só as 10 notificações mais recentes por '
   'user. Substitui o DELETE que corria no render de /app/notificacoes. '

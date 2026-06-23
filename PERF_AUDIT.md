@@ -56,6 +56,10 @@ Implemented the free wins this session (code in tree; one migration to apply):
 - **P-22 — FIXED.** `getAvailableSlots` merged the two independent query batches
   (bookings+blocks and recurring+skips) into a single `Promise.all` of 4 — one fewer RTT per
   `/api/slots` call (every day-switch in the booking flow). `lib/availability.ts:108-133`.
+- **P-18 — FIXED.** `/admin/clientes/[id]` purchases/bookings `select("*")` trimmed to the
+  consumed columns. `app/admin/clientes/[id]/page.tsx:30-50`.
+- **P-19 — FIXED.** Same page: the 3-stage waterfall (notes → packs+notes → duoPartner) was
+  collapsed into one `Promise.all` after the first batch. Saves ~2 RTT per load.
 
 ---
 
@@ -165,8 +169,8 @@ Actions taken this session, and *why* the plan changed after deeper checks:
 | P-15  | 🟨  | Data               | `/admin/relatorios` aggregates in JS and is **not scoped to the trainer**            | OPEN                                       |
 | P-16  | 🟨  | Data               | `/app/comprar` serial `await getActiveTrainersPublic()` then `getTrainerForClient()` | FIXED                                      |
 | P-17  | 🟨  | Data               | `/admin/notas` index fetches up to 500 notes and group-bys in JS                     | OPEN                                       |
-| P-18  | 🟨  | Data               | `/admin/clientes/[id]` uses `select("*")` on purchases + bookings                    | OPEN                                       |
-| P-19  | 🟨  | Data               | `/admin/clientes/[id]` waterfalls 3 round-trips that can run as 1 parallel batch     | OPEN                                       |
+| P-18  | 🟨  | Data               | `/admin/clientes/[id]` uses `select("*")` on purchases + bookings                    | FIXED                                      |
+| P-19  | 🟨  | Data               | `/admin/clientes/[id]` waterfalls 3 round-trips that can run as 1 parallel batch     | FIXED                                      |
 | P-20  | 🟧  | Edge/Data          | Engagement cron pulls ALL confirmed purchases + N×2 serial per-client awaits         | OPEN                                       |
 | P-21  | 🟨  | Edge/Data          | Reminders cron is a serial per-booking loop with 4 awaits each                       | OPEN                                       |
 | P-22  | 🟦  | Data               | `getAvailableSlots` has 3 sequential `Promise.all` batches; last two can merge       | FIXED                                      |
@@ -321,30 +325,24 @@ index; with low volume it still ships hundreds of rows for ≤10 cards.
 `(client_id, full_name, email, phone, count, last_at)` ordered by `last_at DESC`, supports the
 `q` search server-side. Drops payload by an order of magnitude and fixes the silent 500-cap.
 
-### P-18 — `/admin/clientes/[id]` `select("*")` on purchases and bookings — OPEN
-**File:** `app/admin/clientes/[id]/page.tsx:33–42`
-`purchases.*` includes `pack_snapshot` (JSON, can be a few KB each) plus columns the page
-never reads (`stripe_*`, `confirmed_by/at`, `rejected_reason`, `cancelled_*`, …). `bookings.*`
-ditto (`cancellation_reason`, `series_id`, `credit_charged`, etc.).
-**Fix:** restrict the columns to those actually consumed:
-```ts
-.select("id, status, amount_cents, sessions_remaining, sessions_total, pack_snapshot, created_at")
-.select("id, starts_at, ends_at, session_type, status")
-```
-Mirrors the same trim already done in `/app/historico` (CB-5).
+### P-18 — `/admin/clientes/[id]` `select("*")` on purchases and bookings — FIXED
+**File:** `app/admin/clientes/[id]/page.tsx:30–50`
+Trimmed to the columns the render actually reads:
+`purchases → id, pack_snapshot, created_at, amount_cents, sessions_remaining, sessions_total`;
+`bookings → id, starts_at, session_type, status`. Drops the unread columns (`stripe_*`,
+`confirmed_*`, `cancelled_*`, `series_id`, `credit_charged`, …) from the wire. Render output
+is unchanged (verified against every `p.`/`b.` field access in the JSX).
+**Verify:** response payload for the two queries shrinks; page renders identically.
 
-### P-19 — `/admin/clientes/[id]` has a 3-step waterfall that can be 1 batch — OPEN
-**File:** `app/admin/clientes/[id]/page.tsx:27–58`
-The page resolves data in **3 sequential rounds**:
-1. trainerIds + credits + purchases + bookings (parallel)
-2. await first → `getClientNotesMapForBookings(...)` (serial, alone)
-3. then `packs + notesMap` (parallel)
-Steps 2 and 3 both depend only on `bookings.map(b => b.id)` (and `packs` depends on `trainerIds`,
-which resolves earlier). Restructure as:
-1. trainerIds + credits + purchases + bookings + packs (all parallel — packs doesn't need
-   bookings)
-2. once bookings resolves, run `Promise.all([getMyNotesMapForBookings, getClientNotesMapForBookings])`.
-Saves 1 RTT on every client detail page.
+### P-19 — `/admin/clientes/[id]` 3-step waterfall collapsed to 1 batch — FIXED
+**File:** `app/admin/clientes/[id]/page.tsx:30–58`
+Previously 3 sequential rounds: (1) trainerIds+credits+purchases+bookings → (2) serial
+`getClientNotesMapForBookings` → (3) packs+`getMyNotesMapForBookings`, then a 4th serial
+`getDuoPartner`. All of packs (needs `trainerIds`), both note-maps (need `bookingIds`) and
+`duoPartner` (needs only `profileId`) have their inputs ready after round 1, so they now run in
+a **single `Promise.all`**. Collapses ~3 serial stages into 1 — saves ~2 RTT per client-detail
+load. `duoPartner` keeps its `isDeleted` short-circuit (`Promise.resolve(null)`).
+**Verify:** flame chart shows packs/notes/duo issuing concurrently after the first batch.
 
 ### P-21 — Reminders cron serializes 4 awaits per booking — OPEN
 **File:** `app/api/cron/reminders/route.ts:128–167`
@@ -509,9 +507,8 @@ srcset (8 candidates from 640 up). Add `sizes="64px"` — the optimizer will the
    ⚠️ apply migration 0111.
 3. **P-16 — DONE** (`/app/comprar` parallelized).
 4. **P-22 — DONE** (`getAvailableSlots` batches merged).
-5. **P-19 (rearrange existing Promise.all batches in /admin/clientes/[id]; `getDuoPartner`
-   adds a 4th serial stage at line 62 — fold it into a batch)** — free. **NEXT.**
-6. **P-18 (trim two select("*") columns)** — small payload win on every client detail load.
+5. **P-19 — DONE** (clientes/[id] waterfall collapsed to 1 batch incl. `getDuoPartner`).
+6. **P-18 — DONE** (clientes/[id] `select("*")` trimmed).
 7. **P-26 (add sizes="64px")** — free; smaller srcset on /admin/loja.
 8. **P-25 (regenerate logo as small PNG or inline SVG)** — small effort, applies to every page.
 9. **P-23 (move `InstallPrompt` into authed layouts)** — small refactor; needs a quick check
