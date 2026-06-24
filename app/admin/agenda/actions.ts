@@ -623,6 +623,64 @@ export async function createBusyAction(
     return { ok: true };
   }
 
+  if (mode === "range") {
+    const dateFrom = String(formData.get("dateFrom") ?? "");
+    const dateTo = String(formData.get("dateTo") ?? "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) {
+      return { error: "Indica as datas de início e fim." };
+    }
+    if (dateTo < dateFrom) {
+      return { error: "A data de fim tem de ser igual ou depois da de início." };
+    }
+
+    // Lista de dias [dateFrom, dateTo] inclusive. Cap de segurança: 366 dias.
+    const days: string[] = [];
+    const cur = new Date(dateFrom + "T00:00:00Z");
+    const last = new Date(dateTo + "T00:00:00Z");
+    for (let guard = 0; cur <= last && guard < 366; guard++) {
+      days.push(cur.toISOString().slice(0, 10));
+      cur.setUTCDate(cur.getUTCDate() + 1);
+    }
+    if (cur <= last) {
+      return { error: "Intervalo demasiado longo (máximo 366 dias)." };
+    }
+
+    const rows = days
+      .map((d) => {
+        const s2 = lisbonWallClockToUTC(d, from);
+        const e2 = lisbonWallClockToUTC(d, to);
+        if (!s2 || !e2 || Number.isNaN(s2.getTime()) || Number.isNaN(e2.getTime()) || e2 <= s2) {
+          return null;
+        }
+        return {
+          trainer_id: trainerId,
+          starts_at: s2.toISOString(),
+          ends_at: e2.toISOString(),
+          reason,
+        };
+      })
+      .filter(Boolean) as Array<{
+        trainer_id: string;
+        starts_at: string;
+        ends_at: string;
+        reason: string | null;
+      }>;
+    if (rows.length === 0) return { error: "Datas ou horas inválidas." };
+
+    const { error: rangeErr } = await supabase.from("trainer_blocked_times").insert(rows);
+    if (rangeErr) {
+      logError("createBusyAction:range", rangeErr);
+      return { error: "Não foi possível criar o horário ocupado." };
+    }
+    await setFlash(
+      rows.length === 1
+        ? "Horário ocupado criado"
+        : `Horário ocupado criado em ${rows.length} dias`,
+    );
+    revalidateAvailabilityViews();
+    return { ok: true };
+  }
+
   // single
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "Indica o dia." };
   const start = lisbonWallClockToUTC(date, from);

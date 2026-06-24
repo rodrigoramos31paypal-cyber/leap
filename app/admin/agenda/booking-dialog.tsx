@@ -76,7 +76,9 @@ export function BookingDialog({
   const [busyFrom, setBusyFrom] = useState("11:00");
   const [busyTo, setBusyTo] = useState("17:00");
   const [busyReason, setBusyReason] = useState("");
-  const [busyScope, setBusyScope] = useState<"single" | "recurring">("single");
+  const [busyScope, setBusyScope] = useState<"single" | "range" | "recurring">("single");
+  const [busyDateFrom, setBusyDateFrom] = useState(viewedDate);
+  const [busyDateTo, setBusyDateTo] = useState(viewedDate);
   const [busyWeekdays, setBusyWeekdays] = useState<Set<number>>(new Set([weekdayOf(viewedDate)]));
   const [replaceRecurring, setReplaceRecurring] = useState(false);
   const [duration, setDuration] = useState(String(defaultDuration));
@@ -109,6 +111,8 @@ export function BookingDialog({
     setBusyTo("17:00");
     setBusyReason("");
     setBusyScope("single");
+    setBusyDateFrom(viewedDate);
+    setBusyDateTo(viewedDate);
     setBusyWeekdays(new Set([weekdayOf(viewedDate)]));
     setReplaceRecurring(false);
     setMode("existing");
@@ -260,15 +264,28 @@ export function BookingDialog({
       setError("Escolhe pelo menos um dia da semana.");
       return;
     }
+    if (busyScope === "range") {
+      if (!busyDateFrom || !busyDateTo) {
+        setError("Indica as datas de início e fim.");
+        return;
+      }
+      if (busyDateTo < busyDateFrom) {
+        setError("A data de fim tem de ser igual ou depois da de início.");
+        return;
+      }
+    }
     const fd = new FormData();
     fd.set("trainerId", trainerId);
-    fd.set("mode", busyScope === "recurring" ? "recurring" : "single");
+    fd.set("mode", busyScope);
     fd.set("date", date);
     fd.set("from", busyFrom);
     fd.set("to", busyTo);
     fd.set("reason", busyReason.trim());
     if (busyScope === "recurring") {
       fd.set("weekdays", Array.from(busyWeekdays).join(","));
+    } else if (busyScope === "range") {
+      fd.set("dateFrom", busyDateFrom);
+      fd.set("dateTo", busyDateTo);
     } else if (replaceRecurring) {
       fd.set("replaceRecurring", "true");
     }
@@ -693,12 +710,12 @@ export function BookingDialog({
                   </div>
                 </div>
 
-                {/* Âmbito: só este dia vs recorrente */}
-                <div className="inline-flex w-full items-center gap-1 rounded-lg border border-ink-900/10 bg-bone-50 p-1 text-sm dark:border-white/10 dark:bg-ink-900">
+                {/* Âmbito: só este dia · intervalo de dias · semanal */}
+                <div className="inline-flex w-full items-center gap-1 rounded-lg border border-ink-900/10 bg-bone-50 p-1 text-xs dark:border-white/10 dark:bg-ink-900">
                   <button
                     type="button"
                     onClick={() => setBusyScope("single")}
-                    className={`flex-1 rounded-md px-3 py-1.5 font-medium transition ${
+                    className={`flex-1 rounded-md px-2 py-1.5 font-medium transition ${
                       busyScope === "single" ? "bg-ink-900 text-white dark:bg-bone-50 dark:text-ink-900" : "text-ink-600"
                     }`}
                   >
@@ -706,16 +723,31 @@ export function BookingDialog({
                   </button>
                   <button
                     type="button"
+                    onClick={() => {
+                      if (busyScope !== "range") {
+                        setBusyDateFrom(date);
+                        setBusyDateTo(date);
+                      }
+                      setBusyScope("range");
+                    }}
+                    className={`flex-1 rounded-md px-2 py-1.5 font-medium transition ${
+                      busyScope === "range" ? "bg-ink-900 text-white dark:bg-bone-50 dark:text-ink-900" : "text-ink-600"
+                    }`}
+                  >
+                    Intervalo
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setBusyScope("recurring")}
-                    className={`flex-1 rounded-md px-3 py-1.5 font-medium transition ${
+                    className={`flex-1 rounded-md px-2 py-1.5 font-medium transition ${
                       busyScope === "recurring" ? "bg-ink-900 text-white dark:bg-bone-50 dark:text-ink-900" : "text-ink-600"
                     }`}
                   >
-                    Repetir todas as semanas
+                    Semanal
                   </button>
                 </div>
 
-                {busyScope === "single" ? (
+                {busyScope === "single" && (
                   <>
                     <p className="text-[12px] text-ink-500">
                       Dia: <span className="font-medium text-ink-700">{date}</span>
@@ -735,7 +767,40 @@ export function BookingDialog({
                       </span>
                     </label>
                   </>
-                ) : (
+                )}
+
+                {busyScope === "range" && (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="min-w-0">
+                        <label className="label" htmlFor="busy_date_from">De</label>
+                        <input
+                          id="busy_date_from"
+                          type="date"
+                          value={busyDateFrom}
+                          onChange={(e) => setBusyDateFrom(e.target.value)}
+                          className="input block min-w-0 max-w-full appearance-none"
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <label className="label" htmlFor="busy_date_to">Até</label>
+                        <input
+                          id="busy_date_to"
+                          type="date"
+                          value={busyDateTo}
+                          min={busyDateFrom}
+                          onChange={(e) => setBusyDateTo(e.target.value)}
+                          className="input block min-w-0 max-w-full appearance-none"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-ink-500">
+                      Marca como ocupado todos os dias entre as duas datas (inclusive), com as mesmas horas.
+                    </p>
+                  </>
+                )}
+
+                {busyScope === "recurring" && (
                   <div>
                     <div className="mb-1.5 flex items-center justify-between gap-2">
                       <div className="label mb-0">Repetir em</div>
