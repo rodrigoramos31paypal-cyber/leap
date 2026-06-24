@@ -12,6 +12,9 @@ export type CreditSummary = {
   individual: number;
   dupla: number;
   total: number;
+  /** Soma de sessions_total de TODOS os packs activos (não-expirados, com
+   *  saldo > 0). Usado em "O teu pack" como denominador agregado. */
+  totalAttributed: number;
 };
 
 export type CreditsByTrainer = Array<{
@@ -28,7 +31,7 @@ const fetchActiveCredits = cache(async (clientId: string) => {
   const { data } = await supabase
     .from("purchases")
     .select(
-      "session_type, sessions_remaining, expires_at, trainer_id, trainers:trainer_id(slug, avatar_url, profiles:profile_id(full_name))",
+      "session_type, sessions_remaining, sessions_total, expires_at, trainer_id, trainers:trainer_id(slug, avatar_url, profiles:profile_id(full_name))",
     )
     .eq("client_id", clientId)
     .eq("status", "confirmed")
@@ -45,13 +48,15 @@ export async function getClientCredits(
 ): Promise<CreditSummary> {
   const rows = await fetchActiveCredits(clientId);
   let individual = 0,
-    dupla = 0;
+    dupla = 0,
+    totalAttributed = 0;
   for (const p of rows as any[]) {
     if (trainerId && p.trainer_id !== trainerId) continue;
     if (p.session_type === "individual") individual += p.sessions_remaining;
     else dupla += p.sessions_remaining;
+    totalAttributed += p.sessions_total ?? 0;
   }
-  return { individual, dupla, total: individual + dupla };
+  return { individual, dupla, total: individual + dupla, totalAttributed };
 }
 
 export async function getClientCreditsByTrainer(clientId: string): Promise<CreditsByTrainer> {
