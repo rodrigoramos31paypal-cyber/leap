@@ -4,7 +4,7 @@ import { NotebookPen, Plus, EyeOff, Eye } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getClientCredits } from "@/lib/credits";
 import { getDuoPartner } from "@/lib/duo";
-import { eur, formatDateTime, BOOKING_STATUS } from "@/lib/utils";
+import { eur, formatDateTime, BOOKING_STATUS, PURCHASE_STATUS } from "@/lib/utils";
 import { NoteEditor } from "@/components/note-editor";
 import { getMyNotesMapForBookings, getClientNotesMapForBookings } from "@/lib/notes";
 import { getAccessibleTrainerIds } from "@/lib/trainer";
@@ -91,7 +91,7 @@ export default async function ClientDetail(props: {
     tab === "compras"
       ? supabase
           .from("purchases")
-          .select("id, pack_snapshot, created_at, amount_cents, sessions_remaining, sessions_total")
+          .select("id, pack_snapshot, created_at, amount_cents, sessions_remaining, sessions_total, status")
           .eq("client_id", profileId)
           .order("created_at", { ascending: false })
           .limit(20)
@@ -213,12 +213,19 @@ export default async function ClientDetail(props: {
                 <li key={p.id} className="card p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-sm font-semibold">{(p.pack_snapshot as any).name}</div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold">{(p.pack_snapshot as any).name}</span>
+                        <span className={`chip-${purchaseStatusColor(p.status)}`}>
+                          {(PURCHASE_STATUS as any)[p.status] ?? p.status}
+                        </span>
+                      </div>
                       <div className="text-xs text-ink-500">{formatDateTime(p.created_at)}</div>
                     </div>
                     <div className="text-right text-sm">
                       <div className="font-bold">{eur(p.amount_cents)}</div>
-                      <div className="text-xs text-ink-500">{p.sessions_remaining}/{p.sessions_total}</div>
+                      {p.status === "confirmed" && (
+                        <div className="text-xs text-ink-500">{p.sessions_remaining}/{p.sessions_total}</div>
+                      )}
                     </div>
                   </div>
                 </li>
@@ -301,6 +308,12 @@ export default async function ClientDetail(props: {
       )}
     </div>
   );
+}
+
+function purchaseStatusColor(s: string): "ok" | "danger" | "warn" {
+  if (s === "confirmed") return "ok";
+  if (s === "rejected" || s === "cancelled") return "danger";
+  return "warn";
 }
 
 function TabLink({ href, active, label }: { href: string; active: boolean; label: string }) {
