@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
+import { randomUUID } from "crypto";
 import { revalidateCreditsViews } from "@/lib/revalidate";
 import {
   adjustCredits,
@@ -189,41 +190,74 @@ export async function adminDeleteClientAction(
     return { ok: false, error: "Escreve APAGAR para confirmar." };
   }
 
-  const supabase = await createClient();
+  // Anonimização feita DIRECTAMENTE com a service-role key, sem depender da
+  // RPC `anonymize_client_account`. A RPC exposta via PostgREST ficava à mercê
+  // da cache de schema do PostgREST (erros PGRST202 "function not found" mesmo
+  // com a função criada), o que tornava o apagar pouco fiável. Endpoints de
+  // tabela (delete/update) não têm esse problema. Mesma lógica/efeito que a
+  // migration 0081: apaga dados pessoais sem retenção e anonimiza o perfil;
+  // compras/marcações ficam para obrigação contabilística.
+  const admin = createSupabaseAdmin(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
 
-  const { error: rpcErr } = await (supabase as any).rpc("anonymize_client_account", {
-    p_client_id: clientId,
-  });
-  if (rpcErr) {
-    logError("adminDeleteClientAction:anonymize", rpcErr);
-    if (isAccessDenied(rpcErr)) {
-      await captureAlert("admin_access_denied", { action: "anonymizeClient", clientId });
-    }
-    // Surface the underlying cause to the admin so we can tell apart
-    // "missing migration" from "permission denied" from real DB errors.
-    const raw = String((rpcErr as any)?.message ?? "").toLowerCase();
-    if (raw.includes("does not exist") || raw.includes("não encontrado") || (rpcErr as any)?.code === "PGRST202") {
-      return {
-        ok: false,
-        error:
-          "RPC anonymize_client_account em falta na base de dados. Aplica a migration 0081_admin_client_management.sql (Supabase Dashboard → SQL Editor → cola o ficheiro → Run).",
-      };
-    }
-    if (isAccessDenied(rpcErr)) {
-      return { ok: false, error: "Sem permissão para apagar este cliente." };
-    }
-    return {
-      ok: false,
-      error: `Não foi possível apagar a conta: ${(rpcErr as any)?.message ?? "erro desconhecido"}`,
-    };
+  // Guarda (igual à da RPC): só contas de cliente podem ser apagadas por aqui.
+  const { data: target, error: lookupErr } = await (admin as any)
+    .from("profiles")
+    .select("id, role")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (lookupErr) {
+    logError("adminDeleteClientAction:lookup", lookupErr);
+    return { ok: false, error: "Não foi possível apagar a conta. Tenta novamente." };
+  }
+  if (!target) {
+    return { ok: false, error: "Cliente não encontrado." };
+  }
+  if ((target as any).role !== "client") {
+    return { ok: false, error: "Só contas de cliente podem ser apagadas por aqui." };
   }
 
+  // Apaga dados pessoais espalhados por outras tabelas.
+  const PERSONAL_DATA: Array<{ table: string; column: string }> = [
+    { table: "session_notes", column: "author_id" },
+    { table: "notifications", column: "user_id" },
+    { table: "calendar_integrations", column: "user_id" },
+    { table: "push_subscriptions", column: "user_id" },
+    { table: "notification_preferences", column: "user_id" },
+    { table: "engagement_alerts", column: "user_id" },
+    { table: "booking_reminders", column: "recipient_id" },
+  ];
+  for (const { table, column } of PERSONAL_DATA) {
+    const { error: delErr } = await (admin as any).from(table).delete().eq(column, clientId);
+    if (delErr) {
+      logError(`adminDeleteClientAction:delete:${table}`, delErr);
+      return {
+        ok: false,
+        error: "Não foi possível apagar todos os dados do cliente. Tenta novamente.",
+      };
+    }
+  }
+
+  // Anonimiza o perfil (nome/email/telefone) e roda o token do feed.
+  const { error: anonErr } = await (admin as any)
+    .from("profiles")
+    .update({
+      full_name: "Cliente removido",
+      email: `apagado+${clientId}@removido.invalid`,
+      phone: null,
+      calendar_feed_token: randomUUID(),
+    })
+    .eq("id", clientId);
+  if (anonErr) {
+    logError("adminDeleteClientAction:anonymize", anonErr);
+    return { ok: false, error: "Não foi possível anonimizar o perfil do cliente." };
+  }
+
+  // Bloqueia o login (auth) — best-effort, não falha o apagar se correr mal.
   try {
-    const admin = createSupabaseAdmin(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { persistSession: false, autoRefreshToken: false } },
-    );
     const { error: banErr } = await admin.auth.admin.updateUserById(clientId, {
       email: `apagado+${clientId}@removido.invalid`,
       ban_duration: "876000h",
