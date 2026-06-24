@@ -130,7 +130,10 @@ export function BookingFlow({
 
   const days = useMemo(() => {
     const today = startOfDay(new Date());
-    return Array.from({ length: 14 }, (_, i) => {
+    // 31 dias de horizonte de marcação (cliente). A faixa de dias mantém o
+    // layout com scroll/swipe horizontal (overflow-x-auto) — só aumenta o nº
+    // de dias visíveis ao deslizar para a direita.
+    return Array.from({ length: 31 }, (_, i) => {
       const d = new Date(today);
       d.setDate(d.getDate() + i);
       return d;
