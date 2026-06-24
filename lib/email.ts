@@ -3,6 +3,14 @@
 // ════════════════════════════════════════════════════════════════
 // Liga via NOTIFICATIONS_EMAIL_ENABLED + RESEND_API_KEY no .env.local.
 // Se não configurado, sendEmail() é no-op (loga e segue).
+import { EMAIL_LOGO_BASE64, EMAIL_LOGO_CID, EMAIL_LOGO_FILENAME } from "@/lib/email-logo";
+
+type Attachment = {
+  filename: string;
+  content: string; // base64
+  content_id?: string; // imagens inline → referência via cid:content_id no HTML
+  content_type?: string;
+};
 
 type SendArgs = {
   to: string;
@@ -30,6 +38,19 @@ export async function sendEmail(args: SendArgs): Promise<{ ok: boolean; error?: 
 
   const from = process.env.NOTIFICATION_FROM_EMAIL ?? "no-reply@leapfitnesstudio.com";
 
+  // Logo embebido como anexo INLINE (CID). Viaja dentro do email, por isso
+  // não há fetch remoto → os clientes (Apple Mail, Gmail, Outlook) deixam de
+  // bloquear a imagem e de mostrar "Download Images". O HTML referencia-o via
+  // src="cid:leap-logo" (ver shell()).
+  const attachments: Attachment[] = [
+    {
+      filename: EMAIL_LOGO_FILENAME,
+      content: EMAIL_LOGO_BASE64,
+      content_id: EMAIL_LOGO_CID,
+      content_type: "image/png",
+    },
+  ];
+
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -44,6 +65,7 @@ export async function sendEmail(args: SendArgs): Promise<{ ok: boolean; error?: 
         html: args.html,
         text: args.text,
         reply_to: args.replyTo,
+        attachments,
       }),
     });
 
@@ -59,14 +81,13 @@ export async function sendEmail(args: SendArgs): Promise<{ ok: boolean; error?: 
 
 // ─── Templates ───────────────────────────────────────────────────────
 
-// URL base usada para o logo nos emails. Resend envia sempre em produção,
-// por isso assumimos o domínio do .env (com fallback para o público).
+// URL base usada para links/CTAs nos emails.
 const EMAIL_APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://leapfitnesstudio.com").replace(/\/$/, "");
-// Logo dos emails: variante com BADGE CLARO OPACO cozido no PNG.
-// Os clientes em dark mode (Outlook, Gmail) só recolorem cores de fundo CSS
-// e texto — nunca imagens. Um logo transparente preto desaparecia no cartão
-// escurecido; esta versão fica sempre visível em light e dark mode.
-const LOGO_URL = `${EMAIL_APP_URL}/images/email-logo.png`;
+// Logo dos emails: referência ao anexo INLINE (CID), embebido por sendEmail.
+// O PNG tem o BADGE CLARO OPACO cozido, por isso fica sempre visível em light
+// e dark mode (clientes em dark mode só recolorem fundo/texto CSS, nunca
+// imagens). Como é inline, não há fetch remoto → sem "Download Images".
+const LOGO_SRC = `cid:${EMAIL_LOGO_CID}`;
 // Marca: nome canónico em "Title Case". NÃO usamos NEXT_PUBLIC_APP_NAME
 // aqui — historicamente esse env veio como "LEAP-FITNESS STUDIO" e
 // poluía o cabeçalho. Mantém-se hardcoded para garantir consistência.
@@ -89,7 +110,7 @@ function shell(title: string, body: string, cta?: { label: string; href: string 
   <tr><td align="center">
     <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #ece8de;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(26,26,26,0.04)">
       <tr><td align="center" style="padding:28px 28px 8px;background:#ffffff">
-        <img src="${escapeHtml(LOGO_URL)}" alt="${escapeHtml(BRAND_NAME)}" width="56" height="56" style="display:block;width:56px;height:56px;border:0;outline:none;text-decoration:none" />
+        <img src="${LOGO_SRC}" alt="${escapeHtml(BRAND_NAME)}" width="56" height="56" style="display:block;width:56px;height:56px;border:0;outline:none;text-decoration:none" />
         <div style="margin-top:10px;font-weight:700;font-size:13px;letter-spacing:.08em;color:#1a1a1a;text-transform:uppercase">${escapeHtml(BRAND_NAME)}</div>
       </td></tr>
       <tr><td style="padding:8px 36px 4px"><div style="height:1px;background:#f1ede4;line-height:1px;font-size:0">&nbsp;</div></td></tr>
