@@ -51,7 +51,7 @@ export default async function AdminAgendaPage(props: {
   const trainerId = (await getCurrentTrainerId()) ?? "";
 
   // Durações permitidas + default + packs activos para o BookingDialog.
-  let durations: number[] = [30, 45, 60, 90];
+  let durations: number[] = [45, 60, 90];
   let defaultDuration = 45;
   let packs: { id: string; name: string; sessions: number; price_cents: number }[] = [];
   if (trainerId) {
@@ -75,6 +75,11 @@ export default async function AdminAgendaPage(props: {
     }
     packs = (pk ?? []) as typeof packs;
   }
+  // O dropdown do ADMIN inclui sempre 30 min — o admin/staff pode marcar
+  // sessões de 30 min em nome do cliente, mesmo que `slot_durations_min`
+  // (que controla o que os clientes veem) só permita 45. Não altera as
+  // durações disponíveis para os clientes no fluxo /app.
+  const adminDurations = Array.from(new Set([30, ...durations])).sort((a, b) => a - b);
   const canBook = !!trainerId;
 
   let rangeStart: Date;
@@ -119,7 +124,7 @@ export default async function AdminAgendaPage(props: {
       {canBook && (
         <AgendaDialogs
           trainerId={trainerId}
-          durations={durations}
+          durations={adminDurations}
           defaultDuration={defaultDuration}
           viewedDate={isoDate(day)}
           packs={packs}
