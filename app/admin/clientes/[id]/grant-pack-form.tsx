@@ -31,9 +31,14 @@ function clientToast(title: string, kind: "success" | "error" | "info" = "succes
 export function GrantPackForm({
   clientId,
   packs,
+  hasPartner = false,
 }: {
   clientId: string;
   packs: GrantPackPack[];
+  /** Cliente tem par duo activo. Quando true, os selectores de Tipo
+   *  ("Sessões avulso" e "Remover sessões") arrancam em "PT Dupla" —
+   *  caso típico de uso, já que o saldo dupla é partilhado pelo par. */
+  hasPartner?: boolean;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>(packs.length > 0 ? "pack" : "custom");
@@ -148,7 +153,7 @@ export function GrantPackForm({
             <label className="label">Tipo</label>
             <select
               name="custom_session_type"
-              defaultValue="individual"
+              defaultValue={hasPartner ? "dupla" : "individual"}
               className="input"
             >
               <option value="individual">PT Individual</option>
@@ -196,7 +201,7 @@ export function GrantPackForm({
             <label className="label">Tipo</label>
             <select
               name="remove_session_type"
-              defaultValue="any"
+              defaultValue={hasPartner ? "dupla" : "any"}
               className="input"
             >
               <option value="any">Qualquer (mais antigas primeiro)</option>

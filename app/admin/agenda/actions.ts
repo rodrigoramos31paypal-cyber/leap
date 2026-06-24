@@ -17,6 +17,8 @@ import { dispatchBookingCancelled, dispatchBookingCreated } from "@/lib/email-di
 import { removeBookingFromCalendars, pushBookingToCalendars } from "@/lib/calendar-sync";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getAccessibleTrainerIds } from "@/lib/trainer";
+import { getClientCredits } from "@/lib/credits";
+import { getActiveDuoPartnerId } from "@/lib/duo";
 import type { SessionType, PaymentMethod } from "@/types/database";
 import { randomUUID } from "crypto";
 import { setFlash } from "@/lib/flash";
@@ -860,4 +862,40 @@ export async function skipRecurringDateAction(formData: FormData) {
     .upsert({ trainer_id: trainerId, skip_date: date }, { onConflict: "trainer_id,skip_date" });
   await setFlash("Recorrência limpa neste dia");
   revalidateAvailabilityViews();
+}
+
+
+// ────────────────────────────────────────────────────────────────
+// getBookingClientHintsAction
+//
+// Devolve informação resumida do cliente para o BookingDialog decidir
+// o default do selector "Tipo" (individual vs dupla). Usado quando o
+// admin acaba de escolher um cliente: se o cliente tem PAR DUO activo
+// e 0 sessões individuais para o trainer, abrimos o dropdown já em
+// "Dupla" — assim o admin não vê o erro "Sem sessões" quando o cliente
+// só tem packs PT Dupla partilhados.
+//
+// Lê apenas saldos (não modifica nada); é seguro chamar em qualquer
+// momento depois do pick. Requer staff (não expõe créditos a clientes).
+// ────────────────────────────────────────────────────────────────
+export async function getBookingClientHintsAction(
+  clientId: string,
+  trainerId?: string,
+): Promise<{ hasPartner: boolean; individual: number; dupla: number }> {
+  await requireStaff();
+  if (!clientId) return { hasPartner: false, individual: 0, dupla: 0 };
+  try {
+    const [credits, partnerId] = await Promise.all([
+      getClientCredits(clientId, trainerId),
+      getActiveDuoPartnerId(clientId),
+    ]);
+    return {
+      hasPartner: !!partnerId,
+      individual: credits.individual,
+      dupla: credits.dupla,
+    };
+  } catch (e) {
+    logError("getBookingClientHintsAction", e);
+    return { hasPartner: false, individual: 0, dupla: 0 };
+  }
 }
