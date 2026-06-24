@@ -6,6 +6,7 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { captureAlert } from "@/lib/alerts";
+import { getActiveDuoPartnerId, getPartnerDuplaRows } from "@/lib/duo";
 import type { PaymentMethod, SessionType } from "@/types/database";
 
 export type CreditSummary = {
@@ -42,11 +43,25 @@ const fetchActiveCredits = cache(async (clientId: string) => {
   );
 });
 
+// DUO: o saldo PT Dupla é PARTILHADO pelo par. Buscamos os packs dupla do
+// parceiro (se houver par activo) para os somar ao saldo do próprio, de
+// modo a que AS DUAS contas mostrem o mesmo número de sessões. Cacheado
+// por cliente para não repetir o lookup quando a página chama vários
+// getClientCredits*.
+const fetchPartnerDuplaRows = cache(async (clientId: string) => {
+  const partnerId = await getActiveDuoPartnerId(clientId);
+  if (!partnerId) return [];
+  return getPartnerDuplaRows(partnerId);
+});
+
 export async function getClientCredits(
   clientId: string,
   trainerId?: string,
 ): Promise<CreditSummary> {
-  const rows = await fetchActiveCredits(clientId);
+  const [rows, partnerRows] = await Promise.all([
+    fetchActiveCredits(clientId),
+    fetchPartnerDuplaRows(clientId),
+  ]);
   let individual = 0,
     dupla = 0,
     totalAttributed = 0;
@@ -56,11 +71,20 @@ export async function getClientCredits(
     else dupla += p.sessions_remaining;
     totalAttributed += p.sessions_total ?? 0;
   }
+  // DUO: soma o saldo dupla do parceiro (saldo partilhado).
+  for (const p of partnerRows) {
+    if (trainerId && p.trainer_id !== trainerId) continue;
+    dupla += p.sessions_remaining;
+    totalAttributed += p.sessions_total;
+  }
   return { individual, dupla, total: individual + dupla, totalAttributed };
 }
 
 export async function getClientCreditsByTrainer(clientId: string): Promise<CreditsByTrainer> {
-  const rows = await fetchActiveCredits(clientId);
+  const [rows, partnerRows] = await Promise.all([
+    fetchActiveCredits(clientId),
+    fetchPartnerDuplaRows(clientId),
+  ]);
   const byTrainer = new Map<string, CreditsByTrainer[number]>();
   for (const p of rows as any[]) {
     const t = p.trainers;
@@ -78,6 +102,22 @@ export async function getClientCreditsByTrainer(clientId: string): Promise<Credi
     const entry = byTrainer.get(key)!;
     if (p.session_type === "individual") entry.individual += p.sessions_remaining;
     else entry.dupla += p.sessions_remaining;
+  }
+  // DUO: soma o saldo dupla partilhado do parceiro, criando a entrada do
+  // treinador caso o próprio não tenha packs com ele (parceiro pagou tudo).
+  for (const p of partnerRows) {
+    const key = p.trainer_id;
+    if (!byTrainer.has(key)) {
+      byTrainer.set(key, {
+        trainerId: key,
+        trainerName: p.trainerName ?? "—",
+        slug: p.slug ?? "",
+        avatarUrl: p.avatarUrl,
+        individual: 0,
+        dupla: 0,
+      });
+    }
+    byTrainer.get(key)!.dupla += p.sessions_remaining;
   }
   return Array.from(byTrainer.values());
 }

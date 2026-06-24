@@ -55,9 +55,10 @@ export function DuoLinkSection({
       </summary>
 
       <p className="mt-3 text-xs text-ink-500">
-        Liga esta conta a outra. Depois de ligadas, sempre que um dos dois marcar
-        uma sessão ela conta como sessão dupla: desconta 1 sessão a cada conta e
-        aparece no calendário de ambos.
+        Liga esta conta a outra. Basta uma das contas ter comprado um pack PT Dupla
+        — depois de ligadas, partilham o mesmo saldo. Sempre que um dos dois marcar
+        uma sessão PT Dupla, desconta 1 sessão do saldo partilhado e aparece no
+        calendário de ambos.
       </p>
 
       {partner ? (
