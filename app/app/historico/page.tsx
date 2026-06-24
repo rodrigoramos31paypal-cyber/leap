@@ -1,28 +1,45 @@
 import { redirect } from "next/navigation";
+// Histórico: sessões (com filtro "ocultar canceladas") + compras.
 import Link from "next/link";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { eur, formatDateTime, BOOKING_STATUS, PURCHASE_STATUS } from "@/lib/utils";
 import { cancelBookingAction, rebookAction } from "./actions";
-import { CalendarPlus, RefreshCcw, NotebookPen, Users } from "lucide-react";
+import { CalendarPlus, RefreshCcw, NotebookPen, Users, EyeOff, Eye } from "lucide-react";
 import { NoteEditor } from "@/components/note-editor";
 import { getMyNotesMapForBookings } from "@/lib/notes";
 import { signBookingIcs } from "@/lib/calendar-token";
 
 export default async function HistoricoPage(
   props: {
-    searchParams: Promise<{ tab?: string; ok?: string; f?: string; c?: string }>;
+    searchParams: Promise<{ tab?: string; ok?: string; f?: string; c?: string; hc?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
   const tab = searchParams.tab === "compras" ? "compras" : "sessoes";
   const sessFilter: "todas" | "futuras" | "passadas" =
     searchParams.f === "futuras" || searchParams.f === "passadas" ? searchParams.f : "todas";
+  const hideCancelled = searchParams.hc === "1";
+
+  // Constrói hrefs preservando o estado dos filtros de sessões (f + hc).
+  const sessHref = (f: "todas" | "futuras" | "passadas") => {
+    const p = new URLSearchParams();
+    if (f !== "todas") p.set("f", f);
+    if (hideCancelled) p.set("hc", "1");
+    const qs = p.toString();
+    return `/app/historico${qs ? `?${qs}` : ""}`;
+  };
+  const toggleHideCancelledHref = (() => {
+    const p = new URLSearchParams();
+    if (sessFilter !== "todas") p.set("f", sessFilter);
+    if (!hideCancelled) p.set("hc", "1");
+    const qs = p.toString();
+    return `/app/historico${qs ? `?${qs}` : ""}`;
+  })();
+
   const compFilter: "todas" | "confirmadas" | "rejeitadas" =
     searchParams.c === "confirmadas" || searchParams.c === "rejeitadas" ? searchParams.c : "todas";
   const user = await getSessionUser();
   if (!user) redirect("/login");
-
-  const supabase = await createClient();
 
   return (
     <div className="space-y-5">
@@ -55,10 +72,21 @@ export default async function HistoricoPage(
       </div>
 
       {tab === "sessoes" && (
-        <div className="flex flex-wrap gap-1.5">
-          <FilterChip label="Todas" href="/app/historico" active={sessFilter === "todas"} />
-          <FilterChip label="Futuras" href="/app/historico?f=futuras" active={sessFilter === "futuras"} />
-          <FilterChip label="Passadas" href="/app/historico?f=passadas" active={sessFilter === "passadas"} />
+        <div className="flex flex-wrap items-center gap-1.5">
+          <FilterChip label="Todas" href={sessHref("todas")} active={sessFilter === "todas"} />
+          <FilterChip label="Futuras" href={sessHref("futuras")} active={sessFilter === "futuras"} />
+          <FilterChip label="Passadas" href={sessHref("passadas")} active={sessFilter === "passadas"} />
+          <Link
+            href={toggleHideCancelledHref}
+            className={`ml-auto inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition ${
+              hideCancelled
+                ? "border-ink-900 bg-ink-900 text-white dark:border-bone-50 dark:bg-bone-50 dark:text-ink-900"
+                : "border-ink-900/15 text-ink-600 hover:bg-ink-900/5 dark:border-white/15 dark:text-bone-100"
+            }`}
+          >
+            {hideCancelled ? <Eye size={12} /> : <EyeOff size={12} />}
+            {hideCancelled ? "Mostrar canceladas" : "Ocultar canceladas"}
+          </Link>
         </div>
       )}
 
@@ -70,7 +98,7 @@ export default async function HistoricoPage(
         </div>
       )}
 
-      {tab === "sessoes" ? <SessoesTab userId={user.id} filter={sessFilter} /> : <ComprasTab userId={user.id} filter={compFilter} />}
+      {tab === "sessoes" ? <SessoesTab userId={user.id} filter={sessFilter} hideCancelled={hideCancelled} /> : <ComprasTab userId={user.id} filter={compFilter} />}
     </div>
   );
 }
@@ -103,19 +131,15 @@ function FilterChip({ label, href, active }: { label: string; href: string; acti
   );
 }
 
-async function SessoesTab({ userId, filter }: { userId: string; filter: "todas" | "futuras" | "passadas" }) {
+async function SessoesTab({ userId, filter, hideCancelled }: { userId: string; filter: "todas" | "futuras" | "passadas"; hideCancelled: boolean }) {
   const supabase = await createClient();
   const nowIso = new Date().toISOString();
-  // PERF (CB-5 audit jun/2026): antes era select("*") — trazia 15+
-  // colunas (cancellation_reason, confirmed_by/at, cancelled_by/at,
-  // purchase_id, series_id, credit_charged, …) que a UI nunca lê. 50
-  // rows × ~600 B → ~30 KB; com as colunas certas ~9 KB e JSON.parse
-  // 3x mais rápido em mobile.
   let query = supabase
     .from("bookings")
     .select("id, starts_at, ends_at, session_type, status, partner_client_id")
     // DUO: inclui as sessões partilhadas em que sou o parceiro.
     .or(`client_id.eq.${userId},partner_client_id.eq.${userId}`);
+  if (hideCancelled) query = query.neq("status", "cancelled");
   if (filter === "futuras") {
     query = query.gte("starts_at", nowIso).order("starts_at", { ascending: true });
   } else if (filter === "passadas") {
@@ -126,7 +150,11 @@ async function SessoesTab({ userId, filter }: { userId: string; filter: "todas" 
   const { data: bookings } = await query.limit(50);
 
   if (!bookings || bookings.length === 0) {
-    return <div className="card p-5 text-center text-sm text-ink-500">Sem sessões ainda.</div>;
+    return (
+      <div className="card p-5 text-center text-sm text-ink-500">
+        {hideCancelled ? "Sem sessões para mostrar." : "Sem sessões ainda."}
+      </div>
+    );
   }
 
   const notesMap = await getMyNotesMapForBookings(bookings.map((b) => b.id));
@@ -192,9 +220,6 @@ async function SessoesTab({ userId, filter }: { userId: string; filter: "todas" 
 
 async function ComprasTab({ userId, filter }: { userId: string; filter: "todas" | "confirmadas" | "rejeitadas" }) {
   const supabase = await createClient();
-  // PERF: limita explicitamente — antes era sem limite e podia trazer
-  // o histórico todo do cliente. Os campos pedidos também foram
-  // restringidos aos que a UI usa.
   let query = supabase
     .from("purchases")
     .select("id, status, amount_cents, sessions_remaining, sessions_total, pack_snapshot, created_at")
