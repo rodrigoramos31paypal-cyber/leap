@@ -19,9 +19,11 @@ export default async function AdminPaymentsPage(
   const searchParams = await props.searchParams;
   const q = (searchParams.q ?? "").trim();
   const clientId = (searchParams.client ?? "").trim();
-  const rawTab = searchParams.tab ?? "pendentes";
+  // Default landing tab é "confirmados" (vista mais útil ao admin no
+  // dia-a-dia — pendentes ficam acessíveis via tab quando há trabalho).
+  const rawTab = searchParams.tab ?? "confirmados";
   const tab: Tab =
-    rawTab === "confirmados" || rawTab === "rejeitados" ? rawTab : "pendentes";
+    rawTab === "pendentes" || rawTab === "rejeitados" ? rawTab : "confirmados";
   const page = Math.max(1, Number(searchParams.page ?? "1") || 1);
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;

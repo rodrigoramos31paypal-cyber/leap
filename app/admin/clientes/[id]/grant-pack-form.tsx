@@ -93,13 +93,13 @@ export function GrantPackForm({
       <input type="hidden" name="clientId" value={clientId} />
       <input type="hidden" name="mode" value={mode} />
 
-      <div className="inline-flex flex-wrap items-center gap-1 rounded-lg border border-ink-900/10 bg-white p-1 text-xs dark:bg-ink-800">
+      <div className="inline-flex items-center gap-1 rounded-lg border border-ink-900/10 bg-white p-1 text-xs dark:bg-ink-800">
         <button
           type="button"
           onClick={() => setMode("pack")}
           className={cn(TAB, mode === "pack" ? TAB_ON : TAB_OFF)}
         >
-          Pack existente
+          Packs
         </button>
         <button
           type="button"
