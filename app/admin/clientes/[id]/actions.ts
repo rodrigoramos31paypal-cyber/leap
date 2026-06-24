@@ -326,22 +326,60 @@ export async function setClientBannedAction(formData: FormData): Promise<void> {
 export async function linkDuoAction(formData: FormData): Promise<void> {
   await requireStaff();
   const clientId = String(formData.get("clientId") ?? "");
-  const partnerEmail = String(formData.get("partnerEmail") ?? "").trim().toLowerCase();
-  if (!clientId || !partnerEmail) {
-    await setFlash("Indica o email da conta a ligar.", "error");
+  // Aceita EMAIL ou TELEFONE. `partnerIdentifier` é o campo novo; mantém-se
+  // compatibilidade com o campo antigo `partnerEmail`.
+  const ident = String(
+    formData.get("partnerIdentifier") ?? formData.get("partnerEmail") ?? "",
+  ).trim();
+  if (!clientId || !ident) {
+    await setFlash("Indica o email ou telefone da conta a ligar.", "error");
     return;
   }
 
   try {
     const supabase = await createClient();
-    const { data: partner } = await (supabase as any)
-      .from("profiles")
-      .select("id, role, email")
-      .ilike("email", partnerEmail)
-      .maybeSingle();
+    let partner: { id: string; role: string; email: string | null; phone: string | null } | null =
+      null;
+
+    if (ident.includes("@")) {
+      // ── Por email ──────────────────────────────────────────────
+      const { data } = await (supabase as any)
+        .from("profiles")
+        .select("id, role, email, phone")
+        .ilike("email", ident.toLowerCase())
+        .maybeSingle();
+      partner = (data as any) ?? null;
+    } else {
+      // ── Por telefone ───────────────────────────────────────────
+      // O telefone pode estar guardado com espaços/formatação diferente,
+      // por isso comparamos só os dígitos. PostgREST não normaliza no filtro,
+      // logo trazemos os clientes com telefone e comparamos em JS.
+      const digits = ident.replace(/\D/g, "");
+      if (digits.length < 6) {
+        await setFlash("Número de telefone inválido.", "error");
+        return;
+      }
+      const { data: candidates } = await (supabase as any)
+        .from("profiles")
+        .select("id, role, email, phone")
+        .eq("role", "client")
+        .not("phone", "is", null)
+        .limit(2000);
+      const matches = ((candidates ?? []) as any[]).filter(
+        (c) => String(c.phone ?? "").replace(/\D/g, "") === digits,
+      );
+      if (matches.length > 1) {
+        await setFlash(
+          "Há mais do que um cliente com esse telefone. Liga pelo email para evitar ambiguidade.",
+          "error",
+        );
+        return;
+      }
+      partner = (matches[0] as any) ?? null;
+    }
 
     if (!partner) {
-      await setFlash("Não foi encontrado nenhum cliente com esse email.", "error");
+      await setFlash("Não foi encontrado nenhum cliente com esse email ou telefone.", "error");
       return;
     }
     if (partner.id === clientId) {
