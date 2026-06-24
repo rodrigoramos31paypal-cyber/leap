@@ -1409,10 +1409,17 @@ function MonthView({ gridStart, anchor, bookings, blocks, reserved, lastCreditId
                     <span>{formatTime(b.starts_at)}</span>
                     <span className="hidden sm:inline">
                       {" "}
-                      {shortName(b.profiles?.full_name)}
-                      {b.partner_profiles?.full_name
-                        ? ` & ${shortName(b.partner_profiles.full_name)}`
-                        : ""}
+                      {b.partner_profiles?.full_name ? (
+                        <>
+                          <strong>Duo</strong>
+                          {" "}
+                          {shortName(b.profiles?.full_name)}
+                          {" "}
+                          {shortName(b.partner_profiles.full_name)}
+                        </>
+                      ) : (
+                        shortName(b.profiles?.full_name)
+                      )}
                     </span>
                   </div>
                 ))}
