@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { Pagination } from "@/components/pagination";
 import { ClientSearch } from "@/components/client-search";
 import { ListSkeleton } from "@/components/skeleton";
+import { NewClientButton } from "./new-client-button";
 
 // "new" foi removido (decisão de produto). "todos" passou a "Todos clientes"
 // no label e a incluir clientes que se registaram com o trainer mas ainda
@@ -53,9 +54,12 @@ export default async function ClientesPage(
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Clientes</h1>
-        <p className="text-sm text-ink-500">{labelFor(tab, q) || "A carregar…"}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl font-bold tracking-tight">Clientes</h1>
+          <p className="text-sm text-ink-500">{labelFor(tab, q) || "A carregar…"}</p>
+        </div>
+        <NewClientButton />
       </div>
 
       <ClientSearch
