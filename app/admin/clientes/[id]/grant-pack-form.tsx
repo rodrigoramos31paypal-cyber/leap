@@ -99,7 +99,7 @@ export function GrantPackForm({
           onClick={() => setMode("pack")}
           className={cn(TAB, mode === "pack" ? TAB_ON : TAB_OFF)}
         >
-          Packs
+          Packs existentes
         </button>
         <button
           type="button"
