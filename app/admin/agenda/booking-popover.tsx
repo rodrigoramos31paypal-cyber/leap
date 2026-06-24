@@ -40,6 +40,13 @@ function firstNameLong(full?: string | null) {
   const first = (full ?? "").trim().split(/\s+/)[0] ?? "";
   return first.slice(0, 14);
 }
+// Apelido (último nome) do cliente, com o mesmo cap de 14 chars. Devolve
+// "" quando só existe um nome, para não renderizar uma linha vazia.
+function lastNameLong(full?: string | null) {
+  const parts = (full ?? "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return "";
+  return parts[parts.length - 1].slice(0, 14);
+}
 // Sessão DUO: une os dois primeiros nomes ("Ana & João"). Para sessões
 // normais devolve só o nome do cliente. `fmt` controla o tamanho de cada
 // nome (shortName no preview, firstNameLong no bloco).
@@ -466,12 +473,24 @@ export function BookingBlock({
             // bloco da frente que vem por baixo.
             fontSize: "clamp(6px, 1.95vw, 10px)",
             display: "-webkit-box",
-            WebkitLineClamp: overlap ? 1 : 2,
+            // Numa sessão individual mostramos nome + apelido em 2 linhas
+            // (mesmo em sobreposição). Em DUO mantemos o comportamento
+            // antigo: 1 linha quando há overlap, 2 caso contrário.
+            WebkitLineClamp: b.partner_profiles?.full_name ? (overlap ? 1 : 2) : 2,
             WebkitBoxOrient: "vertical",
             overflow: "hidden",
           }}
         >
-          {duoNames(b, firstNameLong)}
+          {b.partner_profiles?.full_name ? (
+            duoNames(b, firstNameLong)
+          ) : (
+            <>
+              {firstNameLong(b.profiles?.full_name)}
+              {lastNameLong(b.profiles?.full_name) && (
+                <span className="block">{lastNameLong(b.profiles?.full_name)}</span>
+              )}
+            </>
+          )}
         </div>
       </button>
 
