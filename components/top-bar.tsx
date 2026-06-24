@@ -72,5 +72,5 @@ export function TopBar({
         </div>
       </div>
     </header>
-  );
+   );
 }

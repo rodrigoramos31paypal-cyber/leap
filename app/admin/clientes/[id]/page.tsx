@@ -160,21 +160,27 @@ export default async function ClientDetail(props: {
             </div>
           )}
           {!isDeleted && (
-            <div className="flex flex-wrap items-start gap-2">
-              <form action={setClientBannedAction}>
+            // flex-nowrap + min-w-0 nos filhos mantém os dois botões na
+            // MESMA linha mesmo em mobile estreito. Labels encurtados
+            // ("Bloquear compras" / "Apagar conta") para caberem sem quebrar.
+            <div className="flex flex-nowrap items-start gap-2">
+              <form action={setClientBannedAction} className="min-w-0 flex-1">
                 <input type="hidden" name="clientId" value={profileId} />
                 <input type="hidden" name="banned" value={profile.banned ? "false" : "true"} />
                 <button
                   className={
-                    profile.banned
-                      ? "btn-primary text-xs"
-                      : "btn-outline border-red-200 text-xs text-red-700 hover:bg-red-50"
+                    "w-full text-xs " +
+                    (profile.banned
+                      ? "btn-primary"
+                      : "btn-outline border-red-200 text-red-700 hover:bg-red-50")
                   }
                 >
-                  {profile.banned ? "Reativar conta" : "Suspender conta (bloquear compras)"}
+                  {profile.banned ? "Reativar conta" : "Bloquear compras"}
                 </button>
               </form>
-              <DeleteClientSection clientId={profileId} />
+              <div className="min-w-0 flex-1">
+                <DeleteClientSection clientId={profileId} />
+              </div>
             </div>
           )}
 

@@ -37,9 +37,9 @@ export function DeleteClientSection({ clientId }: { clientId: string }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="btn-outline inline-flex items-center gap-1.5 text-xs text-red-700 hover:bg-red-50 border-red-200"
+        className="btn-outline inline-flex w-full items-center justify-center gap-1.5 text-xs text-red-700 hover:bg-red-50 border-red-200"
       >
-        <Trash2 size={12} /> Apagar conta do cliente
+        <Trash2 size={12} /> Apagar conta
       </button>
     );
   }
