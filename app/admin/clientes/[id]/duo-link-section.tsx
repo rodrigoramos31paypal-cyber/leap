@@ -22,19 +22,19 @@ export function DuoLinkSection({
   partner: DuoPartner | null;
 }) {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [pending, startTransition] = useTransition();
 
   function onLink(formData: FormData) {
     formData.set("clientId", clientId);
-    const e = String(formData.get("partnerEmail") ?? "").trim();
+    const e = String(formData.get("partnerIdentifier") ?? "").trim();
     if (!e) {
-      clientToast("Indica o email da conta a ligar", "error");
+      clientToast("Indica o email ou telefone da conta a ligar", "error");
       return;
     }
     startTransition(async () => {
       await linkDuoAction(formData);
-      setEmail("");
+      setIdentifier("");
       router.refresh();
     });
   }
@@ -82,15 +82,16 @@ export function DuoLinkSection({
         <form action={onLink} className="mt-4 flex flex-wrap items-end gap-3">
           <input type="hidden" name="clientId" value={clientId} />
           <div className="grow sm:max-w-xs">
-            <label className="label">Email da conta a ligar</label>
+            <label className="label">Email ou telefone da conta a ligar</label>
             <input
-              name="partnerEmail"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              name="partnerIdentifier"
+              type="text"
+              inputMode="text"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               required
               className="input"
-              placeholder="cliente@exemplo.pt"
+              placeholder="cliente@exemplo.pt ou 9xx xxx xxx"
             />
           </div>
           <button className="btn-primary inline-flex items-center gap-1.5" disabled={pending}>
