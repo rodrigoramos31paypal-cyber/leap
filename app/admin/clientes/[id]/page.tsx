@@ -65,10 +65,13 @@ export default async function ClientDetail(props: {
 
   // Query das sessões — filtro futuras/passadas + ocultar canceladas +
   // paginação (10 por página, com contagem total para as setas).
+  // DUO: inclui sessões partilhadas em que este cliente é o parceiro
+  // (partner_client_id) — sem isto a sessão duo só aparecia no perfil
+  // de quem fez a marcação, mesmo descontando sessão a ambos.
   let bookingsQuery = supabase
     .from("bookings")
     .select("id, starts_at, session_type, status", { count: "exact" })
-    .eq("client_id", profileId);
+    .or(`client_id.eq.${profileId},partner_client_id.eq.${profileId}`);
   if (hideCancelled) bookingsQuery = bookingsQuery.neq("status", "cancelled");
   if (sessFilter === "futuras") {
     bookingsQuery = bookingsQuery.gte("starts_at", nowIso).order("starts_at", { ascending: true });
