@@ -61,6 +61,61 @@ export async function getDuoPartner(clientId: string): Promise<DuoPartner | null
 }
 
 /**
+ * Id do parceiro duo activo (ou null). Versão leve de `getDuoPartner`
+ * quando só precisamos do id (ex.: somar o saldo dupla partilhado).
+ */
+export async function getActiveDuoPartnerId(clientId: string): Promise<string | null> {
+  const admin = createAdminClient();
+  const { data: pair } = await (admin as any)
+    .from("duo_partnerships")
+    .select("client_a, client_b")
+    .eq("active", true)
+    .or(`client_a.eq.${clientId},client_b.eq.${clientId}`)
+    .maybeSingle();
+  if (!pair) return null;
+  return pair.client_a === clientId ? pair.client_b : pair.client_a;
+}
+
+/**
+ * Packs PT Dupla (confirmados, com saldo, não expirados) de um cliente,
+ * por treinador. Usado para SOMAR o saldo dupla do parceiro ao do próprio
+ * (saldo partilhado pelo par). Service role: um cliente não pode ler as
+ * compras do outro pelas policies normais.
+ */
+export type PartnerDuplaRow = {
+  trainer_id: string;
+  sessions_remaining: number;
+  sessions_total: number;
+  trainerName: string | null;
+  slug: string | null;
+  avatarUrl: string | null;
+};
+
+export async function getPartnerDuplaRows(partnerId: string): Promise<PartnerDuplaRow[]> {
+  const admin = createAdminClient();
+  const { data } = await (admin as any)
+    .from("purchases")
+    .select(
+      "trainer_id, sessions_remaining, sessions_total, expires_at, trainers:trainer_id(slug, avatar_url, profiles:profile_id(full_name))",
+    )
+    .eq("client_id", partnerId)
+    .eq("session_type", "dupla")
+    .eq("status", "confirmed")
+    .gt("sessions_remaining", 0);
+  const now = Date.now();
+  return ((data ?? []) as any[])
+    .filter((p) => !p.expires_at || new Date(p.expires_at).getTime() >= now)
+    .map((p) => ({
+      trainer_id: p.trainer_id,
+      sessions_remaining: Number(p.sessions_remaining ?? 0),
+      sessions_total: Number(p.sessions_total ?? 0),
+      trainerName: p.trainers?.profiles?.full_name ?? null,
+      slug: p.trainers?.slug ?? null,
+      avatarUrl: p.trainers?.avatar_url ?? null,
+    }));
+}
+
+/**
  * Saldo de sessões PT Dupla (confirmadas e não expiradas) de um cliente
  * para um treinador. Usa service role porque é chamado na app do CLIENTE
  * para saber se o PAR tem créditos — as policies normais não deixam um
