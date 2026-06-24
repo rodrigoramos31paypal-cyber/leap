@@ -1,10 +1,14 @@
 -- ════════════════════════════════════════════════════════════════
--- 0112 · create_booking_admin · permitir sobreposição parcial
+-- 0112 · create_booking_admin · sobreposição parcial + 30 min admin
 --
--- Pedido: admin/staff/owner deve poder marcar sessões mesmo que se
+-- Pedido 1: admin/staff/owner deve poder marcar sessões mesmo que se
 -- sobreponham por alguns minutos a outra sessão. A única colisão que
 -- continua bloqueada é o MESMO horário de início exato (duas sessões
 -- a começar à mesma hora no mesmo trainer).
+--
+-- Pedido 2: admin/staff/owner pode marcar sessões de 30 min em nome do
+-- cliente, mesmo que os clientes só possam marcar 45 min. A guarda de
+-- duração passa a aceitar `slot_durations_min` OU 30.
 --
 -- Antes (0107): bloqueava qualquer interseção de intervalos
 --   (tstzrange && tstzrange).
@@ -65,7 +69,11 @@ begin
   -- 0107: SEM check de "tem de ser no futuro" — admin pode registar
   -- sessões passadas (e marcar como livre/realizada à posteriori).
 
-  if not (p_duration_min = any(v_settings.slot_durations_min)) then
+  -- 0112: admin/staff/owner pode marcar sessões de 30 min em nome do
+  -- cliente, além das durações configuradas em `slot_durations_min` (que
+  -- regem o que os clientes podem marcar no fluxo /app). 30 é sempre
+  -- aceite aqui; o resto continua limitado às durações permitidas.
+  if not (p_duration_min = any(v_settings.slot_durations_min) or p_duration_min = 30) then
     raise exception 'Duração % min não permitida.', p_duration_min;
   end if;
 
