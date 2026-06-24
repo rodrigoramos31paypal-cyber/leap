@@ -14,7 +14,7 @@ export type GrantPackPack = {
 
 type Mode = "pack" | "custom" | "remove";
 
-const TAB = "rounded-md px-2.5 py-1 font-medium transition";
+const TAB = "flex-1 rounded-md px-2.5 py-1 font-medium transition";
 const TAB_ON = "bg-ink-900 text-white dark:bg-bone-50 dark:text-ink-900";
 const TAB_OFF = "text-ink-600 hover:bg-ink-900/5";
 
@@ -93,7 +93,7 @@ export function GrantPackForm({
       <input type="hidden" name="clientId" value={clientId} />
       <input type="hidden" name="mode" value={mode} />
 
-      <div className="inline-flex items-center gap-1 rounded-lg border border-ink-900/10 bg-white p-1 text-xs dark:bg-ink-800">
+      <div className="flex w-full items-center gap-1 rounded-lg border border-ink-900/10 bg-white p-1 text-xs dark:bg-ink-800">
         <button
           type="button"
           onClick={() => setMode("pack")}
