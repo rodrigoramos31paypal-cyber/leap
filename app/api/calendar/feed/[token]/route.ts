@@ -209,10 +209,12 @@ export async function GET(req: Request, props: { params: Promise<{ token: string
     }
   } else {
     // Client: as suas próprias sessões.
+    // DUO: inclui sessões partilhadas em que sou o parceiro — o feed iCal
+    // do par tem de mostrar as sessões duo, não só as que ele marcou.
     const { data: bookings } = await admin
       .from("bookings")
       .select("id, starts_at, ends_at, session_type, status")
-      .eq("client_id", profile.id)
+      .or(`client_id.eq.${profile.id},partner_client_id.eq.${profile.id}`)
       .gte("starts_at", rangeStart.toISOString())
       .lt("starts_at", rangeEnd.toISOString())
       .neq("status", "cancelled");

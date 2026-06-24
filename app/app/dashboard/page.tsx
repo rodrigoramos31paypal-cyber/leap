@@ -246,7 +246,8 @@ async function BelowFold({
     supabase
       .from("bookings")
       .select("id, starts_at, session_type, status")
-      .eq("client_id", userId)
+      // DUO: inclui sessões partilhadas em que sou o parceiro.
+      .or(`client_id.eq.${userId},partner_client_id.eq.${userId}`)
       .lt("starts_at", nowIso)
       .order("starts_at", { ascending: false })
       .limit(4),
@@ -254,7 +255,8 @@ async function BelowFold({
       ? supabase
           .from("bookings")
           .select("status")
-          .eq("client_id", userId)
+          // DUO: a sessão dupla também desconta ao par — conta para a presença.
+          .or(`client_id.eq.${userId},partner_client_id.eq.${userId}`)
           .gte("starts_at", latestPack.created_at)
           .lt("starts_at", nowIso)
           .in("status", ["confirmed", "no_show"])
