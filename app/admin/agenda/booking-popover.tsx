@@ -476,13 +476,17 @@ export function BookingBlock({
             // Numa sessão individual mostramos nome + apelido em 2 linhas
             // (mesmo em sobreposição). Em DUO mantemos o comportamento
             // antigo: 1 linha quando há overlap, 2 caso contrário.
-            WebkitLineClamp: b.partner_profiles?.full_name ? (overlap ? 1 : 2) : 2,
+            WebkitLineClamp: b.partner_profiles?.full_name ? (overlap ? 2 : 3) : 2,
             WebkitBoxOrient: "vertical",
             overflow: "hidden",
           }}
         >
           {b.partner_profiles?.full_name ? (
-            duoNames(b, firstNameLong)
+            <>
+              <span className="block font-bold">Duo</span>
+              <span className="block">{firstNameLong(b.profiles?.full_name)}</span>
+              <span className="block">{firstNameLong(b.partner_profiles?.full_name)}</span>
+            </>
           ) : (
             <>
               {firstNameLong(b.profiles?.full_name)}
@@ -515,7 +519,17 @@ export function BookingBlock({
             }}
           >
             <div className="font-semibold tabular-nums">{preview.time}</div>
-            <div className="truncate font-medium">{duoNames(b, shortName)}</div>
+            <div className="truncate font-medium">
+              {b.partner_profiles?.full_name ? (
+                <>
+                  <strong>Duo</strong>{" "}
+                  {shortName(b.profiles?.full_name)}{" "}
+                  {shortName(b.partner_profiles.full_name)}
+                </>
+              ) : (
+                shortName(b.profiles?.full_name)
+              )}
+            </div>
           </div>
         </>
       )}
@@ -542,12 +556,15 @@ export function BookingBlock({
                 {formatTime(b.starts_at)}
                 {b.ends_at ? `–${formatTime(b.ends_at)}` : ""}
               </div>
-              <div className="text-xs text-ink-500">
-                {b.profiles?.full_name ?? "—"}
-                {b.partner_profiles?.full_name && (
-                  <> &amp; {b.partner_profiles.full_name}</>
-                )}
-              </div>
+              {b.partner_profiles?.full_name ? (
+                <div className="text-xs text-ink-500 leading-tight">
+                  <span className="block font-bold text-ink-900 dark:text-bone-50">Duo</span>
+                  <span className="block">{firstNameLong(b.profiles?.full_name)}</span>
+                  <span className="block">{firstNameLong(b.partner_profiles?.full_name)}</span>
+                </div>
+              ) : (
+                <div className="text-xs text-ink-500">{b.profiles?.full_name ?? "—"}</div>
+              )}
               {b.partner_profiles?.full_name && (
                 <div className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-gold-100 px-2 py-0.5 text-[10px] font-semibold text-gold-700 dark:bg-gold-400/15">
                   <Users size={10} /> Sessão dupla
