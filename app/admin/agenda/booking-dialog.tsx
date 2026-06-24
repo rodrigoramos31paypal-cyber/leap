@@ -188,10 +188,10 @@ export function BookingDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, mode]);
 
-  // DUO: ao escolher um cliente, vai buscar os hints (par activo + saldos
-  // individual/dupla) e arranca o dropdown "Tipo" em "Dupla" quando o
-  // cliente só tem packs PT Dupla partilhados — caso típico que antes
-  // dava "Sem sessões para descontar" porque o default era "individual".
+  // DUO: ao escolher um cliente com PAR activo, arranca o dropdown "Tipo"
+  // em "Dupla" — assume-se que o trainer está a marcar uma sessão dupla
+  // para o par. O admin pode mudar para "Individual" no dropdown se for
+  // mesmo uma sessão individual (nesse caso desconta só ao próprio).
   useEffect(() => {
     if (!picked) return;
     let cancelled = false;
@@ -199,7 +199,7 @@ export function BookingDialog({
       try {
         const hints = await getBookingClientHintsAction(picked.id, trainerId);
         if (cancelled) return;
-        if (hints.hasPartner && hints.individual === 0 && hints.dupla > 0) {
+        if (hints.hasPartner) {
           setSessionType("dupla");
         }
       } catch {

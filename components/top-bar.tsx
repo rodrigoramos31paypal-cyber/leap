@@ -48,7 +48,7 @@ export function TopBar({
                 className="h-11 w-11 dark:invert"
               />
               <span className="font-display text-sm font-semibold tracking-tight hidden sm:inline">
-                LEAP·FITNESS
+                LEAP Fitness Studio
               </span>
             </Link>
           )}
