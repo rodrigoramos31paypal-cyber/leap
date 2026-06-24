@@ -210,6 +210,7 @@ export default async function ClientDetail(props: {
               <GrantPackForm
                 clientId={profileId}
                 packs={packs.map((p) => ({ id: p.id, name: p.name, price_cents: p.price_cents }))}
+                hasPartner={!!duoPartner}
               />
             </details>
           )}

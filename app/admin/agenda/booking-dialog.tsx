@@ -16,7 +16,7 @@ import { useRouter } from "next/navigation";
 import { Ban, CalendarPlus, Package, Search, UserPlus, X } from "lucide-react";
 import { eur } from "@/lib/utils";
 import { searchClientsAction, type ClientHit } from "@/app/admin/clientes/search-action";
-import { createAgendaBookingAction, createBusyAction } from "./actions";
+import { createAgendaBookingAction, createBusyAction, getBookingClientHintsAction } from "./actions";
 
 type PackLite = { id: string; name: string; sessions: number; price_cents: number };
 
@@ -187,6 +187,30 @@ export function BookingDialog({
     return () => window.clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, mode]);
+
+  // DUO: ao escolher um cliente, vai buscar os hints (par activo + saldos
+  // individual/dupla) e arranca o dropdown "Tipo" em "Dupla" quando o
+  // cliente só tem packs PT Dupla partilhados — caso típico que antes
+  // dava "Sem sessões para descontar" porque o default era "individual".
+  useEffect(() => {
+    if (!picked) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const hints = await getBookingClientHintsAction(picked.id, trainerId);
+        if (cancelled) return;
+        if (hints.hasPartner && hints.individual === 0 && hints.dupla > 0) {
+          setSessionType("dupla");
+        }
+      } catch {
+        /* silencioso — fica no default actual */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picked?.id, trainerId]);
 
   // Quando troca para "novo cliente", a sessão grátis é o default
   // (cliente acabado de criar não tem pack). Para existente, descontar.
