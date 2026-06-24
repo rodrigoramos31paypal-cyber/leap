@@ -145,6 +145,17 @@ export function GrantPackForm({
             />
           </div>
           <div>
+            <label className="label">Tipo</label>
+            <select
+              name="custom_session_type"
+              defaultValue="individual"
+              className="input"
+            >
+              <option value="individual">PT Individual</option>
+              <option value="dupla">PT Dupla (partilhado com o par)</option>
+            </select>
+          </div>
+          <div>
             <label className="label">Preço total (€)</label>
             <input
               name="custom_price_euros"
