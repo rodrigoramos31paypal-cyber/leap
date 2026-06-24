@@ -51,7 +51,7 @@ export default async function AdminAgendaPage(props: {
   const trainerId = (await getCurrentTrainerId()) ?? "";
 
   // Durações permitidas + default + packs activos para o BookingDialog.
-  let durations: number[] = [45, 60, 90];
+  let durations: number[] = [30, 45, 60, 90];
   let defaultDuration = 45;
   let packs: { id: string; name: string; sessions: number; price_cents: number }[] = [];
   if (trainerId) {

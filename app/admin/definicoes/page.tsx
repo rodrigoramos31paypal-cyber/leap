@@ -339,7 +339,7 @@ function RegrasTab({
           <label className="label">Durações permitidas (min, separadas por vírgula)</label>
           <input
             name="slot_durations"
-            defaultValue={(settings?.slot_durations_min ?? [45, 60, 90]).join(", ")}
+            defaultValue={(settings?.slot_durations_min ?? [30, 45, 60, 90]).join(", ")}
             className="input"
           />
         </div>
