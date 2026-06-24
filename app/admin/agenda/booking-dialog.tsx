@@ -20,16 +20,18 @@ import { createAgendaBookingAction, createBusyAction } from "./actions";
 
 type PackLite = { id: string; name: string; sessions: number; price_cents: number };
 
-const TIME_OPTIONS = Array.from({ length: 30 }, (_, i) => {
-  const h = 7 + Math.floor(i / 2);
-  const m = (i % 2) * 30;
+const TIME_OPTIONS = Array.from({ length: 59 }, (_, i) => {
+  const total = 7 * 60 + i * 15; // 07:00 → 21:30, passos de 15 min
+  const h = Math.floor(total / 60);
+  const m = total % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }); // 07:00 → 21:30
 
-// Horas 00:00 → 23:30 (separador "Ocupado", que cobre o dia todo).
-const BUSY_TIMES = Array.from({ length: 48 }, (_, i) => {
-  const h = Math.floor(i / 2);
-  const m = (i % 2) * 30;
+// Horas 00:00 → 23:45 (separador "Ocupado", que cobre o dia todo), passos de 15 min.
+const BUSY_TIMES = Array.from({ length: 96 }, (_, i) => {
+  const total = i * 15;
+  const h = Math.floor(total / 60);
+  const m = total % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 });
 
