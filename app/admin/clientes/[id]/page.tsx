@@ -8,18 +8,25 @@ import { eur, formatDateTime, BOOKING_STATUS } from "@/lib/utils";
 import { NoteEditor } from "@/components/note-editor";
 import { getMyNotesMapForBookings, getClientNotesMapForBookings } from "@/lib/notes";
 import { getAccessibleTrainerIds } from "@/lib/trainer";
+import { Pagination } from "@/components/pagination";
 import { GrantPackForm } from "./grant-pack-form";
 import { DuoLinkSection } from "./duo-link-section";
 import { setClientBannedAction } from "./actions";
 import { DeleteClientSection } from "./delete-client-section";
 
+const SESSIONS_PAGE_SIZE = 10;
+
 export default async function ClientDetail(props: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ hc?: string }>;
+  searchParams: Promise<{ hc?: string; f?: string; page?: string }>;
 }) {
   const params = await props.params;
-  const { hc } = await props.searchParams;
+  const { hc, f, page: pageParam } = await props.searchParams;
   const hideCancelled = hc === "1";
+  const sessFilter: "todas" | "futuras" | "passadas" =
+    f === "futuras" || f === "passadas" ? f : "todas";
+  const pageNum = Math.max(1, Math.floor(Number(pageParam)) || 1);
+  const nowIso = new Date().toISOString();
   const supabase = await createClient();
   const { data: profile } = await (supabase as any)
     .from("profiles")
@@ -32,9 +39,46 @@ export default async function ClientDetail(props: {
   const profileId = profile.id;
   const isDeleted = (profile.email ?? "").endsWith("@removido.invalid");
 
+  // Constrói hrefs preservando o estado dos filtros (f + hc). Mudar de
+  // filtro/toggle volta sempre à página 1 (page é omitido).
+  const sessHref = (target: "todas" | "futuras" | "passadas") => {
+    const p = new URLSearchParams();
+    if (target !== "todas") p.set("f", target);
+    if (hideCancelled) p.set("hc", "1");
+    const qs = p.toString();
+    return `/admin/clientes/${profileId}${qs ? `?${qs}` : ""}`;
+  };
+  const toggleHideCancelledHref = (() => {
+    const p = new URLSearchParams();
+    if (sessFilter !== "todas") p.set("f", sessFilter);
+    if (!hideCancelled) p.set("hc", "1");
+    const qs = p.toString();
+    return `/admin/clientes/${profileId}${qs ? `?${qs}` : ""}`;
+  })();
+  const sessExtraParams: Record<string, string> = {};
+  if (sessFilter !== "todas") sessExtraParams.f = sessFilter;
+  if (hideCancelled) sessExtraParams.hc = "1";
+
+  // Query das sessões — filtro futuras/passadas + ocultar canceladas +
+  // paginação (10 por página, com contagem total para as setas).
+  let bookingsQuery = supabase
+    .from("bookings")
+    .select("id, starts_at, session_type, status", { count: "exact" })
+    .eq("client_id", profileId);
+  if (hideCancelled) bookingsQuery = bookingsQuery.neq("status", "cancelled");
+  if (sessFilter === "futuras") {
+    bookingsQuery = bookingsQuery.gte("starts_at", nowIso).order("starts_at", { ascending: true });
+  } else if (sessFilter === "passadas") {
+    bookingsQuery = bookingsQuery.lt("starts_at", nowIso).order("starts_at", { ascending: false });
+  } else {
+    bookingsQuery = bookingsQuery.order("starts_at", { ascending: false });
+  }
+  const fromRow = (pageNum - 1) * SESSIONS_PAGE_SIZE;
+  bookingsQuery = bookingsQuery.range(fromRow, fromRow + SESSIONS_PAGE_SIZE - 1);
+
   // PERF (P-18): só as colunas consumidas pelo render (antes `*`, que trazia
   // o pack_snapshot pesado + dezenas de colunas nunca lidas em ambas as tabelas).
-  const [trainerIds, credits, { data: purchasesRaw }, { data: bookingsRaw }] =
+  const [trainerIds, credits, { data: purchasesRaw }, { data: bookingsRaw, count: bookingsCount }] =
     await Promise.all([
       getAccessibleTrainerIds(),
       getClientCredits(profileId),
@@ -44,19 +88,7 @@ export default async function ClientDetail(props: {
         .eq("client_id", profileId)
         .order("created_at", { ascending: false })
         .limit(20),
-      (hideCancelled
-        ? supabase
-            .from("bookings")
-            .select("id, starts_at, session_type, status")
-            .eq("client_id", profileId)
-            .neq("status", "cancelled")
-        : supabase
-            .from("bookings")
-            .select("id, starts_at, session_type, status")
-            .eq("client_id", profileId)
-      )
-        .order("starts_at", { ascending: false })
-        .limit(20),
+      bookingsQuery,
     ]);
   const purchases = (purchasesRaw ?? []) as any[];
   const bookings = (bookingsRaw ?? []) as any[];
@@ -170,11 +202,14 @@ export default async function ClientDetail(props: {
       </section>
 
       <section>
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Sessões recentes</h2>
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-ink-500">Sessões recentes</h2>
+        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          <SessFilterChip label="Todas" href={sessHref("todas")} active={sessFilter === "todas"} />
+          <SessFilterChip label="Futuras" href={sessHref("futuras")} active={sessFilter === "futuras"} />
+          <SessFilterChip label="Passadas" href={sessHref("passadas")} active={sessFilter === "passadas"} />
           <Link
-            href={hideCancelled ? `/admin/clientes/${profileId}` : `/admin/clientes/${profileId}?hc=1`}
-            className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition ${
+            href={toggleHideCancelledHref}
+            className={`ml-auto inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition ${
               hideCancelled
                 ? "border-ink-900 bg-ink-900 text-white dark:border-bone-50 dark:bg-bone-50 dark:text-ink-900"
                 : "border-ink-900/15 text-ink-600 hover:bg-ink-900/5 dark:border-white/15 dark:text-bone-100"
@@ -185,45 +220,71 @@ export default async function ClientDetail(props: {
           </Link>
         </div>
         {bookings.length === 0 ? (
-          <div className="card p-4 text-sm text-ink-500">{hideCancelled ? "Sem sessões para mostrar." : "Sem sessões."}</div>
+          <div className="card p-4 text-sm text-ink-500">
+            {hideCancelled || sessFilter !== "todas" ? "Sem sessões para mostrar." : "Sem sessões."}
+          </div>
         ) : (
-          <ul className="space-y-2">
-            {bookings.map((b) => (
-              <li key={b.id} className="card p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-semibold">{formatDateTime(b.starts_at)}</div>
-                    <div className="text-xs text-ink-500 capitalize">{b.session_type}</div>
-                  </div>
-                  <span className={
-                    b.status === "confirmed" ? "chip-ok" :
-                    b.status === "no_show" ? "chip-danger" :
-                    b.status === "cancelled" ? "chip-mute" : "chip-gold"
-                  }>
-                    {(BOOKING_STATUS as any)[b.status] ?? b.status}
-                  </span>
-                </div>
-                {clientNotesMap.get(b.id)?.body && (
-                  <div className="mt-3 rounded-lg border border-gold-200 bg-gold-50 p-3 dark:border-gold-400/30 dark:bg-gold-400/10">
-                    <div className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold text-gold-700">
-                      <NotebookPen size={12} /> Nota do cliente
+          <>
+            <ul className="space-y-2">
+              {bookings.map((b) => (
+                <li key={b.id} className="card p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-semibold">{formatDateTime(b.starts_at)}</div>
+                      <div className="text-xs text-ink-500 capitalize">{b.session_type}</div>
                     </div>
-                    <p className="whitespace-pre-wrap text-xs text-ink-700">{clientNotesMap.get(b.id)?.body}</p>
+                    <span className={
+                      b.status === "confirmed" ? "chip-ok" :
+                      b.status === "no_show" ? "chip-danger" :
+                      b.status === "cancelled" ? "chip-mute" : "chip-gold"
+                    }>
+                      {(BOOKING_STATUS as any)[b.status] ?? b.status}
+                    </span>
                   </div>
-                )}
-                <details className="mt-3 border-t border-ink-900/5 pt-3">
-                  <summary className="cursor-pointer inline-flex items-center gap-1.5 text-xs font-semibold text-ink-600 hover:text-ink-900">
-                    <NotebookPen size={12} /> Minhas notas{notesMap.get(b.id) ? " · ✓" : ""}
-                  </summary>
-                  <div className="mt-2">
-                    <NoteEditor bookingId={b.id} initialBody={notesMap.get(b.id)?.body} compact />
-                  </div>
-                </details>
-              </li>
-            ))}
-          </ul>
+                  {clientNotesMap.get(b.id)?.body && (
+                    <div className="mt-3 rounded-lg border border-gold-200 bg-gold-50 p-3 dark:border-gold-400/30 dark:bg-gold-400/10">
+                      <div className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold text-gold-700">
+                        <NotebookPen size={12} /> Nota do cliente
+                      </div>
+                      <p className="whitespace-pre-wrap text-xs text-ink-700">{clientNotesMap.get(b.id)?.body}</p>
+                    </div>
+                  )}
+                  <details className="mt-3 border-t border-ink-900/5 pt-3">
+                    <summary className="cursor-pointer inline-flex items-center gap-1.5 text-xs font-semibold text-ink-600 hover:text-ink-900">
+                      <NotebookPen size={12} /> Minhas notas{notesMap.get(b.id) ? " · ✓" : ""}
+                    </summary>
+                    <div className="mt-2">
+                      <NoteEditor bookingId={b.id} initialBody={notesMap.get(b.id)?.body} compact />
+                    </div>
+                  </details>
+                </li>
+              ))}
+            </ul>
+            <Pagination
+              page={pageNum}
+              pageSize={SESSIONS_PAGE_SIZE}
+              total={bookingsCount ?? 0}
+              baseHref={`/admin/clientes/${profileId}`}
+              extraParams={sessExtraParams}
+            />
+          </>
         )}
       </section>
     </div>
+  );
+}
+
+function SessFilterChip({ label, href, active }: { label: string; href: string; active: boolean }) {
+  return (
+    <Link
+      href={href}
+      className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+        active
+          ? "border-ink-900 bg-ink-900 text-white dark:border-bone-50 dark:bg-bone-50 dark:text-ink-900"
+          : "border-ink-900/15 text-ink-600 hover:bg-ink-900/5 dark:border-white/15 dark:text-bone-100"
+      }`}
+    >
+      {label}
+    </Link>
   );
 }
