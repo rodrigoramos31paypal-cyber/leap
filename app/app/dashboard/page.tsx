@@ -203,7 +203,13 @@ export default async function ClientDashboard() {
           </>
         }
       >
-        <BelowFold userId={user.id} nowIso={nowIso} latestPackRows={(latestPackRows ?? []) as any[]} />
+        <BelowFold
+          userId={user.id}
+          nowIso={nowIso}
+          latestPackRows={(latestPackRows ?? []) as any[]}
+          packRemaining={credits.total}
+          packTotal={credits.totalAttributed}
+        />
       </Suspense>
     </div>
   );
@@ -213,26 +219,30 @@ async function BelowFold({
   userId,
   nowIso,
   latestPackRows,
+  packRemaining,
+  packTotal,
 }: {
   userId: string;
   nowIso: string;
   latestPackRows: any[];
+  // Agregados de TODOS os packs activos (não-expirados, com saldo > 0),
+  // alinhados com "Sessões disponíveis". packRemaining === credits.total.
+  packRemaining: number;
+  packTotal: number;
 }) {
   const supabase = await createClient();
   const nowMs = Date.now();
 
+  // Pack activo mais recente — usado apenas para a janela da taxa de presença.
   const latestPack = (latestPackRows as any[]).find(
     (p) =>
       p.sessions_remaining > 0 &&
       (!p.expires_at || new Date(p.expires_at).getTime() >= nowMs),
   ) as any | undefined;
-  const packName = latestPack ? (latestPack.pack_snapshot as any)?.name ?? "Pack" : null;
-  // A barra reflecte o pack comprado mais recente (mesmo já gasto).
-  const barPack = (latestPackRows as any[])[0] as any | undefined;
 
-  // PERF (audit #3): uma única vaga paralela — histórico + presença +
-  // progresso do pack. Toda a secção é streamed, fora do caminho crítico.
-  const [{ data: recentPast }, presencaRes, packPctRes] = await Promise.all([
+  // PERF (audit #3): uma única vaga paralela — histórico + presença.
+  // Toda a secção é streamed, fora do caminho crítico.
+  const [{ data: recentPast }, presencaRes] = await Promise.all([
     supabase
       .from("bookings")
       .select("id, starts_at, session_type, status")
@@ -249,16 +259,9 @@ async function BelowFold({
           .lt("starts_at", nowIso)
           .in("status", ["confirmed", "no_show"])
       : Promise.resolve({ data: null }),
-    barPack && barPack.sessions_total > 0
-      ? supabase
-          .from("bookings")
-          .select("ends_at")
-          .eq("purchase_id", barPack.id)
-          .in("status", ["booked", "confirmed", "no_show"])
-      : Promise.resolve({ data: null }),
   ]);
 
-  // Taxa de presença (apenas do pack atual).
+  // Taxa de presença (apenas do pack activo mais recente).
   let presenca: number | null = null;
   let faltas = 0;
   if (latestPack) {
@@ -269,14 +272,12 @@ async function BelowFold({
     presenca = tot > 0 ? Math.round((attended / tot) * 100) : null;
   }
 
-  let packPct = 0;
-  if (barPack && barPack.sessions_total > 0) {
-    const finalizeBeforeMs = nowMs - 60_000; // finalizada 1 min apos o fim
-    const finalized = ((packPctRes.data ?? []) as any[]).filter(
-      (b) => b.ends_at && new Date(b.ends_at).getTime() <= finalizeBeforeMs,
-    ).length;
-    packPct = Math.min(100, Math.round((finalized / barPack.sessions_total) * 100));
-  }
+  // Barra agregada: proporção de sessões já usadas (marcadas/decrementadas)
+  // sobre o total atribuído nos packs activos. Consistente com "X/Y".
+  const packPct =
+    packTotal > 0
+      ? Math.min(100, Math.round(((packTotal - packRemaining) / packTotal) * 100))
+      : 0;
 
   return (
     <>
@@ -291,7 +292,7 @@ async function BelowFold({
             <div className="rounded-lg bg-bone-50 p-2.5 dark:bg-white/[0.03]">
               <div className="text-[11px] font-semibold text-ink-600 dark:text-bone-100">O teu pack</div>
               <div className="mt-1 font-display text-lg font-bold tabular-nums">
-                {latestPack ? `${latestPack.sessions_remaining}/${latestPack.sessions_total}` : "0/0"}
+                {packTotal > 0 ? `${packRemaining}/${packTotal}` : "0/0"}
               </div>
               <div className="text-[11px] text-ink-500">sessões restantes</div>
             </div>
@@ -305,14 +306,12 @@ async function BelowFold({
               </div>
             </div>
             <div className="rounded-lg bg-bone-50 p-2.5 dark:bg-white/[0.03]">
-              <div className="text-[11px] font-semibold text-ink-600 dark:text-bone-100">Pack atual</div>
-              <div className="mt-1 truncate text-sm font-bold">{packName ?? "Sem pack"}</div>
-              <div className="text-[11px] text-ink-500">
-                {latestPack ? `${latestPack.sessions_total} Sessões` : "Sem pack"}
-              </div>
+              <div className="text-[11px] font-semibold text-ink-600 dark:text-bone-100">Ranking</div>
+              <div className="mt-1 truncate text-sm font-bold">Em breve</div>
+              <div className="text-[11px] text-ink-500">Pontos · loja</div>
             </div>
           </div>
-          {barPack && (
+          {packTotal > 0 && (
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-ink-900/10 dark:bg-white/10">
               <div className="h-full rounded-full bg-gold-400 transition-all" style={{ width: `${packPct}%` }} />
             </div>
