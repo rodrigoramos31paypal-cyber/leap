@@ -178,10 +178,23 @@ export default async function ClientDetail(props: {
             </div>
           )}
 
-          <div className="grid gap-3 sm:grid-cols-1">
-            <div className="card p-4">
-              <div className="text-xs uppercase tracking-wide text-ink-500">Total sessões disponíveis</div>
-              <div className="mt-1 font-display text-2xl font-bold">{credits?.total ?? 0}</div>
+          <div className="card p-4">
+            <div className="text-xs uppercase tracking-wide text-ink-500">Total sessões disponíveis</div>
+            <div className="mt-1 font-display text-2xl font-bold">{credits?.total ?? 0}</div>
+            {/* DUO: divisão por tipo. Em par duo o saldo PT Dupla é
+                partilhado (migration 0113) — o sufixo "partilhado" deixa
+                claro que esse número espelha as duas contas. */}
+            <div className="mt-3 grid grid-cols-2 gap-3 border-t border-ink-900/5 pt-3 text-sm">
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-ink-500">PT Individual</div>
+                <div className="mt-0.5 font-display text-lg font-bold tabular-nums">{credits?.individual ?? 0}</div>
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-ink-500">
+                  PT Dupla{duoPartner ? " · partilhado" : ""}
+                </div>
+                <div className="mt-0.5 font-display text-lg font-bold tabular-nums">{credits?.dupla ?? 0}</div>
+              </div>
             </div>
           </div>
 

@@ -180,19 +180,33 @@ export function GrantPackForm({
       )}
 
       {mode === "remove" && (
-        <div>
-          <label className="label">Nº de sessões a remover</label>
-          <input
-            name="remove_sessions"
-            type="number"
-            min={1}
-            required
-            defaultValue={1}
-            className="input sm:max-w-xs"
-          />
-          <p className="mt-1 text-xs text-ink-500">
-            Remove sessões do saldo do cliente (consome primeiro as que expiram
-            mais cedo). Não afecta a receita.
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="label">Nº de sessões a remover</label>
+            <input
+              name="remove_sessions"
+              type="number"
+              min={1}
+              required
+              defaultValue={1}
+              className="input"
+            />
+          </div>
+          <div>
+            <label className="label">Tipo</label>
+            <select
+              name="remove_session_type"
+              defaultValue="any"
+              className="input"
+            >
+              <option value="any">Qualquer (mais antigas primeiro)</option>
+              <option value="individual">Só PT Individual</option>
+              <option value="dupla">Só PT Dupla (partilhado com o par)</option>
+            </select>
+          </div>
+          <p className="text-xs text-ink-500 sm:col-span-2">
+            Remove sessões do saldo do cliente (dentro do tipo escolhido,
+            consome primeiro as que expiram mais cedo). Não afecta a receita.
           </p>
         </div>
       )}

@@ -95,17 +95,26 @@ export async function grantPackAction(formData: FormData): Promise<void> {
       await setFlash("Indica um número de sessões válido", "error");
       return;
     }
+    // Filtro opcional por tipo (any | individual | dupla). "any" consome
+    // qualquer pack — útil para o caso geral; "individual"/"dupla" para
+    // ajustar especificamente um dos pools (típico em pares duo, onde o
+    // admin quer mexer só no saldo dupla partilhado).
+    const removeTypeRaw = String(formData.get("remove_session_type") ?? "any");
+    const removeType: "individual" | "dupla" | undefined =
+      removeTypeRaw === "individual" || removeTypeRaw === "dupla"
+        ? removeTypeRaw
+        : undefined;
     const trainerId = (await getCurrentTrainerId()) ?? (await getAccessibleTrainerIds())[0];
     if (!trainerId) {
       await setFlash("Sem trainer associado", "error");
       return;
     }
     try {
-      const removed = await removeClientSessions(clientId, trainerId, count);
+      const removed = await removeClientSessions(clientId, trainerId, count, removeType);
       await logAudit("credits_adjust", {
         targetTable: "purchases",
         targetId: clientId,
-        payload: { action: "remove_sessions", requested: count, removed },
+        payload: { action: "remove_sessions", requested: count, removed, type: removeType ?? "any" },
       });
       if (removed === 0) {
         await setFlash("O cliente não tinha sessões disponíveis para remover", "info");
