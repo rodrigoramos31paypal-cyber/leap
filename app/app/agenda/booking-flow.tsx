@@ -66,6 +66,8 @@ export function BookingFlow({
     sessionType === "dupla" && (duoNotLinked || partnerHasNoDupla);
   const [duration, setDuration] = useState<number>(defaultDuration);
   const [date, setDate] = useState<Date>(() => startOfDay(new Date()));
+  // Mês seleccionado no filtro (chave "ano-mês"). Por defeito, o mês de hoje.
+  const [monthKey, setMonthKey] = useState<string>(() => monthKeyOf(startOfDay(new Date())));
   const [slots, setSlots] = useState<{ startsAt: string; endsAt: string }[]>([]);
   const [picked, setPicked] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -130,15 +132,46 @@ export function BookingFlow({
 
   const days = useMemo(() => {
     const today = startOfDay(new Date());
-    // 31 dias de horizonte de marcação (cliente). A faixa de dias mantém o
-    // layout com scroll/swipe horizontal (overflow-x-auto) — só aumenta o nº
-    // de dias visíveis ao deslizar para a direita.
-    return Array.from({ length: 31 }, (_, i) => {
+    // 90 dias de horizonte de marcação (cliente). Como são muitos dias para
+    // percorrer, a faixa é filtrada por mês (ver `months`/`visibleDays`); cada
+    // mês mantém o layout com scroll/swipe horizontal (overflow-x-auto).
+    return Array.from({ length: 90 }, (_, i) => {
       const d = new Date(today);
       d.setDate(d.getDate() + i);
       return d;
     });
   }, []);
+
+  const currentYear = new Date().getFullYear();
+
+  // Meses abrangidos pela janela de 90 dias (para o filtro de mês). Guarda o
+  // 1.º dia disponível de cada mês para saltar lá ao clicar.
+  const months = useMemo(() => {
+    const seen = new Map<string, Date>();
+    for (const d of days) {
+      const k = monthKeyOf(d);
+      if (!seen.has(k)) seen.set(k, d);
+    }
+    return Array.from(seen.entries()).map(([key, first]) => ({
+      key,
+      label: MONTHS_PT[first.getMonth()],
+      year: first.getFullYear(),
+    }));
+  }, [days]);
+
+  // Só os dias do mês seleccionado (dentro da janela de 90 dias).
+  const visibleDays = useMemo(
+    () => days.filter((d) => monthKeyOf(d) === monthKey),
+    [days, monthKey],
+  );
+
+  // Trocar de mês: selecciona o 1.º dia disponível desse mês (hoje, se for o
+  // mês corrente) e carrega os respectivos horários.
+  function pickMonth(key: string) {
+    setMonthKey(key);
+    const first = days.find((d) => monthKeyOf(d) === key);
+    if (first) setDate(first);
+  }
 
   const availableCredits = sessionType === "individual" ? credits.individual : credits.dupla;
 
@@ -295,9 +328,32 @@ export function BookingFlow({
       </div>
 
       <div>
+        <div className="label">Mês</div>
+        <div className="flex gap-1.5 overflow-x-auto pb-2">
+          {months.map((m) => {
+            const active = m.key === monthKey;
+            return (
+              <button
+                key={m.key}
+                type="button"
+                onClick={() => pickMonth(m.key)}
+                className={cn(
+                  "shrink-0 rounded-lg border px-3 py-1.5 text-sm capitalize",
+                  active ? "border-ink-900 bg-ink-900 text-bone-50" : "border-ink-900/10",
+                )}
+              >
+                {m.label}
+                {m.year !== currentYear ? ` ${m.year}` : ""}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
         <div className="label">Dia</div>
         <div className="flex gap-1.5 overflow-x-auto pb-2">
-          {days.map((d) => {
+          {visibleDays.map((d) => {
             const active = isSameDay(d, date);
             return (
               <button
@@ -717,6 +773,13 @@ function startOfDay(d: Date) {
 }
 function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+const MONTHS_PT = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+];
+function monthKeyOf(d: Date) {
+  return `${d.getFullYear()}-${d.getMonth()}`;
 }
 const WEEKDAYS_PT_SHORT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 function weekday(d: Date) {
