@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { NotebookPen, Plus } from "lucide-react";
+import { NotebookPen, Plus, EyeOff, Eye } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getClientCredits } from "@/lib/credits";
 import { getDuoPartner } from "@/lib/duo";
@@ -13,8 +13,13 @@ import { DuoLinkSection } from "./duo-link-section";
 import { setClientBannedAction } from "./actions";
 import { DeleteClientSection } from "./delete-client-section";
 
-export default async function ClientDetail(props: { params: Promise<{ id: string }> }) {
+export default async function ClientDetail(props: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ hc?: string }>;
+}) {
   const params = await props.params;
+  const { hc } = await props.searchParams;
+  const hideCancelled = hc === "1";
   const supabase = await createClient();
   const { data: profile } = await (supabase as any)
     .from("profiles")
@@ -39,10 +44,17 @@ export default async function ClientDetail(props: { params: Promise<{ id: string
         .eq("client_id", profileId)
         .order("created_at", { ascending: false })
         .limit(20),
-      supabase
-        .from("bookings")
-        .select("id, starts_at, session_type, status")
-        .eq("client_id", profileId)
+      (hideCancelled
+        ? supabase
+            .from("bookings")
+            .select("id, starts_at, session_type, status")
+            .eq("client_id", profileId)
+            .neq("status", "cancelled")
+        : supabase
+            .from("bookings")
+            .select("id, starts_at, session_type, status")
+            .eq("client_id", profileId)
+      )
         .order("starts_at", { ascending: false })
         .limit(20),
     ]);
@@ -158,9 +170,22 @@ export default async function ClientDetail(props: { params: Promise<{ id: string
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-ink-500">Sessões recentes</h2>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Sessões recentes</h2>
+          <Link
+            href={hideCancelled ? `/admin/clientes/${profileId}` : `/admin/clientes/${profileId}?hc=1`}
+            className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition ${
+              hideCancelled
+                ? "border-ink-900 bg-ink-900 text-white dark:border-bone-50 dark:bg-bone-50 dark:text-ink-900"
+                : "border-ink-900/15 text-ink-600 hover:bg-ink-900/5 dark:border-white/15 dark:text-bone-100"
+            }`}
+          >
+            {hideCancelled ? <Eye size={12} /> : <EyeOff size={12} />}
+            {hideCancelled ? "Mostrar canceladas" : "Ocultar canceladas"}
+          </Link>
+        </div>
         {bookings.length === 0 ? (
-          <div className="card p-4 text-sm text-ink-500">Sem sessões.</div>
+          <div className="card p-4 text-sm text-ink-500">{hideCancelled ? "Sem sessões para mostrar." : "Sem sessões."}</div>
         ) : (
           <ul className="space-y-2">
             {bookings.map((b) => (
