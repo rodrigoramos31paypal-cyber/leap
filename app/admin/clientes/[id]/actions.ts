@@ -11,7 +11,7 @@ import {
   removeClientSessions,
 } from "@/lib/credits";
 import { getCurrentTrainerId, getAccessibleTrainerIds } from "@/lib/trainer";
-import { linkDuo, unlinkDuo } from "@/lib/duo";
+import { linkDuo, unlinkDuo, getActiveDuoPartnerId } from "@/lib/duo";
 import { createClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
@@ -45,7 +45,22 @@ export async function adjustCreditsAction(formData: FormData) {
     if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "adjustCredits", targetId: purchaseId });
     await setFlash("Não foi possível ajustar sessões", "error");
   }
+  await revalidateForClientAndPartner(clientId);
+}
+
+// DUO: revalida créditos para um cliente e, se existir, para o parceiro
+// duo activo. Necessário porque packs dupla são partilhados pelo par
+// (migration 0113) — sem isto, o perfil do parceiro mostraria dados
+// desactualizados até ao próximo TTL.
+async function revalidateForClientAndPartner(clientId: string) {
   revalidateCreditsViews(clientId);
+  if (!clientId) return;
+  try {
+    const partnerId = await getActiveDuoPartnerId(clientId);
+    if (partnerId) revalidateCreditsViews(partnerId);
+  } catch (e) {
+    logError("revalidateForClientAndPartner", e);
+  }
 }
 
 export async function grantPackAction(formData: FormData): Promise<void> {
@@ -104,7 +119,7 @@ export async function grantPackAction(formData: FormData): Promise<void> {
       if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "removeClientSessions", clientId });
       await setFlash("Não foi possível remover as sessões", "error");
     }
-    revalidateCreditsViews(clientId);
+    await revalidateForClientAndPartner(clientId);
     return;
   }
 
@@ -115,6 +130,12 @@ export async function grantPackAction(formData: FormData): Promise<void> {
       const sessions = Number(formData.get("custom_sessions") ?? 0);
       const priceEuros = Number(formData.get("custom_price_euros") ?? 0);
       const name = String(formData.get("custom_name") ?? "").trim();
+      // Tipo escolhido no form (individual vs dupla). Quando "dupla" entra
+      // no saldo PARTILHADO pelo par (ver migration 0113), por isso uma
+      // atribuição reflecte automaticamente nas duas contas ligadas.
+      const sessionTypeRaw = String(formData.get("custom_session_type") ?? "individual");
+      const sessionType: "individual" | "dupla" =
+        sessionTypeRaw === "dupla" ? "dupla" : "individual";
       if (sessions <= 0) {
         await setFlash("Indica um número de sessões válido", "error");
         return;
@@ -132,7 +153,7 @@ export async function grantPackAction(formData: FormData): Promise<void> {
         trainerId,
         sessions,
         priceCents: Math.round(priceEuros * 100),
-        sessionType: "individual",
+        sessionType,
         paymentMethod: method,
         name: name || undefined,
       });
@@ -167,7 +188,7 @@ export async function grantPackAction(formData: FormData): Promise<void> {
     if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "grantPack", clientId });
     await setFlash("Não foi possível atribuir as sessões", "error");
   }
-  revalidateCreditsViews(clientId);
+  await revalidateForClientAndPartner(clientId);
 }
 
 /**
