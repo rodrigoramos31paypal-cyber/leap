@@ -29,7 +29,7 @@ export default function HomePage() {
             {/* ThemeToggle mantém o look discreto; Entrar herda o destaque
                 gold (antes era do "Criar conta", removido para reduzir
                 clutter no header — registo continua em /registar). */}
-            <ThemeToggle className="border border-ink-900/10 bg-white/60 hover:bg-white dark:border-white/10 dark:bg-white/[0.06] dark:hover:bg-white/[0.12]" />
+            <ThemeToggle className="border border-ink-900/10 dark:border-white/10" />
             <Link href="/login" className="btn-gold">
               Entrar
             </Link>
