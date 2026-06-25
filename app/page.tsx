@@ -22,7 +22,7 @@ export default function HomePage() {
               className="h-9 w-9 sm:h-10 sm:w-10 dark:invert"
             />
             <span className="font-display text-base font-semibold tracking-tight sm:text-lg">
-              LEAP<span className="text-gold-400">·</span>FITNESS
+              LEAP<span className="text-gold-400">·</span>FITNESS STUDIO
             </span>
           </Link>
           <nav className="flex items-center gap-1.5 sm:gap-2">
