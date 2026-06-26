@@ -88,11 +88,19 @@ export async function deletePurchaseAction(
   } catch (e) {
     logError("deletePurchaseAction", e);
     if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "deletePurchase", targetId: id });
-    const msg = e instanceof Error ? e.message : "";
-    // Mensagem amigável da RPC (P0001) chega no .message — reaproveita-a.
-    const friendly = /sess(ã|a)o|série|associad/i.test(msg)
-      ? msg
-      : "Não foi possível eliminar o pagamento.";
+    // Os erros do Supabase sao objectos simples ({message, code}), nao
+    // instancias de Error, por isso lemos .message directamente.
+    const err = e as { message?: string; code?: string };
+    const raw = String(err.message || "");
+    const rawLower = raw.toLowerCase();
+    const code = String(err.code || "");
+    const isRefusal = rawLower.indexOf("associad") >= 0 || rawLower.indexOf("ativa") >= 0;
+    let friendly = "Nao foi possivel eliminar o pagamento.";
+    if (isRefusal) {
+      friendly = raw;
+    } else if (code === "23503") {
+      friendly = "Este pagamento tem sessoes marcadas associadas. Usa Cancelar pagamento em vez de eliminar.";
+    }
     return { ok: false, error: friendly };
   }
   revalidateCreditsViews();
