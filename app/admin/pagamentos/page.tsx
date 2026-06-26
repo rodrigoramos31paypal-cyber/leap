@@ -5,6 +5,7 @@ import { confirmPurchaseAction, rejectPurchaseAction, cancelConfirmedPurchaseAct
 import { getAccessibleTrainerIds } from "@/lib/trainer";
 import { Pagination } from "@/components/pagination";
 import { ClientSearch } from "@/components/client-search";
+import { DeletePurchaseButton } from "./delete-purchase-button";
 import { ArrowLeft } from "lucide-react";
 
 const PAGE_SIZE = 10;
@@ -242,9 +243,12 @@ function renderPurchase(p: any) {
             LEAP-{p.id.slice(0, 6).toUpperCase()}
           </code>
         </div>
-        <span className={`chip-${statusColor(p.status)}`}>
-          {(PURCHASE_STATUS as any)[p.status]}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className={`chip-${statusColor(p.status)}`}>
+            {(PURCHASE_STATUS as any)[p.status]}
+          </span>
+          <DeletePurchaseButton purchaseId={p.id} />
+        </div>
       </div>
 
       {(p.status === "awaiting_confirmation" || p.status === "pending_payment") && (
