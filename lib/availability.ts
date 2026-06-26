@@ -170,36 +170,36 @@ export async function getAvailableSlots(args: {
     };
   });
 
-  // Candidato → slot: respeita antecedência mínima, cabe na janela e não
-  // colide com nenhum intervalo ocupado. `seen` evita duplicar instantes.
-  const seen = new Set<number>();
-  const tryPush = (t: number, win: { start: number; end: number }) => {
-    if (t < bookableFrom) return;
-    const slotEnd = t + slotMs;
-    if (t < win.start || slotEnd > win.end) return;
-    if (busy.some((b) => !(slotEnd <= b.start || t >= b.end))) return;
-    if (seen.has(t)) return;
-    seen.add(t);
-    slots.push({ startsAt: new Date(t), endsAt: new Date(slotEnd) });
-  };
+  const bufferMs = buffer * 60_000;
 
   for (const win of windows) {
-    // Grelha normal: passos de (duração + buffer) a partir do início da janela
-    // → 07:15, 08:00, 08:45, … (com 45 min e buffer 0).
-    for (let t = win.start; t + slotMs <= win.end; t += stepMs) {
-      tryPush(t, win);
-    }
-
-    // SINCRONIZAÇÃO APÓS ARRASTO DO ADMIN (jun/2026): o FIM de cada intervalo
-    // ocupado é também um início válido de slot. Quando um admin arrasta uma
-    // sessão para fora da grelha (ex.: 19:15→19:00, passando a terminar às
-    // 19:45 em vez de 20:00), o instante libertado deixava de ser oferecido —
-    // o cliente só via o próximo ponto da grelha (20:00). Ao ancorar no fim do
-    // intervalo ocupado, 19:45 volta a ser marcável, SEM densificar a grelha
-    // de 15 em 15 min. Sessões "on-grid" terminam em pontos da grelha, por
-    // isso não geram slots novos — só as movidas é que abrem horários extra.
-    for (const b of busy) {
-      tryPush(b.end, win);
+    // Um cursor avança pela janela. Em condições normais isto é apenas a
+    // grelha de (duração + buffer) a partir do início da janela: 07:15,
+    // 08:00, 08:45, … (com 45 min e buffer 0).
+    //
+    // SINCRONIZAÇÃO APÓS ARRASTO DO ADMIN (jun/2026): sempre que o cursor
+    // colide com um intervalo ocupado, RE-ANCORA no fim desse intervalo
+    // (+ buffer) e continua a contar a partir daí. Assim, se uma sessão for
+    // arrastada para fora da grelha (ex.: 19:15→19:00, passando a terminar às
+    // 19:45), os horários seguintes passam a ser 19:45, 20:30, 21:15… até a
+    // janela fechar — o ponto antigo da grelha (20:00) deixa de aparecer.
+    // Como uma sessão "on-grid" termina num ponto da grelha, o re-âncora
+    // coincide com a grelha e, sem arrastos, nada muda.
+    let cursor = win.start;
+    // Guarda anti-loop: o cursor é estritamente crescente (hit.end > cursor,
+    // ou += stepMs > 0), por isso isto nunca dispara com dados sãos.
+    let guard = 0;
+    while (cursor + slotMs <= win.end && guard++ < 10_000) {
+      const slotEnd = cursor + slotMs;
+      const hit = busy.find((b) => !(slotEnd <= b.start || cursor >= b.end));
+      if (hit) {
+        cursor = hit.end + bufferMs; // re-ancora no fim da sessão/bloqueio
+        continue;
+      }
+      if (cursor >= bookableFrom) {
+        slots.push({ startsAt: new Date(cursor), endsAt: new Date(slotEnd) });
+      }
+      cursor += stepMs;
     }
   }
 
