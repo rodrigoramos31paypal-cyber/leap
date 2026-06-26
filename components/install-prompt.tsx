@@ -16,16 +16,20 @@ export function InstallPrompt() {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    // não mostra se já instalado
+    // nao mostra se ja instalado
     if (typeof window === "undefined") return;
     const standalone =
       window.matchMedia?.("(display-mode: standalone)").matches ||
       (window.navigator as any).standalone === true;
     if (standalone) return;
 
-    // PERF (QW-15 audit jun/2026): o read de localStorage é diferido
-    // para dentro do handler. Antes corria síncrono em mount em todos
-    // os utilizadores; agora montamos o listener leve e só lemos o
+    // Na pagina dedicada /instalar ja existe um CTA de instalacao proprio —
+    // nao duplicamos o banner flutuante por cima dele.
+    if (window.location.pathname.startsWith("/instalar")) return;
+
+    // PERF (QW-15 audit jun/2026): o read de localStorage e diferido
+    // para dentro do handler. Antes corria sincrono em mount em todos
+    // os utilizadores; agora montamos o listener leve e so lemos o
     // dismiss quando o browser dispara beforeinstallprompt (raro).
     const handler = (e: Event) => {
       const last = Number(localStorage.getItem(DISMISS_KEY) ?? 0);
