@@ -156,20 +156,7 @@ export async function getAvailableSlots(args: {
 
   const slots: Slot[] = [];
   const slotMs = durationMin * 60_000;
-  // GRANULARIDADE DE MARCAÇÃO (jun/2026): os horários oferecidos ao cliente
-  // avançam de SLOT_GRANULARITY_MIN em SLOT_GRANULARITY_MIN (15 min) — já
-  // NÃO em passos de (duração + buffer). Antes, a grelha estava "presa" a
-  // múltiplos da duração a partir do início da disponibilidade, por isso uma
-  // sessão reagendada para fora dessa grelha (ex.: a terminar às 19:45) não
-  // libertava o instante seguinte; o cliente só via 20:00. Com passo de 15
-  // min, 19:45 passa a ser oferecível.
-  const SLOT_GRANULARITY_MIN = 15;
-  const stepMs = SLOT_GRANULARITY_MIN * 60_000;
-  // Com a grelha mais fina, o `buffer` (intervalo entre sessões) deixa de ser
-  // garantido pelo espaçamento da grelha e passa a ser imposto AQUI: um slot
-  // é recusado se começar/terminar a menos de `buffer` de um intervalo
-  // ocupado. (Com buffer = 0, reduz-se à sobreposição directa de antes.)
-  const bufferMs = buffer * 60_000;
+  const stepMs = (durationMin + buffer) * 60_000;
   const now = Date.now();
   const bookableFrom = now + noticeHours * 3_600_000;
 
@@ -182,9 +169,7 @@ export async function getAvailableSlots(args: {
     for (let t = startBoundary; t + slotMs <= endBoundary; t += stepMs) {
       if (t < bookableFrom) continue;
       const slotEnd = t + slotMs;
-      const overlaps = busy.some(
-        (b) => !(slotEnd + bufferMs <= b.start || t >= b.end + bufferMs),
-      );
+      const overlaps = busy.some((b) => !(slotEnd <= b.start || t >= b.end));
       if (overlaps) continue;
       slots.push({ startsAt: new Date(t), endsAt: new Date(slotEnd) });
     }
