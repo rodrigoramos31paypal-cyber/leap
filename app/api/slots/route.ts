@@ -47,29 +47,27 @@ export async function GET(request: NextRequest) {
       })),
     },
     {
-      // PERF (CB-8 audit jun/2026): o conteúdo deste endpoint depende
-      // só de (trainer, date, duration) — não há per-user data. Era
-      // `private` o que forçava bypass do Vercel Edge e cada cliente
-      // pagava middleware + 4 queries Supabase. Em peak (segunda 9h,
-      // 10 clientes a ver o mesmo dia), 10× round trips. Agora o Edge
-      // cacheia 30 s e partilha entre clientes — 1 query Supabase /
-      // 30 s por (trainer, date, duration). `create_booking` continua
-      // a validar atomicamente: se um slot for ocupado na janela de
-      // staleness, o servidor rejeita com mensagem clara.
+      // CORRECÇÃO (jun/2026): NÃO cachear este endpoint.
       //
-      // SEC (S-12, audit jun/2026): a rota está fora de `isPublic` →
-      // middleware redirecciona unauth. Mas `Cache-Control: public`
-      // permitia ao Vercel Edge servir o cached body antes do
-      // middleware correr → utilizador unauth via slots. Trocamos
-      // `Cache-Control` por `private` (browser-only) e mantemos o
-      // edge cache via `CDN-Cache-Control` + `s-maxage` no Cache-
-      // Control sem `public`. O `s-maxage` instrui apenas shared
-      // caches; a directiva `private` impede que proxies/browsers
-      // não-Vercel armazenem; e o middleware continua a correr antes
-      // de o edge cache responder a um miss.
+      // O conteúdo NÃO depende só de (trainer, date, duration) — muda
+      // sempre que o estado de ocupação muda: uma marcação nova, um
+      // cancelamento, um bloqueio e, em particular, um REAGENDAMENTO
+      // (drag-and-drop do admin na Agenda). O cache anterior
+      // (`s-maxage=30` + `stale-while-revalidate=300`) era partilhado no
+      // Vercel Edge e servia slots desactualizados até ~30 s (fresh) e
+      // até 5 min (stale-while-revalidate). Como `revalidatePath`/
+      // `revalidateTag` NÃO purgam o cache HTTP de um Route Handler, as
+      // acções do admin nunca invalidavam isto → os clientes viam
+      // horários antigos (ex.: arrastar 19:15→19:00 não libertava o
+      // 19:45 no lado do cliente). A consistência tem prioridade sobre
+      // o ganho de cache aqui; cada pedido volta a ler a verdade.
+      //
+      // SEC (S-12): mantemos `private` + `no-store` — nenhum shared
+      // cache (Vercel Edge incluído) guarda o corpo, por isso também
+      // não há risco de servir slots a um utilizador unauth antes de o
+      // middleware correr.
       headers: {
-        "Cache-Control": "private, s-maxage=30, stale-while-revalidate=300",
-        "CDN-Cache-Control": "public, s-maxage=30",
+        "Cache-Control": "private, no-store, max-age=0, must-revalidate",
       },
     },
   );
