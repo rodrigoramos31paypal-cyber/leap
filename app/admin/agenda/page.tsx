@@ -554,18 +554,23 @@ function DayView({
             className="w-full overflow-y-auto"
             style={{ maxHeight: "75vh" }}
           >
-            {/* Day header — sticky, igual ao da semana. */}
-            <div
-              className="sticky top-0 z-30 grid border-b border-ink-900/10 bg-bone-50"
-              style={{ gridTemplateColumns: GRID_COLS }}
-            >
-              <div className="border-r border-ink-900/10" />
-              <div className="border-r border-ink-900/10 px-2 py-2 text-center">
-                <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
-                  {weekday(day)}
-                </div>
-                <div className={`font-display text-xl font-bold ${isToday ? "text-gold-600" : ""}`}>
-                  {fmt(day)}
+            {/* Day header — sticky, igual ao da semana, com faixa do mês/ano. */}
+            <div className="sticky top-0 z-30 bg-bone-50">
+              <div className="border-b border-ink-900/10 px-2 py-1 text-center font-display text-sm font-semibold capitalize text-ink-700">
+                {monthRangeLabel(day, day)}
+              </div>
+              <div
+                className="grid border-b border-ink-900/10 bg-bone-50"
+                style={{ gridTemplateColumns: GRID_COLS }}
+              >
+                <div className="border-r border-ink-900/10" />
+                <div className="border-r border-ink-900/10 px-2 py-2 text-center">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+                    {weekday(day)}
+                  </div>
+                  <div className={`font-display text-xl font-bold ${isToday ? "text-gold-600" : ""}`}>
+                    {fmt(day)}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1053,6 +1058,10 @@ function WeekView({
   const byDay = bucketByDay(bookings, blocks, reserved); // PERF (#5): 1 passagem
   const today = new Date();
 
+  // Rótulo do mês/ano da semana visível. Se a semana atravessa dois meses
+  // (ou dois anos) mostra ambos — assim o trainer nunca perde a referência.
+  const monthLabel = monthRangeLabel(days[0], days[6]);
+
   // Layout das linhas-hora (altura variável). Horas não-marcáveis e sem
   // sessões encolhem para uma faixa fina → cabem mais horas no ecrã.
   const layout = buildRowLayout(days, byDay, avail);
@@ -1083,30 +1092,37 @@ function WeekView({
           className="w-full overflow-y-auto"
           style={{ maxHeight: "75vh" }}
         >
-          {/* Day headers — sticky no topo do scroll interno. */}
-          <div
-            className="sticky top-0 z-30 grid border-b border-ink-900/10 bg-bone-50"
-            style={{ gridTemplateColumns: GRID_COLS }}
-          >
-            <div className="border-r border-ink-900/10" />
-            {days.map((d) => {
-              const isToday = sameDay(d, today);
-              return (
-                <div
-                  key={d.toISOString()}
-                  className="border-r border-ink-900/10 px-0.5 py-2 text-center last:border-r-0"
-                >
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
-                    {weekday(d)}
-                  </div>
+          {/* Cabeçalho fixo: faixa do mês/ano + day-headers. Ambos colados
+              ao topo do scroll interno para o trainer não perder a
+              referência do mês ao deslocar a agenda. */}
+          <div className="sticky top-0 z-30 bg-bone-50">
+            <div className="border-b border-ink-900/10 px-2 py-1 text-center font-display text-sm font-semibold capitalize text-ink-700">
+              {monthLabel}
+            </div>
+            <div
+              className="grid border-b border-ink-900/10 bg-bone-50"
+              style={{ gridTemplateColumns: GRID_COLS }}
+            >
+              <div className="border-r border-ink-900/10" />
+              {days.map((d) => {
+                const isToday = sameDay(d, today);
+                return (
                   <div
-                    className={`font-display text-xl font-bold ${isToday ? "text-gold-600" : ""}`}
+                    key={d.toISOString()}
+                    className="border-r border-ink-900/10 px-0.5 py-2 text-center last:border-r-0"
                   >
-                    {d.getDate()}
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+                      {weekday(d)}
+                    </div>
+                    <div
+                      className={`font-display text-xl font-bold ${isToday ? "text-gold-600" : ""}`}
+                    >
+                      {d.getDate()}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
 
           {/* Time grid */}
@@ -1363,6 +1379,9 @@ function MonthView({ gridStart, anchor, bookings, blocks, reserved, lastCreditId
   const currentMonth = anchor.getMonth();
   return (
     <div className="card overflow-hidden p-2">
+      <div className="mb-2 text-center font-display text-sm font-semibold capitalize text-ink-700">
+        {monthRangeLabel(anchor, anchor)}
+      </div>
       <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase tracking-wide text-ink-500">
         {["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"].map((d) => <div key={d}>{d}</div>)}
       </div>
@@ -1541,6 +1560,18 @@ function weekday(d: Date) {
 }
 function fmt(d: Date) {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+// Rótulo "mês ano" (ou "mês – mês ano" quando o intervalo atravessa dois
+// meses, p.ex. uma semana entre Junho e Julho). Em pt-PT.
+const MONTH_FMT = new Intl.DateTimeFormat("pt-PT", { month: "long" });
+function monthRangeLabel(from: Date, to: Date) {
+  const m1 = MONTH_FMT.format(from);
+  const y1 = from.getFullYear();
+  const m2 = MONTH_FMT.format(to);
+  const y2 = to.getFullYear();
+  if (m1 === m2 && y1 === y2) return `${m1} ${y1}`;
+  if (y1 === y2) return `${m1} – ${m2} ${y2}`;
+  return `${m1} ${y1} – ${m2} ${y2}`;
 }
 // Primeiro nome do cliente, truncado a 7 chars para caber dentro do
 // bloco da sessão (especialmente na vista de mês, com células muito
