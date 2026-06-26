@@ -11,6 +11,12 @@ import type { SessionType } from "@/types/database";
 
 const NOTE_MAX_LEN = 5000;
 
+// Tempo de vida do cache de slots em memória. Curto o suficiente para que
+// uma mudança do lado do admin (reagendamento, bloqueio, cancelamento) seja
+// reflectida quase de imediato, mas longo o suficiente para amortecer o
+// "clicar de um dia para o outro e voltar" sem refetch a cada toque.
+const SLOTS_TTL_MS = 15_000;
+
 type CreditSummary = { individual: number; dupla: number; total: number };
 
 type Conflict = {
@@ -78,7 +84,14 @@ export function BookingFlow({
   const [note, setNote] = useState<string>("");
   const [noteOpen, setNoteOpen] = useState<boolean>(false);
   // PERF (CB-3 audit jun/2026): cache em memoria dos slots ja lidos.
-  const slotsCache = useRef(new Map<string, { startsAt: string; endsAt: string }[]>());
+  // CORRECÇÃO (jun/2026): cache com TTL curto. Antes era permanente (sem
+  // expiração) — um cliente com o fluxo de marcação aberto nunca via as
+  // mudanças feitas pelo admin (ex.: reagendamento por drag) sem recarregar
+  // a página. Agora cada entrada expira em SLOTS_TTL_MS, forçando um
+  // refetch que reflecte o estado actual do servidor.
+  const slotsCache = useRef(
+    new Map<string, { data: { startsAt: string; endsAt: string }[]; ts: number }>(),
+  );
   // Quantas semanas marcar de uma vez. Default conservador: 4 (ou menos,
   // se o cliente tiver menos creditos). O cliente ajusta com o stepper.
   const [recurringCount, setRecurringCount] = useState<number>(() =>
@@ -90,8 +103,8 @@ export function BookingFlow({
     let cancelled = false;
     const cacheKey = `${trainerId}|${ymd(date)}|${duration}`;
     const cached = slotsCache.current.get(cacheKey);
-    if (cached) {
-      setSlots(cached);
+    if (cached && Date.now() - cached.ts < SLOTS_TTL_MS) {
+      setSlots(cached.data);
       setPicked(null);
       setLoading(false);
       return;
@@ -112,7 +125,7 @@ export function BookingFlow({
         if (res.ok) {
           const data = await res.json();
           next = data.slots ?? [];
-          slotsCache.current.set(cacheKey, next);
+          slotsCache.current.set(cacheKey, { data: next, ts: Date.now() });
         }
       } catch {
         // rede falhou - mostra "sem horarios" em vez de crashar.

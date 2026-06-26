@@ -467,7 +467,11 @@ export async function rescheduleBookingAdminAction(args: {
       payload: { from: bookingId, notify },
     });
     await setFlash("Sessão reagendada");
+    // Um reagendamento liberta o horário antigo e ocupa um novo → afecta
+    // tanto as vistas de marcações como as de disponibilidade. Invalidamos
+    // ambas, como as restantes acções da Agenda que mexem na ocupação.
     revalidateBookingViews();
+    revalidateAvailabilityViews();
     return { ok: true };
   } catch (e: any) {
     logError("rescheduleBookingAdminAction", e);

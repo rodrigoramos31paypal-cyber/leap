@@ -65,11 +65,15 @@ export async function GET(req: NextRequest) {
 
   if (type === "purchases") {
     // Só pagamentos CONFIRMADOS (é o que interessa para contabilidade).
+    // Excluímos também os de preço 0 (tipicamente cortesias): não têm
+    // valor contabilístico e só poluíam o relatório. `gt amount_cents 0`
+    // remove-os do CSV — não apaga nada na base de dados.
     const { data } = await supabase
       .from("purchases")
       .select("created_at, payment_method, amount_cents, pack_snapshot, profiles:client_id(full_name, email)")
       .in("trainer_id", trainerScope)
       .eq("status", "confirmed")
+      .gt("amount_cents", 0)
       .gte("created_at", fromIso)
       .lte("created_at", toIso);
     rows = data ?? [];
