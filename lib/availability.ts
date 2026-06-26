@@ -160,24 +160,55 @@ export async function getAvailableSlots(args: {
   const now = Date.now();
   const bookableFrom = now + noticeHours * 3_600_000;
 
-  for (const a of avail) {
+  // Janelas de disponibilidade do dia (em ms), calculadas uma só vez.
+  const windows = avail.map((a) => {
     const [sh, sm] = a.start_time.split(":").map(Number);
     const [eh, em] = a.end_time.split(":").map(Number);
-    const startBoundary = wallToUtc(y, mo, d, sh, sm).getTime();
-    const endBoundary = wallToUtc(y, mo, d, eh, em).getTime();
+    return {
+      start: wallToUtc(y, mo, d, sh, sm).getTime(),
+      end: wallToUtc(y, mo, d, eh, em).getTime(),
+    };
+  });
 
-    for (let t = startBoundary; t + slotMs <= endBoundary; t += stepMs) {
-      if (t < bookableFrom) continue;
-      const slotEnd = t + slotMs;
-      const overlaps = busy.some((b) => !(slotEnd <= b.start || t >= b.end));
-      if (overlaps) continue;
-      slots.push({ startsAt: new Date(t), endsAt: new Date(slotEnd) });
+  // Candidato → slot: respeita antecedência mínima, cabe na janela e não
+  // colide com nenhum intervalo ocupado. `seen` evita duplicar instantes.
+  const seen = new Set<number>();
+  const tryPush = (t: number, win: { start: number; end: number }) => {
+    if (t < bookableFrom) return;
+    const slotEnd = t + slotMs;
+    if (t < win.start || slotEnd > win.end) return;
+    if (busy.some((b) => !(slotEnd <= b.start || t >= b.end))) return;
+    if (seen.has(t)) return;
+    seen.add(t);
+    slots.push({ startsAt: new Date(t), endsAt: new Date(slotEnd) });
+  };
+
+  for (const win of windows) {
+    // Grelha normal: passos de (duração + buffer) a partir do início da janela
+    // → 07:15, 08:00, 08:45, … (com 45 min e buffer 0).
+    for (let t = win.start; t + slotMs <= win.end; t += stepMs) {
+      tryPush(t, win);
+    }
+
+    // SINCRONIZAÇÃO APÓS ARRASTO DO ADMIN (jun/2026): o FIM de cada intervalo
+    // ocupado é também um início válido de slot. Quando um admin arrasta uma
+    // sessão para fora da grelha (ex.: 19:15→19:00, passando a terminar às
+    // 19:45 em vez de 20:00), o instante libertado deixava de ser oferecido —
+    // o cliente só via o próximo ponto da grelha (20:00). Ao ancorar no fim do
+    // intervalo ocupado, 19:45 volta a ser marcável, SEM densificar a grelha
+    // de 15 em 15 min. Sessões "on-grid" terminam em pontos da grelha, por
+    // isso não geram slots novos — só as movidas é que abrem horários extra.
+    for (const b of busy) {
+      tryPush(b.end, win);
     }
   }
 
   slots.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
   return slots;
 }
+
+
+// ══════════════════════════════════════════════
 
 
 // ════════════════════════════════════════════════════════════════
