@@ -315,12 +315,12 @@ function Tab({ href, active, label }: { href: string; active: boolean; label: st
 
 function paymentMethodLabel(m: string) {
   return {
-    manual_mbway: "MB Way (manual)",
+    manual_mbway: "MB Way",
     manual_cash: "Dinheiro",
     manual_transfer: "Transferência",
     manual_revolut: "Revolut",
     complimentary: "Cortesia",
-    mbway: "MB Way (auto)",
+    mbway: "MB Way",
     multibanco: "Multibanco",
     card: "Cartão",
   }[m] ?? m;
