@@ -219,7 +219,7 @@ async function Kpis({ year, month }: { year: number; month: number }) {
           label="Pagamentos pendentes"
           value={String(pendingPaymentsCount ?? 0)}
           accent={pendingPaymentsCount && pendingPaymentsCount > 0 ? "gold" : undefined}
-          href="/admin/pagamentos"
+          href="/admin/pagamentos?tab=pendentes"
         />
       </div>
 

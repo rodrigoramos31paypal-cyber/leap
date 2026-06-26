@@ -199,7 +199,7 @@ export default async function AdminPaymentsPage(
       <div className="flex gap-2 border-b border-ink-900/10 dark:border-white/10">
         <Tab href="/admin/pagamentos?tab=confirmados" active={tab === "confirmados"} label="Confirmados" />
         <Tab href="/admin/pagamentos?tab=rejeitados" active={tab === "rejeitados"} label="Rejeitados" />
-        <Tab href="/admin/pagamentos" active={tab === "pendentes"} label="Pendentes" />
+        <Tab href="/admin/pagamentos?tab=pendentes" active={tab === "pendentes"} label="Pendentes" />
       </div>
 
       {(!purchases || purchases.length === 0) ? (
@@ -213,7 +213,7 @@ export default async function AdminPaymentsPage(
         pageSize={PAGE_SIZE}
         total={total}
         baseHref="/admin/pagamentos"
-        extraParams={tab !== "pendentes" ? { tab } : {}}
+        extraParams={{ tab }}
       />
     </div>
   );
