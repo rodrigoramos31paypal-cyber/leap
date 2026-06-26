@@ -54,13 +54,7 @@ export default async function RelatoriosPage(props: { searchParams: Promise<{ fr
             href={`/api/relatorios/export?type=purchases&from=${from.toISOString()}&to=${to.toISOString()}`}
             className="btn-primary"
           >
-            Compras (.csv)
-          </Link>
-          <Link
-            href={`/api/relatorios/export?type=bookings&from=${from.toISOString()}&to=${to.toISOString()}`}
-            className="btn-outline"
-          >
-            Sessões (.csv)
+            Relatório (.csv)
           </Link>
         </div>
       </div>
