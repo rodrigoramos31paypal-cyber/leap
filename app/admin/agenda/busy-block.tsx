@@ -167,7 +167,7 @@ export function BusyBlock({
             recorrente
           </div>
         )}
-        {b.reason && <div className="mt-0.5 truncate text-red-700/80">{b.reason}</div>}
+        {b.reason && <div className="mt-0.5 truncate text-[9px] font-medium leading-none text-red-700/80">{b.reason}</div>}
       </button>
 
       {open && (
