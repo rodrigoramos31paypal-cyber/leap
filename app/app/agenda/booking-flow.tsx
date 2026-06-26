@@ -175,6 +175,15 @@ export function BookingFlow({
     [days, monthKey],
   );
 
+  // Rótulo "mês ano" dos dias visíveis (todos do mesmo mês). Fica fixo por
+  // cima da faixa de dias para o utilizador não se perder ao deslizar muito
+  // para a direita na horizontal.
+  const monthLabel = useMemo(() => {
+    const ref = visibleDays[0] ?? date;
+    const name = new Intl.DateTimeFormat("pt-PT", { month: "long" }).format(ref);
+    return `${name} ${ref.getFullYear()}`;
+  }, [visibleDays, date]);
+
   // Trocar de mês: selecciona o 1.º dia disponível desse mês (hoje, se for o
   // mês corrente) e carrega os respectivos horários.
   function pickMonth(key: string) {
@@ -360,7 +369,12 @@ export function BookingFlow({
       </div>
 
       <div>
-        <div className="label">Dia</div>
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="label">Dia</span>
+          <span className="mb-1.5 text-sm font-semibold capitalize text-ink-900 dark:text-bone-50">
+            {monthLabel}
+          </span>
+        </div>
         <div className="flex gap-1.5 overflow-x-auto pb-2">
           {visibleDays.map((d) => {
             const active = isSameDay(d, date);
