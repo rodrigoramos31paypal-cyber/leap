@@ -216,6 +216,20 @@ export async function cancelConfirmedPurchase(purchaseId: string, reason?: strin
   if (error) throw error;
 }
 
+/**
+ * Elimina (hard delete) uma compra/pagamento. Admin/staff. Remove o
+ * registo de vez — não fica em "Confirmados"/"Rejeitados"/"Pendentes".
+ * A RPC recusa se houver sessões marcadas associadas (FK restrict);
+ * nesse caso usar cancelConfirmedPurchase.
+ */
+export async function deletePurchase(purchaseId: string) {
+  const supabase = await createClient();
+  const { error } = await (supabase as any).rpc("delete_purchase", {
+    p_purchase_id: purchaseId,
+  });
+  if (error) throw error;
+}
+
 export async function createBooking(args: {
   trainerId: string;
   startsAt: Date;

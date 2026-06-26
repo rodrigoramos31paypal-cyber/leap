@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidateCreditsViews } from "@/lib/revalidate";
-import { confirmPurchase, rejectPurchase, cancelConfirmedPurchase } from "@/lib/credits";
+import { confirmPurchase, rejectPurchase, cancelConfirmedPurchase, deletePurchase } from "@/lib/credits";
 import { dispatchPurchaseConfirmed } from "@/lib/email-dispatch";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
@@ -69,4 +69,32 @@ export async function cancelConfirmedPurchaseAction(formData: FormData) {
     await setFlash("Não foi possível cancelar o pagamento", "error");
   }
   revalidateCreditsViews();
+}
+
+// Eliminar DEFINITIVAMENTE um registo de pagamento (hard delete). Ao
+// contrário de cancelar, não fica em "Rejeitados" — desaparece. Usado
+// para limpar registos de teste/duplicados/erros. Devolve {ok,error}
+// para o componente cliente mostrar a mensagem (ex.: recusa por ter
+// sessões marcadas associadas) em vez de falhar em silêncio.
+export async function deletePurchaseAction(
+  formData: FormData,
+): Promise<{ ok: boolean; error?: string }> {
+  await requireStaff();
+  const id = String(formData.get("purchaseId") ?? "");
+  if (!id) return { ok: false, error: "Pagamento não identificado." };
+  try {
+    await deletePurchase(id);
+    await logAudit("purchase_delete", { targetTable: "purchases", targetId: id });
+  } catch (e) {
+    logError("deletePurchaseAction", e);
+    if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "deletePurchase", targetId: id });
+    const msg = e instanceof Error ? e.message : "";
+    // Mensagem amigável da RPC (P0001) chega no .message — reaproveita-a.
+    const friendly = /sess(ã|a)o|série|associad/i.test(msg)
+      ? msg
+      : "Não foi possível eliminar o pagamento.";
+    return { ok: false, error: friendly };
+  }
+  revalidateCreditsViews();
+  return { ok: true };
 }
