@@ -64,27 +64,25 @@ export async function GET(req: NextRequest) {
   let body = "";
 
   if (type === "purchases") {
+    // Só pagamentos CONFIRMADOS (é o que interessa para contabilidade).
     const { data } = await supabase
       .from("purchases")
-      .select("created_at, confirmed_at, status, payment_method, amount_cents, sessions_total, sessions_remaining, pack_snapshot, profiles:client_id(full_name, email)")
+      .select("created_at, payment_method, amount_cents, pack_snapshot, profiles:client_id(full_name, email)")
       .in("trainer_id", trainerScope)
+      .eq("status", "confirmed")
       .gte("created_at", fromIso)
       .lte("created_at", toIso);
     rows = data ?? [];
-    header = "Data;Confirmada;Cliente;Email;Pack;Sessões;Restantes;Valor€;Método;Status";
+    header = "Data da compra;Cliente;Email;Pack;Preço€;Método de pagamento";
     body = rows
       .map((r) =>
         [
           fmtCsv(r.created_at),
-          fmtCsv(r.confirmed_at),
           esc((r as any).profiles?.full_name),
           esc((r as any).profiles?.email),
           esc(r.pack_snapshot?.name),
-          r.sessions_total,
-          r.sessions_remaining,
           (r.amount_cents / 100).toFixed(2),
-          esc(r.payment_method),
-          esc(r.status),
+          esc(paymentMethodLabel(r.payment_method)),
         ].join(";"),
       )
       .join("\n");
@@ -127,12 +125,13 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  const fileLabel = type === "purchases" ? "compras" : "marcacoes";
   const csv = "﻿" + header + "\n" + body;
   return new NextResponse(csv, {
     status: 200,
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="leap-${type}-${Date.now()}.csv"`,
+      "Content-Disposition": `attachment; filename="leap-${fileLabel}-${Date.now()}.csv"`,
     },
   });
 }
@@ -153,4 +152,21 @@ function esc(v: any) {
 function fmtCsv(v: any) {
   if (!v) return "";
   return new Date(v).toLocaleString("pt-PT");
+}
+
+// Rótulos legíveis para o método de pagamento (coerente com a página de
+// Pagamentos). Códigos desconhecidos passam tal e qual.
+function paymentMethodLabel(m: any) {
+  return (
+    {
+      manual_mbway: "MB Way (manual)",
+      manual_cash: "Dinheiro",
+      manual_transfer: "Transferência",
+      manual_revolut: "Revolut",
+      complimentary: "Cortesia",
+      mbway: "MB Way (auto)",
+      multibanco: "Multibanco",
+      card: "Cartão",
+    } as Record<string, string>
+  )[String(m)] ?? String(m ?? "");
 }
