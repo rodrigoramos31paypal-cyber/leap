@@ -1,8 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
-import { LogOut } from "lucide-react";
 import { NotificationBell } from "./notification-bell";
 import { ThemeToggle } from "./theme-toggle";
+import { LogoutButton } from "./logout-button";
 
 export function TopBar({
   title,
@@ -64,11 +64,7 @@ export function TopBar({
               <span className="block h-[18px] w-[18px]" />
             </Link>
           )}
-          <form action="/auth/logout" method="post">
-            <button className="rounded-md p-2 text-ink-500 hover:bg-ink-900/5 dark:text-bone-100 dark:hover:bg-white/10" aria-label="Sair">
-              <LogOut size={18} />
-            </button>
-          </form>
+          <LogoutButton />
         </div>
       </div>
     </header>
