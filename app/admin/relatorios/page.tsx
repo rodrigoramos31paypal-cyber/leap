@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { eur } from "@/lib/utils";
-import Link from "next/link";
+import { ExportButton } from "./export-button";
 
 function parseRange(searchParams: { from?: string; to?: string }) {
   const now = new Date();
@@ -50,12 +50,12 @@ export default async function RelatoriosPage(props: { searchParams: Promise<{ fr
         <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Exportar</h2>
         <p className="mt-2 text-sm text-ink-500">CSV pronto para Excel/Google Sheets.</p>
         <div className="mt-4 flex gap-2">
-          <Link
+          <ExportButton
             href={`/api/relatorios/export?type=purchases&from=${from.toISOString()}&to=${to.toISOString()}`}
-            className="btn-primary"
+            filename={`leap-compras-${from.toISOString().slice(0, 10)}_${to.toISOString().slice(0, 10)}.csv`}
           >
             Relatório (.csv)
-          </Link>
+          </ExportButton>
         </div>
       </div>
     </div>
