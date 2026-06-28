@@ -52,7 +52,7 @@ export default async function ClientLayout({ children }: { children: React.React
   const flash = await consumeFlash();
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-bone-50 dark:bg-ink-900">
+    <div className="min-h-dvh bg-bone-50 dark:bg-ink-900">
       <ViewportKeyboard />
       <SwNavigator />
       <AppUpdater />
@@ -60,9 +60,9 @@ export default async function ClientLayout({ children }: { children: React.React
       <ClientTopNav />
       <Toaster initial={flash} />
       <ReminderSync />
-      <main className="flex-1 overflow-y-auto overflow-x-hidden">
-        <div className="mx-auto max-w-6xl px-4 pt-1 pb-6">{children}</div>
-      </main>
+      {/* pb-24 (mobile) liberta espaço para a barra inferior FIXA não tapar
+          o conteúdo; md:pb-6 no desktop, onde a barra fixa está escondida. */}
+      <main className="mx-auto max-w-6xl px-4 pt-1 pb-24 md:pb-6">{children}</main>
       <BottomNav variant="client" />
     </div>
   );

@@ -56,7 +56,10 @@
 // arranque a frio do iOS PWA (altura do viewport medida em JS) — força
 // `activate` a limpar caches antigas e dispara o reload por
 // `controllerchange` no próximo arranque, sem reinstalar a PWA.
-const CACHE_NAME = "leap-v22";
+// v23 (jun/2026): barra inferior passa a `position: fixed` + scroll normal
+// do documento (sem app-shell de altura fixa). O navegador ancora a barra
+// ao fundo REAL do viewport, imune ao bug de altura do cold start iOS.
+const CACHE_NAME = "leap-v23";
 
 // Cache dedicada (NÃO versionada) para a navegação pendente de um push
 // tocado com a app fechada. Mantida à parte de CACHE_NAME para não ser
