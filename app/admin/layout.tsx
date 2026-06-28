@@ -17,7 +17,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // PERF: getSessionUser/getCurrentProfile sao cached por request, leem
   // apenas cookie (sem round-trip ao auth server). Middleware ja validou.
   const user = await getSessionUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/");
 
   const supabase = await createClient();
 
