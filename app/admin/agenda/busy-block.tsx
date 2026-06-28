@@ -19,6 +19,8 @@ import {
   deleteRecurringBlockAction,
   skipRecurringDateAction,
   createBusyAction,
+  splitBlockAction,
+  splitRecurringBlockAction,
 } from "./actions";
 
 const TIMES = Array.from({ length: 48 }, (_, i) => {
@@ -65,6 +67,11 @@ export function BusyBlock({
   const origTo = hhmmLocal(b.ends_at);
   const [from, setFrom] = useState(origFrom);
   const [to, setTo] = useState(origTo);
+  // Pausa livre dentro do bloqueio ("split-on-save"): grava o bloqueio
+  // como dois segmentos com um buraco no meio.
+  const [hasFree, setHasFree] = useState(false);
+  const [freeFrom, setFreeFrom] = useState("12:30");
+  const [freeTo, setFreeTo] = useState("14:00");
   const [reason, setReason] = useState<string>(b.reason ?? "");
   // Para recorrentes: aplicar a alteração só a este dia ou a todas as semanas.
   const [scope, setScope] = useState<"single" | "all">("all");
@@ -80,6 +87,20 @@ export function BusyBlock({
       setError("A hora de fim tem de ser depois do início.");
       return;
     }
+    if (hasFree) {
+      if (freeTo <= freeFrom) {
+        setError("A pausa livre: o fim tem de ser depois do início.");
+        return;
+      }
+      if (freeFrom < from || freeTo > to) {
+        setError("A pausa livre tem de estar dentro do intervalo ocupado.");
+        return;
+      }
+      if (freeFrom === from && freeTo === to) {
+        setError("A pausa livre não pode cobrir todo o intervalo.");
+        return;
+      }
+    }
     startTransition(async () => {
       let res: { ok?: true; error?: string } | void;
       if (!isRecurring) {
@@ -89,7 +110,15 @@ export function BusyBlock({
         fd.set("from", from);
         fd.set("to", to);
         fd.set("reason", reason.trim());
-        res = await updateBlockAction(fd);
+        if (hasFree) {
+          // bloqueio pontual com pausa → substitui por dois segmentos.
+          fd.set("trainerId", b.trainer_id);
+          fd.set("freeFrom", freeFrom);
+          fd.set("freeTo", freeTo);
+          res = await splitBlockAction(fd);
+        } else {
+          res = await updateBlockAction(fd);
+        }
       } else if (scope === "all") {
         const fd = new FormData();
         fd.set("id", b.recurring_id);
@@ -99,10 +128,17 @@ export function BusyBlock({
         // grupo: todos os dias-da-semana criados com este mesmo intervalo
         fd.set("oldFrom", origFrom);
         fd.set("oldTo", origTo);
-        res = await updateRecurringBlockAction(fd);
+        if (hasFree) {
+          // recorrência com pausa → divide o grupo em dois intervalos.
+          fd.set("freeFrom", freeFrom);
+          fd.set("freeTo", freeTo);
+          res = await splitRecurringBlockAction(fd);
+        } else {
+          res = await updateRecurringBlockAction(fd);
+        }
       } else {
         // só este dia: limpa a recorrência nesta data e cria um bloqueio
-        // pontual com as novas horas.
+        // pontual com as novas horas (createBusyAction já trata a pausa).
         const sk = new FormData();
         sk.set("trainerId", b.trainer_id);
         sk.set("date", date);
@@ -113,6 +149,10 @@ export function BusyBlock({
         fd.set("date", date);
         fd.set("from", from);
         fd.set("to", to);
+        if (hasFree) {
+          fd.set("freeFrom", freeFrom);
+          fd.set("freeTo", freeTo);
+        }
         fd.set("reason", reason.trim());
         res = await createBusyAction(fd);
       }
@@ -256,6 +296,56 @@ export function BusyBlock({
                   ))}
                 </select>
               </div>
+            </div>
+
+            <div className="mb-3 rounded-lg border border-ink-900/10 bg-bone-50 p-3 dark:border-white/10 dark:bg-ink-900">
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={hasFree}
+                  onChange={(e) => setHasFree(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-ink-900/30"
+                />
+                <span>
+                  <span className="font-medium">Deixar um intervalo livre (pausa)</span>
+                  <span className="block text-[11px] text-ink-500">
+                    Abre um período livre dentro do bloqueio. Ex: ocupado 11:00–17:00 mas livre 12:30–14:00.
+                  </span>
+                </span>
+              </label>
+
+              {hasFree && (
+                <div className="mt-3 grid grid-cols-2 gap-3 border-t border-ink-900/10 pt-3">
+                  <div className="min-w-0">
+                    <label className="label" htmlFor="busy_free_from">Livre das</label>
+                    <select
+                      id="busy_free_from"
+                      value={freeFrom}
+                      onChange={(e) => setFreeFrom(e.target.value)}
+                      className="input"
+                    >
+                      {!TIMES.includes(freeFrom) && <option value={freeFrom}>{freeFrom}</option>}
+                      {TIMES.map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="min-w-0">
+                    <label className="label" htmlFor="busy_free_to">Até</label>
+                    <select
+                      id="busy_free_to"
+                      value={freeTo}
+                      onChange={(e) => setFreeTo(e.target.value)}
+                      className="input"
+                    >
+                      {!TIMES.includes(freeTo) && <option value={freeTo}>{freeTo}</option>}
+                      {TIMES.slice(1).map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="mb-3">

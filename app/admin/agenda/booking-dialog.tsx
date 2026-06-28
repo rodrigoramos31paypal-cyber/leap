@@ -75,6 +75,11 @@ export function BookingDialog({
   // Separador "Ocupado"
   const [busyFrom, setBusyFrom] = useState("11:00");
   const [busyTo, setBusyTo] = useState("17:00");
+  // Pausa livre dentro do bloqueio ("split-on-save"). Aplica-se a todos
+  // os âmbitos (só este dia / intervalo / semanal).
+  const [busyHasFree, setBusyHasFree] = useState(false);
+  const [busyFreeFrom, setBusyFreeFrom] = useState("12:30");
+  const [busyFreeTo, setBusyFreeTo] = useState("14:00");
   const [busyReason, setBusyReason] = useState("");
   const [busyScope, setBusyScope] = useState<"single" | "range" | "recurring">("single");
   const [busyDateFrom, setBusyDateFrom] = useState(viewedDate);
@@ -109,6 +114,9 @@ export function BookingDialog({
     setTab("session");
     setBusyFrom("11:00");
     setBusyTo("17:00");
+    setBusyHasFree(false);
+    setBusyFreeFrom("12:30");
+    setBusyFreeTo("14:00");
     setBusyReason("");
     setBusyScope("single");
     setBusyDateFrom(viewedDate);
@@ -284,6 +292,20 @@ export function BookingDialog({
       setError("A hora de fim tem de ser depois do início.");
       return;
     }
+    if (busyHasFree) {
+      if (busyFreeTo <= busyFreeFrom) {
+        setError("A pausa livre: o fim tem de ser depois do início.");
+        return;
+      }
+      if (busyFreeFrom < busyFrom || busyFreeTo > busyTo) {
+        setError("A pausa livre tem de estar dentro do intervalo ocupado.");
+        return;
+      }
+      if (busyFreeFrom === busyFrom && busyFreeTo === busyTo) {
+        setError("A pausa livre não pode cobrir todo o intervalo.");
+        return;
+      }
+    }
     if (busyScope === "recurring" && busyWeekdays.size === 0) {
       setError("Escolhe pelo menos um dia da semana.");
       return;
@@ -304,6 +326,10 @@ export function BookingDialog({
     fd.set("date", date);
     fd.set("from", busyFrom);
     fd.set("to", busyTo);
+    if (busyHasFree) {
+      fd.set("freeFrom", busyFreeFrom);
+      fd.set("freeTo", busyFreeTo);
+    }
     fd.set("reason", busyReason.trim());
     if (busyScope === "recurring") {
       fd.set("weekdays", Array.from(busyWeekdays).join(","));
@@ -732,6 +758,55 @@ export function BookingDialog({
                       ))}
                     </select>
                   </div>
+                </div>
+
+                {/* Pausa livre dentro do bloqueio (split-on-save) */}
+                <div className="rounded-lg border border-ink-900/10 bg-bone-50 p-3 dark:border-white/10 dark:bg-ink-900">
+                  <label className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={busyHasFree}
+                      onChange={(e) => setBusyHasFree(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-ink-900/30"
+                    />
+                    <span>
+                      <span className="font-medium">Deixar um intervalo livre (pausa)</span>
+                      <span className="block text-[11px] text-ink-500">
+                        Mantém este período livre para marcações dentro do bloqueio. Ex: ocupado 11:00–17:00 mas livre 12:30–14:00.
+                      </span>
+                    </span>
+                  </label>
+
+                  {busyHasFree && (
+                    <div className="mt-3 grid grid-cols-2 gap-3 border-t border-ink-900/10 pt-3">
+                      <div className="min-w-0">
+                        <label className="label" htmlFor="busy_free_from">Livre das</label>
+                        <select
+                          id="busy_free_from"
+                          value={busyFreeFrom}
+                          onChange={(e) => setBusyFreeFrom(e.target.value)}
+                          className="input"
+                        >
+                          {BUSY_TIMES.map((t) => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="min-w-0">
+                        <label className="label" htmlFor="busy_free_to">Até</label>
+                        <select
+                          id="busy_free_to"
+                          value={busyFreeTo}
+                          onChange={(e) => setBusyFreeTo(e.target.value)}
+                          className="input"
+                        >
+                          {BUSY_TIMES.slice(1).map((t) => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Âmbito: só este dia · intervalo de dias · semanal */}
