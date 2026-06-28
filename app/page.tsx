@@ -37,11 +37,11 @@ export default function HomePage() {
         </div>
       </header>
 
-      <section className="mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center px-6 py-16 text-center">
+      <section className="mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center px-6 py-10 text-center">
         {/* Hero centrado (horizontal + vertical); os 4 cards ficam logo
             por baixo, também centrados. Antes era um layout de 2 colunas
             com os cards à direita. */}
-        <h1 className="font-display text-5xl font-black leading-[1.05] tracking-tight md:text-6xl">
+        <h1 className="font-display text-[2.75rem] font-black leading-[1.05] tracking-tight md:text-[3.25rem]">
           A tua jornada,
           <br />
           <span className="text-gold-400">as tuas sessões,</span>
@@ -65,7 +65,7 @@ export default function HomePage() {
 
         {/* Feature cards — logo por baixo, centrados. 2 colunas no
             telemóvel, 4 numa linha em ecrãs maiores. */}
-        <div className="mt-14 grid w-full max-w-3xl grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="mt-10 grid w-full max-w-3xl grid-cols-2 gap-3 sm:grid-cols-4">
           <FeatureCard icon={<Dumbbell size={18} />} title="Packs" desc="PT Individual ou Dupla." />
           <FeatureCard icon={<Calendar size={18} />} title="Agenda" desc="Marca em segundos." />
           <FeatureCard icon={<CreditCard size={18} />} title="Pagamentos" desc="MB WAY e Revolut." />
@@ -74,7 +74,7 @@ export default function HomePage() {
       </section>
 
       <footer className="mt-auto border-t border-ink-900/10 dark:border-white/5">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6 text-xs text-ink-500 dark:text-bone-100/50">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4 text-xs text-ink-500 dark:text-bone-100/50">
           <span>© {new Date().getFullYear()} LEAP Fitness Studio</span>
           <span>Made with discipline.</span>
         </div>
