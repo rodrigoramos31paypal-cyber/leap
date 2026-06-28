@@ -52,7 +52,11 @@
 // (/app/dashboard) em vez do destino (ex.: /app/agenda do "Pack ativo").
 // Agora a navegação pendente é PERSISTIDA na Cache API (sobrevive a
 // reinícios do SW) numa cache dedicada que o `activate` nunca apaga.
-const CACHE_NAME = "leap-v21";
+// v22 (jun/2026): bump para propagar o fix do bottom nav a flutuar no
+// arranque a frio do iOS PWA (altura do viewport medida em JS) — força
+// `activate` a limpar caches antigas e dispara o reload por
+// `controllerchange` no próximo arranque, sem reinstalar a PWA.
+const CACHE_NAME = "leap-v22";
 
 // Cache dedicada (NÃO versionada) para a navegação pendente de um push
 // tocado com a app fechada. Mantida à parte de CACHE_NAME para não ser
