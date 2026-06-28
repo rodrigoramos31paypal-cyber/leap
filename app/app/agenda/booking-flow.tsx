@@ -99,6 +99,19 @@ export function BookingFlow({
   );
   const [pending, start] = useTransition();
 
+  // Auto-scroll suave: âncoras para os horários e para o cartão de
+  // confirmação, para o cliente não ter de scrollar manualmente.
+  const slotsRef = useRef<HTMLDivElement>(null);
+  const confirmRef = useRef<HTMLDivElement>(null);
+
+  // Ao escolher a hora (picked passa a ter valor), traz o cartão de
+  // confirmação à vista. Quando picked volta a null (ex.: trocou de dia),
+  // não faz nada.
+  useEffect(() => {
+    if (!picked) return;
+    smoothScrollTo(confirmRef.current, "center");
+  }, [picked]);
+
   useEffect(() => {
     let cancelled = false;
     const cacheKey = `${trainerId}|${ymd(date)}|${duration}`;
@@ -368,7 +381,13 @@ export function BookingFlow({
               <button
                 key={d.toISOString()}
                 type="button"
-                onClick={() => setDate(d)}
+                onClick={() => {
+                  setDate(d);
+                  // Desce suavemente para a secção de horários. A secção já
+                  // está renderizada (mostra "A carregar…" enquanto busca),
+                  // por isso o rAF garante o scroll após o re-render.
+                  requestAnimationFrame(() => smoothScrollTo(slotsRef.current, "start"));
+                }}
                 className={cn(
                   "flex flex-col items-center rounded-lg border px-3 py-2 text-xs shrink-0 w-14",
                   active ? "border-ink-900 bg-ink-900 text-bone-50" : "border-ink-900/10",
@@ -384,7 +403,7 @@ export function BookingFlow({
         </div>
       </div>
 
-      <div>
+      <div ref={slotsRef} className="scroll-mt-3">
         <div className="label">Horários disponíveis</div>
         {loading ? (
           <div className="card p-5 text-center text-sm text-ink-500">A carregar…</div>
@@ -511,7 +530,7 @@ export function BookingFlow({
       })()}
 
       {picked && !partial && (
-        <div className="card p-4">
+        <div ref={confirmRef} className="card scroll-mt-3 p-4">
           <div className="flex items-center justify-between text-sm">
             <div>
               <div className="font-semibold">Sessão {sessionType} · {duration} min</div>
@@ -743,6 +762,16 @@ async function fetchSlots(
   } catch {
     return [];
   }
+}
+
+// Scroll suave até um elemento, respeitando quem prefere menos movimento
+// (prefers-reduced-motion → salta sem animação). O scroll é feito no
+// contentor scrollável mais próximo (o <main> do shell), por isso
+// funciona dentro do layout de altura fixa.
+function smoothScrollTo(el: HTMLElement | null, block: ScrollLogicalPosition) {
+  if (!el || typeof window === "undefined") return;
+  const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block });
 }
 
 function minutesOfDay(d: Date) {
