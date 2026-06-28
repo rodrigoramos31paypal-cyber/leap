@@ -100,3 +100,63 @@ export async function emailAllowed(
 ): Promise<boolean> {
   return (await getChannelPref(admin, userId, category)).email;
 }
+
+// ────────────────────────────────────────────────────────────────
+// In-app (sininho) a espelhar o PUSH
+//
+// Decisão (jun/2026): o sininho deixa de ser "sempre ON". Passa a
+// espelhar o canal PUSH — se uma categoria tem o push DESLIGADO, as
+// notificações desse tipo não aparecem no sino nem contam para o badge.
+// A linha continua a ser criada em `notifications` (o push usa-a como
+// gatilho); o gating é feito na LEITURA, igual ao /api/push/dispatch.
+//
+// `TYPES_BY_CATEGORY` é o inverso de `categoryForType`. É de propósito
+// role-agnóstico: um utilizador só tem um papel, e `session_reminder`
+// cai em "reminders" (treinador) OU "sessions" (cliente) — como só uma
+// dessas categorias existe nas definições de cada papel, a união nunca
+// esconde a categoria errada.
+// ────────────────────────────────────────────────────────────────
+export const TYPES_BY_CATEGORY: Record<string, string[]> = {
+  // treinador / staff
+  bookings: ["booking_created_admin", "booking_cancelled_admin"],
+  payments: ["payment_pending"],
+  notes: ["client_note"],
+  signups: ["new_signup_admin"],
+  reminders: ["session_reminder"],
+  // cliente
+  sessions: ["booking_created", "booking_cancelled", "session_reminder"],
+  packs: ["purchase_confirmed", "low_credits", "no_credits", "credit_alert", "pack_expiring"],
+  ratings: ["rating_prompt"],
+};
+
+/** Expande um conjunto de categorias para os `type`s que as compõem. */
+export function typesForCategories(categories: Iterable<string>): string[] {
+  const out = new Set<string>();
+  for (const c of categories) {
+    for (const t of TYPES_BY_CATEGORY[c] ?? []) out.add(t);
+  }
+  return [...out];
+}
+
+/**
+ * `type`s que devem ficar OCULTOS no sininho/in-app para este utilizador,
+ * porque a respectiva categoria tem o PUSH desligado. Fail-open: qualquer
+ * erro devolve [] (mostra tudo) — nunca esconder por causa de uma falha
+ * de leitura de preferências.
+ */
+export async function hiddenInAppTypesForUser(
+  client: SupabaseClient,
+  userId: string,
+): Promise<string[]> {
+  try {
+    const { data } = await (client as any)
+      .from("notification_preferences")
+      .select("kind, push_enabled")
+      .eq("user_id", userId)
+      .eq("push_enabled", false);
+    const disabled = ((data as any[]) ?? []).map((r) => r.kind as string);
+    return typesForCategories(disabled);
+  } catch {
+    return [];
+  }
+}

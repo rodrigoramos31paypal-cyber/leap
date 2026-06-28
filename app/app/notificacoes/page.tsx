@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { BackLink } from "@/components/back-link";
 import { NotificationsList } from "@/components/notifications-list";
+import { hiddenInAppTypesForUser } from "@/lib/notifications-config";
 
 export default async function NotificationsPage() {
   // PERF (P-13): getSessionUser le so o cookie (sem round-trip ao GoTrue);
@@ -30,6 +31,13 @@ export default async function NotificationsPage() {
     .order("created_at", { ascending: false })
     .limit(10);
 
+  // O sininho espelha o push: esconde categorias com push desligado.
+  // Tipos `null` (sem categoria) ficam sempre visíveis.
+  const hidden = new Set(await hiddenInAppTypesForUser(supabase, user.id));
+  const visible = ((notifs ?? []) as any[]).filter(
+    (n) => !n.type || !hidden.has(n.type),
+  );
+
   return (
     <div className="space-y-5">
       <BackLink />
@@ -40,7 +48,7 @@ export default async function NotificationsPage() {
         </p>
       </div>
 
-      <NotificationsList initial={(notifs ?? []) as any} scope="app" />
+      <NotificationsList initial={visible as any} scope="app" />
     </div>
   );
 }
