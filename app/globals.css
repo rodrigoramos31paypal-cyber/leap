@@ -147,6 +147,9 @@ input[type="date"]::-webkit-date-and-time-value {
     left: calc(var(--ov-col, 0) / var(--ov-cols, 1) * 100% + 2px) !important;
     width: calc(100% / var(--ov-cols, 1) - 4px) !important;
     right: auto !important;
+    /* Desktop tem espaço para colunas lado-a-lado → repõe a altura cheia
+       (no mobile o bloco fica encolhido até ao início da sessão seguinte). */
+    height: var(--h-full) !important;
   }
 }
 

@@ -730,6 +730,7 @@ function DayView({
                     );
                     live.push({ id: it.id, e: it.e, col });
                   }
+                  const { endMsById, startRank, clipEndMs } = overlapShrink(act);
 
                   return dayBookings.map((b: any) => {
                     const s = new Date(b.starts_at);
@@ -748,11 +749,17 @@ function DayView({
                     const cols = g !== undefined ? groupCols.get(g) ?? 1 : 1;
                     const col = colOf.get(b.id) ?? 0;
                     const isOverlap = cols > 1;
+                    // Mobile: altura encolhida até ao início da sessão
+                    // seguinte. Desktop repõe pos.height via --h-full (CSS).
+                    const mobileH = isOverlap
+                      ? shrunkHeight(layout, s, pos.height, clipEndMs.get(b.id), endMsById.get(b.id))
+                      : pos.height;
                     const overlapStyle: React.CSSProperties = isOverlap
                       ? ({
                           "--ov-col": col,
                           "--ov-cols": cols,
-                          zIndex: (b.status === "no_show" ? 10 : 20) + col,
+                          "--h-full": `${pos.height}px`,
+                          zIndex: (b.status === "no_show" ? 10 : 20) + (startRank.get(b.id) ?? 0),
                         } as any)
                       : {};
                     return (
@@ -762,7 +769,7 @@ function DayView({
                         note={notesMap.get(b.id)}
                         clientNote={clientNotesMap.get(b.id)}
                         teamNotes={teamNotesMap.get(b.id)}
-                        style={{ top: pos.top, height: pos.height, ...overlapStyle }}
+                        style={{ top: pos.top, height: mobileH, ...overlapStyle }}
                         draggable={canDrag}
                         rowTops={layout.tops}
                         rowHeights={layout.heights}
@@ -956,6 +963,44 @@ function clampPosition(
   const bottom = yForMinutes(layout, Math.min(totalMin, endMin));
   const height = Math.max(18, bottom - top - 2);
   return { top, height };
+}
+
+// ─── Encolher sobreposições (cascata mobile) ────────────────────────
+// Quando uma sessão tem outra a COMEÇAR dentro do seu intervalo, cortamos
+// a 1.ª para terminar no início da 2.ª. Assim os blocos sobrepostos ficam
+// em cascata (sem se taparem) e a hora+nome de TODOS fica visível, em vez
+// de o bloco da frente cobrir o de trás. Aplica-se só em mobile — em
+// ≥640px a regra `.booking-overlap-block` repõe a altura cheia (--h-full)
+// e usa colunas lado-a-lado. `startRank` = ordem por início (mais tarde =
+// z-index mais alto), para que qualquer sobra de um bloco fique POR BAIXO
+// do seguinte e nunca tape o seu cabeçalho.
+function overlapShrink(act: { id: string; s: number; e: number }[]) {
+  const endMsById = new Map(act.map((a): [string, number] => [a.id, a.e]));
+  const startRank = new Map<string, number>();
+  act.forEach((a, i) => startRank.set(a.id, i));
+  const clipEndMs = new Map<string, number>();
+  for (const a of act) {
+    let next = Infinity;
+    for (const o of act) {
+      if (o.s > a.s && o.s < a.e && o.s < next) next = o.s;
+    }
+    clipEndMs.set(a.id, next === Infinity ? a.e : next);
+  }
+  return { endMsById, startRank, clipEndMs };
+}
+
+function shrunkHeight(
+  layout: RowLayout,
+  s: Date,
+  naturalHeight: number,
+  clipEndMs: number | undefined,
+  naturalEndMs: number | undefined,
+): number {
+  if (clipEndMs === undefined || naturalEndMs === undefined || clipEndMs >= naturalEndMs) {
+    return naturalHeight;
+  }
+  const cp = clampPosition(layout, s, new Date(clipEndMs));
+  return cp ? Math.min(naturalHeight, cp.height) : naturalHeight;
 }
 
 // ─── Layout das linhas-hora (altura variável) ───────────────────────
@@ -1305,6 +1350,7 @@ function WeekView({
                     );
                     live.push({ id: it.id, e: it.e, col });
                   }
+                  const { endMsById, startRank, clipEndMs } = overlapShrink(act);
 
                   return dayBookings.map((b) => {
                     const s = new Date(b.starts_at);
@@ -1321,21 +1367,22 @@ function WeekView({
                     const cols = g !== undefined ? groupCols.get(g) ?? 1 : 1;
                     const col = colOf.get(b.id) ?? 0;
                     const isOverlap = cols > 1;
-                    // O posicionamento responsivo (cascata em mobile,
-                    // colunas lado-a-lado em ≥640px) é feito por CSS em
-                    // `.booking-overlap-block` (globals.css), consumindo
-                    // estas CSS vars. zIndex inline garante a ordem
-                    // independentemente do breakpoint.
+                    // Mobile: cascata por encolhimento (altura até ao início
+                    // da sessão seguinte). Desktop (≥640px): colunas lado-a-
+                    // lado + altura cheia, repostas por CSS via --h-full.
+                    const mobileH = isOverlap
+                      ? shrunkHeight(layout, s, pos.height, clipEndMs.get(b.id), endMsById.get(b.id))
+                      : pos.height;
                     const overlapStyle: React.CSSProperties = isOverlap
                       ? ({
                           "--ov-col": col,
                           "--ov-cols": cols,
-                          // Faltas (no_show) ficam SEMPRE atras das sessoes
-                          // activas: base 10 vs 20. Assim uma sessao viva
-                          // sobreposta a uma falta nunca fica escondida por
-                          // baixo dela (e a falta continua visivel onde
-                          // sobra). +col mantem a ordem dentro de cada nivel.
-                          zIndex: (b.status === "no_show" ? 10 : 20) + col,
+                          "--h-full": `${pos.height}px`,
+                          // Faltas (no_show) ficam atrás das sessões activas
+                          // (base 10 vs 20). startRank (ordem por início, mais
+                          // tarde = mais alto) garante que a sobra encolhida
+                          // de um bloco fica por baixo do seguinte.
+                          zIndex: (b.status === "no_show" ? 10 : 20) + (startRank.get(b.id) ?? 0),
                         } as any)
                       : {};
                     return (
@@ -1345,7 +1392,7 @@ function WeekView({
                         note={notesMap.get(b.id)}
                         clientNote={clientNotesMap.get(b.id)}
                         teamNotes={teamNotesMap.get(b.id)}
-                        style={{ top: pos.top, height: pos.height, ...overlapStyle }}
+                        style={{ top: pos.top, height: mobileH, ...overlapStyle }}
                         draggable={canDrag}
                         rowTops={layout.tops}
                         rowHeights={layout.heights}
