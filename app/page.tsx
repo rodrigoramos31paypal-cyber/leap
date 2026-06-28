@@ -49,7 +49,9 @@ export default function HomePage() {
           num só sítio.
         </h1>
         <p className="mt-6 max-w-md text-base text-ink-600 dark:text-bone-100/80">
-          Compra packs, marca sessões e segue o teu histórico. Sem confusões, sem sessões perdidas.
+          Compra packs, marca sessões e segue o teu histórico.
+          <br />
+          Sem confusões, sem sessões perdidas.
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Link href="/registar" className="btn-gold">
@@ -85,8 +87,8 @@ export default function HomePage() {
 
 function FeatureCard({ icon, title, desc }: { icon: React.ReactNode; title: string; desc: string }) {
   return (
-    <div className="rounded-xl border border-ink-900/10 bg-white p-4 text-left dark:border-white/5 dark:bg-ink-800">
-      <div className="mb-2 grid h-8 w-8 place-items-center rounded-lg bg-gold-400/15 text-gold-600 dark:text-gold-400">
+    <div className="rounded-xl border border-ink-900/10 bg-white p-3.5 text-left dark:border-white/5 dark:bg-ink-800">
+      <div className="mb-2 grid h-7 w-7 place-items-center rounded-lg bg-gold-400/15 text-gold-600 dark:text-gold-400">
         {icon}
       </div>
       <div className="text-sm font-semibold">{title}</div>
