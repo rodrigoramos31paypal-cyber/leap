@@ -60,6 +60,56 @@ function lisbonWallClockToUTC(dateIso: string, timeHHMM: string): Date | null {
   return new Date(naive.getTime() - diffMin * 60_000);
 }
 
+// ────────────────────────────────────────────────────────────────
+// freeWindowSegments · "split-on-save" para pausas dentro de um
+// bloqueio. Dado o intervalo do bloqueio [from, to] e uma pausa livre
+// [freeFrom, freeTo], devolve os segmentos OCUPADOS que sobram (ou seja
+// o bloqueio com um "buraco" no meio). Como as horas são "HH:MM" com
+// zero à esquerda, a comparação lexicográfica == cronológica.
+//
+//   11:00–17:00 com pausa 12:30–14:00 → [11:00–12:30, 14:00–17:00]
+//
+// Devolve:
+//   • null  → pausa inválida (fora do bloqueio, ou fim ≤ início)
+//   • []    → pausa cobre o bloqueio inteiro (nada para ocupar)
+//   • [seg] / [seg, seg] → segmentos a gravar.
+// ────────────────────────────────────────────────────────────────
+function freeWindowSegments(
+  from: string,
+  to: string,
+  freeFrom: string,
+  freeTo: string,
+): Array<{ from: string; to: string }> | null {
+  if (!/^\d{2}:\d{2}$/.test(freeFrom) || !/^\d{2}:\d{2}$/.test(freeTo)) return null;
+  if (freeTo <= freeFrom) return null;
+  if (freeFrom < from || freeTo > to) return null; // a pausa tem de estar dentro do bloqueio
+  const segs: Array<{ from: string; to: string }> = [];
+  if (freeFrom > from) segs.push({ from, to: freeFrom });
+  if (freeTo < to) segs.push({ from: freeTo, to });
+  return segs;
+}
+
+// Resolve os segmentos a gravar a partir dos campos de formulário
+// `freeFrom`/`freeTo` (opcionais). Sem pausa → o bloqueio inteiro.
+// Com pausa → valida e devolve os segmentos, ou um erro amigável.
+function resolveBusySegments(
+  from: string,
+  to: string,
+  freeFrom: string,
+  freeTo: string,
+): { segments: Array<{ from: string; to: string }> } | { error: string } {
+  const hasFree = /^\d{2}:\d{2}$/.test(freeFrom) && /^\d{2}:\d{2}$/.test(freeTo);
+  if (!hasFree) return { segments: [{ from, to }] };
+  const segs = freeWindowSegments(from, to, freeFrom, freeTo);
+  if (segs === null) {
+    return { error: "A pausa livre tem de estar dentro do intervalo ocupado." };
+  }
+  if (segs.length === 0) {
+    return { error: "A pausa livre não pode cobrir todo o intervalo." };
+  }
+  return { segments: segs };
+}
+
 export async function confirmAttendanceAction(formData: FormData) {
   // S-10 (audit jun/2026): defesa em profundidade no boundary, igual ao
   // resto das actions admin. As RPCs SECURITY DEFINER (confirm_booking_
@@ -561,6 +611,10 @@ export async function createBusyAction(
   const date = String(formData.get("date") ?? "");
   const from = String(formData.get("from") ?? "");
   const to = String(formData.get("to") ?? "");
+  // Pausa livre opcional ("split-on-save"): se preenchida, o bloqueio é
+  // gravado como dois segmentos com um buraco no meio.
+  const freeFrom = String(formData.get("freeFrom") ?? "");
+  const freeTo = String(formData.get("freeTo") ?? "");
   const reasonRaw = String(formData.get("reason") ?? "").trim().slice(0, 200);
   const reason = reasonRaw.length > 0 ? reasonRaw : null;
 
@@ -569,6 +623,12 @@ export async function createBusyAction(
     return { error: "Indica as horas de início e fim." };
   }
   if (to <= from) return { error: "A hora de fim tem de ser depois do início." };
+
+  // Segmentos a gravar (1 sem pausa; até 2 com pausa). Validado aqui para
+  // todos os modos (single/range/recurring) usarem a mesma regra.
+  const segResult = resolveBusySegments(from, to, freeFrom, freeTo);
+  if ("error" in segResult) return { error: segResult.error };
+  const segments = segResult.segments;
 
   // SEC: o trainerId tem de estar no scope do utilizador autenticado.
   const accessible = await getAccessibleTrainerIds();
@@ -590,13 +650,16 @@ export async function createBusyAction(
     if (weekdays.length === 0) return { error: "Escolhe pelo menos um dia da semana." };
 
     const uniqueWeekdays = Array.from(new Set(weekdays));
-    const rows = uniqueWeekdays.map((dow) => ({
-      trainer_id: trainerId,
-      day_of_week: dow,
-      start_time: from,
-      end_time: to,
-      reason,
-    }));
+    // dias-da-semana × segmentos (com pausa, cada dia gera 2 regras).
+    const rows = uniqueWeekdays.flatMap((dow) =>
+      segments.map((seg) => ({
+        trainer_id: trainerId,
+        day_of_week: dow,
+        start_time: seg.from,
+        end_time: seg.to,
+        reason,
+      })),
+    );
     const { error } = await (supabase as any).from("trainer_recurring_blocks").insert(rows);
     if (error) {
       logError("createBusyAction:recurring", error);
@@ -651,20 +714,23 @@ export async function createBusyAction(
       return { error: "Intervalo demasiado longo (máximo 366 dias)." };
     }
 
+    // dias × segmentos (com pausa, cada dia gera 2 bloqueios).
     const rows = days
-      .map((d) => {
-        const s2 = lisbonWallClockToUTC(d, from);
-        const e2 = lisbonWallClockToUTC(d, to);
-        if (!s2 || !e2 || Number.isNaN(s2.getTime()) || Number.isNaN(e2.getTime()) || e2 <= s2) {
-          return null;
-        }
-        return {
-          trainer_id: trainerId,
-          starts_at: s2.toISOString(),
-          ends_at: e2.toISOString(),
-          reason,
-        };
-      })
+      .flatMap((d) =>
+        segments.map((seg) => {
+          const s2 = lisbonWallClockToUTC(d, seg.from);
+          const e2 = lisbonWallClockToUTC(d, seg.to);
+          if (!s2 || !e2 || Number.isNaN(s2.getTime()) || Number.isNaN(e2.getTime()) || e2 <= s2) {
+            return null;
+          }
+          return {
+            trainer_id: trainerId,
+            starts_at: s2.toISOString(),
+            ends_at: e2.toISOString(),
+            reason,
+          };
+        }),
+      )
       .filter(Boolean) as Array<{
         trainer_id: string;
         starts_at: string;
@@ -679,9 +745,9 @@ export async function createBusyAction(
       return { error: "Não foi possível criar o horário ocupado." };
     }
     await setFlash(
-      rows.length === 1
+      days.length === 1
         ? "Horário ocupado criado"
-        : `Horário ocupado criado em ${rows.length} dias`,
+        : `Horário ocupado criado em ${days.length} dias`,
     );
     revalidateAvailabilityViews();
     return { ok: true };
@@ -689,18 +755,30 @@ export async function createBusyAction(
 
   // single
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "Indica o dia." };
-  const start = lisbonWallClockToUTC(date, from);
-  const end = lisbonWallClockToUTC(date, to);
-  if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
-    return { error: "Data ou horas inválidas." };
-  }
+  // segmentos do dia (com pausa, 2 bloqueios; sem pausa, 1).
+  const singleRows = segments
+    .map((seg) => {
+      const start = lisbonWallClockToUTC(date, seg.from);
+      const end = lisbonWallClockToUTC(date, seg.to);
+      if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+        return null;
+      }
+      return {
+        trainer_id: trainerId,
+        starts_at: start.toISOString(),
+        ends_at: end.toISOString(),
+        reason,
+      };
+    })
+    .filter(Boolean) as Array<{
+      trainer_id: string;
+      starts_at: string;
+      ends_at: string;
+      reason: string | null;
+    }>;
+  if (singleRows.length === 0) return { error: "Data ou horas inválidas." };
 
-  const { error: insErr } = await supabase.from("trainer_blocked_times").insert({
-    trainer_id: trainerId,
-    starts_at: start.toISOString(),
-    ends_at: end.toISOString(),
-    reason,
-  });
+  const { error: insErr } = await supabase.from("trainer_blocked_times").insert(singleRows);
   if (insErr) {
     logError("createBusyAction:single", insErr);
     return { error: "Não foi possível criar o horário ocupado." };
@@ -842,6 +920,162 @@ export async function updateRecurringBlockAction(
   const { error } = await q;
   if (error) {
     logError("updateRecurringBlockAction", error);
+    return { error: "Não foi possível atualizar." };
+  }
+  await setFlash("Recorrência atualizada");
+  revalidateAvailabilityViews();
+  return { ok: true };
+}
+
+// ════════════════════════════════════════════════════════════════
+// splitBlockAction · "abre um buraco" num bloqueio PONTUAL existente.
+// Como cada bloqueio é uma linha [starts_at, ends_at], introduzir uma
+// pausa no meio significa substituí-lo por dois bloqueios. Apagamos o
+// original e inserimos os segmentos resultantes (1 ou 2) no mesmo dia.
+// ════════════════════════════════════════════════════════════════
+export async function splitBlockAction(
+  formData: FormData,
+): Promise<{ ok?: true; error?: string }> {
+  await requireStaff(); // S-10
+  const id = String(formData.get("id") ?? "");
+  const trainerId = String(formData.get("trainerId") ?? "");
+  const date = String(formData.get("date") ?? "");
+  const from = String(formData.get("from") ?? "");
+  const to = String(formData.get("to") ?? "");
+  const freeFrom = String(formData.get("freeFrom") ?? "");
+  const freeTo = String(formData.get("freeTo") ?? "");
+  const reasonRaw = String(formData.get("reason") ?? "").trim().slice(0, 200);
+  const reason = reasonRaw.length > 0 ? reasonRaw : null;
+
+  if (!id || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "Dados inválidos." };
+  if (!/^\d{2}:\d{2}$/.test(from) || !/^\d{2}:\d{2}$/.test(to)) {
+    return { error: "Indica as horas de início e fim." };
+  }
+  if (to <= from) return { error: "A hora de fim tem de ser depois do início." };
+
+  const segResult = resolveBusySegments(from, to, freeFrom, freeTo);
+  if ("error" in segResult) return { error: segResult.error };
+
+  const supabase = await createClient();
+  const { data: blk } = await supabase
+    .from("trainer_blocked_times")
+    .select("trainer_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!blk) return { error: "Bloqueio não encontrado." };
+  const accessible = await getAccessibleTrainerIds();
+  if (!accessible.includes((blk as any).trainer_id)) return { error: "Sem permissão." };
+
+  const rows = segResult.segments
+    .map((seg) => {
+      const s = lisbonWallClockToUTC(date, seg.from);
+      const e = lisbonWallClockToUTC(date, seg.to);
+      if (!s || !e || Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e <= s) return null;
+      return {
+        trainer_id: (blk as any).trainer_id as string,
+        starts_at: s.toISOString(),
+        ends_at: e.toISOString(),
+        reason,
+      };
+    })
+    .filter(Boolean) as Array<{ trainer_id: string; starts_at: string; ends_at: string; reason: string | null }>;
+  if (rows.length === 0) return { error: "Horas inválidas." };
+
+  // Apaga o original e insere os segmentos. (Sem transação RPC: se a
+  // inserção falhasse, o bloqueio teria de ser recriado à mão — mas a
+  // inserção só falha por erro de infra, raro; mantemos simples.)
+  const { error: delErr } = await supabase.from("trainer_blocked_times").delete().eq("id", id);
+  if (delErr) {
+    logError("splitBlockAction:delete", delErr);
+    return { error: "Não foi possível atualizar." };
+  }
+  const { error: insErr } = await supabase.from("trainer_blocked_times").insert(rows);
+  if (insErr) {
+    logError("splitBlockAction:insert", insErr);
+    return { error: "Não foi possível atualizar." };
+  }
+  await setFlash("Horário ocupado atualizado");
+  revalidateAvailabilityViews();
+  return { ok: true };
+}
+
+// ════════════════════════════════════════════════════════════════
+// splitRecurringBlockAction · "abre um buraco" numa recorrência. O
+// grupo é identificado por (trainer_id, oldFrom, oldTo) — pode abranger
+// vários dias-da-semana. Recolhemos esses dias, apagamos o grupo e
+// reinserimos, para cada dia, os segmentos resultantes (1 ou 2).
+// ════════════════════════════════════════════════════════════════
+export async function splitRecurringBlockAction(
+  formData: FormData,
+): Promise<{ ok?: true; error?: string }> {
+  await requireStaff(); // S-10
+  const id = String(formData.get("id") ?? "");
+  const oldFrom = String(formData.get("oldFrom") ?? "");
+  const oldTo = String(formData.get("oldTo") ?? "");
+  const from = String(formData.get("from") ?? "");
+  const to = String(formData.get("to") ?? "");
+  const freeFrom = String(formData.get("freeFrom") ?? "");
+  const freeTo = String(formData.get("freeTo") ?? "");
+  const reasonRaw = String(formData.get("reason") ?? "").trim().slice(0, 200);
+  const reason = reasonRaw.length > 0 ? reasonRaw : null;
+
+  if (!id || !/^\d{2}:\d{2}$/.test(from) || !/^\d{2}:\d{2}$/.test(to)) {
+    return { error: "Dados inválidos." };
+  }
+  if (to <= from) return { error: "A hora de fim tem de ser depois do início." };
+  if (!/^\d{2}:\d{2}$/.test(oldFrom) || !/^\d{2}:\d{2}$/.test(oldTo)) {
+    return { error: "Recorrência não identificada." };
+  }
+
+  const segResult = resolveBusySegments(from, to, freeFrom, freeTo);
+  if ("error" in segResult) return { error: segResult.error };
+
+  const supabase = await createClient();
+  const { data: rb } = await (supabase as any)
+    .from("trainer_recurring_blocks")
+    .select("trainer_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!rb) return { error: "Recorrência não encontrada." };
+  const trainerId = (rb as any).trainer_id as string;
+  const accessible = await getAccessibleTrainerIds();
+  if (!accessible.includes(trainerId)) return { error: "Sem permissão." };
+
+  // Dias-da-semana do grupo (mesmo intervalo de horas original).
+  const { data: groupRows } = await (supabase as any)
+    .from("trainer_recurring_blocks")
+    .select("day_of_week")
+    .eq("trainer_id", trainerId)
+    .eq("start_time", oldFrom)
+    .eq("end_time", oldTo);
+  const weekdays = Array.from(
+    new Set(((groupRows ?? []) as any[]).map((r) => Number(r.day_of_week))),
+  ).filter((n) => Number.isInteger(n) && n >= 0 && n <= 6);
+  if (weekdays.length === 0) return { error: "Recorrência não encontrada." };
+
+  const rows = weekdays.flatMap((dow) =>
+    segResult.segments.map((seg) => ({
+      trainer_id: trainerId,
+      day_of_week: dow,
+      start_time: seg.from,
+      end_time: seg.to,
+      reason,
+    })),
+  );
+
+  const { error: delErr } = await (supabase as any)
+    .from("trainer_recurring_blocks")
+    .delete()
+    .eq("trainer_id", trainerId)
+    .eq("start_time", oldFrom)
+    .eq("end_time", oldTo);
+  if (delErr) {
+    logError("splitRecurringBlockAction:delete", delErr);
+    return { error: "Não foi possível atualizar." };
+  }
+  const { error: insErr } = await (supabase as any).from("trainer_recurring_blocks").insert(rows);
+  if (insErr) {
+    logError("splitRecurringBlockAction:insert", insErr);
     return { error: "Não foi possível atualizar." };
   }
   await setFlash("Recorrência atualizada");
