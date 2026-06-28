@@ -32,8 +32,8 @@ export default async function AdminSegurancaPage() {
           <div className="font-semibold">Recomendamos activar 2FA</div>
           <p className="mt-1 text-xs">
             Como és trainer/owner, ativar 2FA protege o acesso à gestão dos teus clientes
-            mesmo que a tua password seja comprometida. Depois de ativares e marcares "confiar
-            neste dispositivo 30 dias", deixas de ter de meter o código a cada login no mesmo browser.
+            mesmo que a tua password seja comprometida. Depois de ativares e marcares &quot;confiar
+            neste dispositivo 30 dias&quot;, deixas de ter de meter o código a cada login no mesmo browser.
           </p>
         </div>
       )}
@@ -91,8 +91,8 @@ export default async function AdminSegurancaPage() {
       <div className="rounded-xl border border-ink-900/10 bg-bone-100 p-4 text-xs text-ink-600">
         <p className="font-semibold text-ink-900">Dispositivos confiados</p>
         <p className="mt-2">
-          Ao confirmares 2FA num dispositivo, podes marcar "Confiar neste dispositivo 30
-          dias". Enquanto o prazo não expirar, esse dispositivo não te pede o código a
+          Ao confirmares 2FA num dispositivo, podes marcar &quot;Confiar neste dispositivo 30
+          dias&quot;. Enquanto o prazo não expirar, esse dispositivo não te pede o código a
           cada login.
         </p>
       </div>

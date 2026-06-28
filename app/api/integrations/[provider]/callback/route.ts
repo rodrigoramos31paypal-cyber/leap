@@ -57,6 +57,15 @@ export async function GET(req: Request, props: { params: Promise<{ provider: str
   if (!user || user.id !== storedUserId) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
+  // M-6: defense-in-depth — só staff conclui a ligação de calendário.
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  if (prof?.role !== "trainer" && prof?.role !== "owner") {
+    return new NextResponse("Forbidden", { status: 403 });
+  }
   const userId = storedUserId;
 
   try {

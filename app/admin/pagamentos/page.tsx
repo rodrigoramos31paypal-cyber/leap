@@ -114,7 +114,7 @@ export default async function AdminPaymentsPage(
         <div>
           <h1 className="font-display text-2xl font-bold tracking-tight">Pagamentos</h1>
           <p className="text-sm text-ink-500">
-            {total} resultado{total === 1 ? "" : "s"} para "{q}" — escolhe um
+            {total} resultado{total === 1 ? "" : "s"} para &quot;{q}&quot; — escolhe um
             cliente para ver os pagamentos dele.
           </p>
         </div>
@@ -290,7 +290,7 @@ function renderPurchase(p: any) {
           />
           <p className="text-[11px] text-ink-500">
             Cancelar reverte o pagamento, retira as sessões restantes do
-            saldo do cliente e move o registo para "Rejeitados".
+            saldo do cliente e move o registo para &quot;Rejeitados&quot;.
           </p>
         </div>
       )}

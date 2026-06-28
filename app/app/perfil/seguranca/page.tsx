@@ -84,8 +84,8 @@ export default async function SegurancaPage() {
       <div className="rounded-xl border border-ink-900/10 bg-bone-100 p-4 text-xs text-ink-600">
         <p className="font-semibold text-ink-900">Dispositivos confiados</p>
         <p className="mt-2">
-          Ao confirmares 2FA num dispositivo, podes marcar a opção "Confiar neste dispositivo 30
-          dias". Enquanto o prazo não expirar, esse dispositivo não te pede o código a cada login.
+          Ao confirmares 2FA num dispositivo, podes marcar a opção &quot;Confiar neste dispositivo 30
+          dias&quot;. Enquanto o prazo não expirar, esse dispositivo não te pede o código a cada login.
         </p>
       </div>
     </div>

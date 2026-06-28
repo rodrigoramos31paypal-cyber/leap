@@ -23,6 +23,19 @@ export async function GET(_req: Request, props: { params: Promise<{ provider: st
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.redirect(new URL("/login", _req.url));
 
+  // M-6 (audit jun/2026): least privilege — só staff (trainer/owner) liga
+  // calendários. A sync de calendário só faz sentido para staff; sem este
+  // gate, qualquer cliente autenticado podia guardar tokens OAuth de
+  // Google/Microsoft contra a sua própria conta.
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  if (prof?.role !== "trainer" && prof?.role !== "owner") {
+    return new NextResponse("Forbidden", { status: 403 });
+  }
+
   // SEC: state = nonce aleatório (256 bits). Guardamos `userId:provider:nonce`
   // num cookie HTTP-only de curta duração, e enviamos só o nonce ao OAuth.
   // No callback validamos que o cookie existe, o nonce bate certo e o

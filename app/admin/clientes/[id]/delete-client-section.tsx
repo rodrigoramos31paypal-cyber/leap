@@ -49,7 +49,7 @@ export function DeleteClientSection({ clientId }: { clientId: string }) {
       <div className="text-xs text-red-800">
         Esta acção é <strong>irreversível</strong>. Os dados pessoais do cliente
         (nome, email, telemóvel, notas) são apagados, o login é bloqueado e a
-        conta deixa de aparecer em "Todos clientes". Compras e marcações
+        conta deixa de aparecer em &quot;Todos clientes&quot;. Compras e marcações
         anteriores ficam registadas de forma anonimizada por obrigação legal de
         contabilidade.
       </div>

@@ -653,7 +653,7 @@ export function BookingDialog({
                       </div>
                     ) : (
                       <p className="text-[11px] text-ink-500">
-                        Sem packs activos. Usa "Nº personalizado".
+                        Sem packs activos. Usa &quot;Nº personalizado&quot;.
                       </p>
                     )
                   ) : (

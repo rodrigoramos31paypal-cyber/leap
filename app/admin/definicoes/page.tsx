@@ -427,7 +427,7 @@ function RegrasTab({
             <span className="font-semibold">Confirmar marcações automaticamente</span>
             <span className="block text-xs text-ink-500">
               Quando ligado, qualquer marcação do cliente fica logo confirmada. Desligado, fica
-              pendente até carregares em "Aceitar".
+              pendente até carregares em &quot;Aceitar&quot;.
             </span>
           </span>
         </label>
