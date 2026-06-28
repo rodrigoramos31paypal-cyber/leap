@@ -56,7 +56,7 @@ export default async function AdminPacksPage() {
             <span>
               <span className="block font-semibold">Marcar como sessão avulsa</span>
               <span className="text-ink-500">
-                Aparece em destaque no topo de /comprar como "Sessão avulsa". Só 1 pack activo
+                Aparece em destaque no topo de /comprar como &quot;Sessão avulsa&quot;. Só 1 pack activo
                 de cada vez pode ter esta marcação.
               </span>
             </span>

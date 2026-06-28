@@ -121,7 +121,7 @@ export function GrantPackForm({
         (packs.length === 0 ? (
           <p className="text-sm text-ink-500">
             Não há packs activos. Cria um em <strong>/admin/packs</strong> ou usa
-            "Sessões avulso".
+            &quot;Sessões avulso&quot;.
           </p>
         ) : (
           <div>

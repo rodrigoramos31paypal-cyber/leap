@@ -23,11 +23,13 @@ const nextConfig = {
       : [],
   },
   // Next 16 (jun/2026): a key `eslint` no next.config foi descontinuada —
-  // ESLint passa a ser tarefa do CI/IDE, não do `next build`. O que era
-  // `ignoreDuringBuilds: true` (dívida histórica — erros a limpar primeiro:
-  // ~20× react/no-unescaped-entities e 1× react-hooks/rules-of-hooks)
-  // continua de facto ignorado, já que o build não corre ESLint. Mover
-  // para `npm run lint` num PR dedicado.
+  // ESLint passa a ser tarefa do CI/IDE, não do `next build`.
+  //
+  // M-2 (audit jun/2026): a antiga dívida de lint foi LIMPA. O
+  // react-hooks/rules-of-hooks já não existe e os ~20
+  // react/no-unescaped-entities foram corrigidos (aspas → &quot;). O
+  // repo passa `npm run lint` a zero erros — adicionar esse comando
+  // como step obrigatório no CI para manter o gate.
   //
   // type-check continua a bloquear o build (`tsc --noEmit` em CI); essa
   // camada não muda — uma action sem o guard `requireStaff`/`requireOwner`
