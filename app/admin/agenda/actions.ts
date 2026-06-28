@@ -138,7 +138,7 @@ export async function confirmAttendanceAction(formData: FormData) {
  */
 export async function updateBookingDurationAction(
   formData: FormData,
-): Promise<{ ok?: true; conflict?: true; count?: number; error?: string }> {
+): Promise<{ ok?: true; conflict?: true; count?: number; blocked?: number; error?: string }> {
   // S-10: defense-in-depth no boundary.
   await requireStaff();
   const id = String(formData.get("bookingId") ?? "");
@@ -156,12 +156,13 @@ export async function updateBookingDurationAction(
       p_force: force,
     });
     if (error) throw error;
-    const res = (data ?? {}) as { ok?: boolean; conflict?: boolean; count?: number };
+    const res = (data ?? {}) as { ok?: boolean; conflict?: boolean; count?: number; blocked?: number };
 
-    // Sobreposição com outra sessão e ainda não confirmado → devolve o
-    // aviso (sem gravar). A UI pergunta se o trainer tem a certeza.
+    // Sobreposição com outra sessão e/ou com um horário ocupado, ainda não
+    // confirmado → devolve o aviso (sem gravar). A UI pergunta se o trainer
+    // tem a certeza. `count` = sessões sobrepostas; `blocked` = "Ocupado".
     if (res.ok === false && res.conflict) {
-      return { conflict: true, count: res.count ?? 1 };
+      return { conflict: true, count: res.count ?? 0, blocked: res.blocked ?? 0 };
     }
 
     // Atualiza o evento no calendário sincronizado (best-effort): remove
@@ -483,7 +484,7 @@ export async function rescheduleBookingAdminAction(args: {
   durationMin: number;
   notify: boolean;
   force?: boolean;
-}): Promise<{ ok?: true; error?: string; conflict?: true }> {
+}): Promise<{ ok?: true; error?: string; conflict?: true; busy?: true }> {
   await requireStaff(); // S-10
   const { bookingId, startsAtIso, durationMin, notify, force } = args;
   if (!bookingId || !startsAtIso || !durationMin) {
@@ -525,6 +526,11 @@ export async function rescheduleBookingAdminAction(args: {
     return { ok: true };
   } catch (e: any) {
     logError("rescheduleBookingAdminAction", e);
+    // Sinal de horário ocupado (P0098): não é erro — a UI pergunta se quer
+    // reagendar por cima do "Ocupado" (depois chama outra vez com force=true).
+    if (e?.code === "P0098") {
+      return { busy: true };
+    }
     // Sinal de sobreposição (P0099): não é erro — a UI pergunta se quer
     // reagendar à mesma (depois chama outra vez com force=true).
     if (e?.code === "P0099") {

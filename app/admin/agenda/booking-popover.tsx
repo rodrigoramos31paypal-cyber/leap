@@ -144,8 +144,11 @@ export function BookingBlock({
   // Valor do controlo de duração no popover (presets + input livre).
   const [durInput, setDurInput] = useState<number>(durationMin);
   const [savingDur, startDurTransition] = useTransition();
-  // Nº de sessões que a nova duração vai sobrepor (null = sem aviso pendente).
-  const [overlapWarn, setOverlapWarn] = useState<number | null>(null);
+  // Aviso pendente de confirmação: nº de sessões sobrepostas (`sessions`) e
+  // nº de "Ocupado" sobrepostos (`blocked`). null = sem aviso.
+  const [overlapWarn, setOverlapWarn] = useState<
+    { sessions: number; blocked: number } | null
+  >(null);
 
   function saveDuration(force: boolean) {
     const fd = new FormData();
@@ -155,8 +158,8 @@ export function BookingBlock({
     startDurTransition(async () => {
       const res = await updateBookingDurationAction(fd);
       if (res?.conflict) {
-        // Vai sobrepor outra sessão → pede confirmação (não fecha).
-        setOverlapWarn(res.count ?? 1);
+        // Vai sobrepor outra sessão e/ou um horário ocupado → confirma.
+        setOverlapWarn({ sessions: res.count ?? 0, blocked: res.blocked ?? 0 });
         return;
       }
       setOverlapWarn(null);
@@ -778,8 +781,32 @@ export function BookingBlock({
                 ) : (
                   <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                     <p>
-                      Esta duração vai <span className="font-semibold">sobrepor-se a {overlapWarn}{" "}
-                      {overlapWarn === 1 ? "sessão" : "sessões"}</span>. Queres guardar à mesma?
+                      {overlapWarn.blocked > 0 && overlapWarn.sessions > 0 ? (
+                        <>
+                          Esta duração fica sobre um{" "}
+                          <span className="font-semibold">horário ocupado</span> e vai{" "}
+                          <span className="font-semibold">
+                            sobrepor-se a {overlapWarn.sessions}{" "}
+                            {overlapWarn.sessions === 1 ? "sessão" : "sessões"}
+                          </span>
+                          . Queres guardar à mesma?
+                        </>
+                      ) : overlapWarn.blocked > 0 ? (
+                        <>
+                          Esta sessão fica sobre um{" "}
+                          <span className="font-semibold">horário ocupado</span>. Queres
+                          guardar à mesma?
+                        </>
+                      ) : (
+                        <>
+                          Esta duração vai{" "}
+                          <span className="font-semibold">
+                            sobrepor-se a {overlapWarn.sessions}{" "}
+                            {overlapWarn.sessions === 1 ? "sessão" : "sessões"}
+                          </span>
+                          . Queres guardar à mesma?
+                        </>
+                      )}
                     </p>
                     <div className="flex gap-2">
                       <button
