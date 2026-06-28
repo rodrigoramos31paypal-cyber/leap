@@ -52,7 +52,7 @@ export default async function ClientLayout({ children }: { children: React.React
   const flash = await consumeFlash();
 
   return (
-    <div className="flex h-[100svh] flex-col overflow-hidden bg-bone-50 dark:bg-ink-900">
+    <div className="flex h-full flex-col overflow-hidden bg-bone-50 dark:bg-ink-900">
       <ViewportKeyboard />
       <SwNavigator />
       <AppUpdater />

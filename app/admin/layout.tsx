@@ -66,7 +66,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const flash = await consumeFlash();
 
   return (
-    <div className="flex h-[100svh] flex-col overflow-hidden bg-bone-50 dark:bg-ink-900">
+    <div className="flex h-full flex-col overflow-hidden bg-bone-50 dark:bg-ink-900">
       <TopBar
         title="Admin"
         unread={0}
