@@ -82,7 +82,7 @@ export const getCurrentProfile = cache(async () => {
   const supabase = await createClient();
   const { data } = await supabase
     .from("profiles")
-    .select("id, role, full_name")
+    .select("id, role, full_name, access_blocked")
     .eq("id", userId)
     .single();
   return data ?? null;

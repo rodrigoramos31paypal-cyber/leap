@@ -528,6 +528,8 @@ export type Database = {
       }
       profiles: {
         Row: {
+          access_blocked: boolean
+          banned: boolean
           calendar_feed_token: string
           created_at: string
           email: string
@@ -539,6 +541,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          access_blocked?: boolean
+          banned?: boolean
           calendar_feed_token?: string
           created_at?: string
           email: string
@@ -550,6 +554,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          access_blocked?: boolean
+          banned?: boolean
           calendar_feed_token?: string
           created_at?: string
           email?: string

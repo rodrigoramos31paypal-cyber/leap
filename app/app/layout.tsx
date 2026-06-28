@@ -38,6 +38,13 @@ export default async function ClientLayout({ children }: { children: React.React
   // polling + visibilitychange + chamada imediata em mount.
   const profile = await getCurrentProfile();
 
+  // 0120: lockout total (ban / conta apagada). Gate por-request → a
+  // sessão aberta cai aqui no próximo request, mesmo que o access token
+  // ainda seja válido. /auth/force-logout limpa os cookies → /login.
+  if ((profile as any)?.access_blocked) {
+    redirect("/auth/force-logout");
+  }
+
   if (profile?.role && profile.role !== "client") {
     redirect("/admin/dashboard");
   }
