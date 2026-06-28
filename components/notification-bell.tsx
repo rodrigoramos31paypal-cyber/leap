@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Bell } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { typesForCategories } from "@/lib/notifications-config";
 
 // PERF: realtime channel ja apanha eventos quase instantaneamente.
 // Polling e so um fallback para casos em que o canal falha (free tier,
@@ -29,6 +30,10 @@ export function NotificationBell({
   // Evita que `setUnread(initialUnread)` reponha o badge logo depois de
   // o utilizador o ter "consumido" (clique no sino).
   const suppressUntil = useRef<number>(0);
+  // Tipos a OCULTAR do sino — categorias com push desligado. O sino
+  // espelha o push (ver lib/notifications-config). Carregado uma vez no
+  // mount; lido lazy nos refresh/realtime, por isso é um ref.
+  const hiddenTypes = useRef<Set<string>>(new Set());
 
   // Sincroniza com server-rendered count, mas respeita supressão recente
   // e força 0 quando o utilizador está na página de notificações.
@@ -45,10 +50,28 @@ export function NotificationBell({
     if (!userId) return;
     const supabase = createClient();
 
+    // Carrega as categorias com push DESLIGADO → tipos a ocultar do sino.
+    // Fail-open: erro deixa o set vazio (mostra tudo).
+    async function loadHidden() {
+      // `as any`: notification_preferences ainda não está nos tipos
+      // gerados do Supabase (igual ao resto do código que lê esta tabela).
+      const { data } = await (supabase as any)
+        .from("notification_preferences")
+        .select("kind, push_enabled")
+        .eq("user_id", userId)
+        .eq("push_enabled", false);
+      hiddenTypes.current = new Set(
+        typesForCategories(((data as any[]) ?? []).map((r) => r.kind as string)),
+      );
+    }
+
     async function refresh() {
-      const { count } = await supabase
+      // A tabela está podada a ≤10 linhas por utilizador (trigger 0111),
+      // por isso lemos os `type` das não-lidas e contamos já filtrado —
+      // o badge tem de bater certo com a lista (push off ⇒ não conta).
+      const { data: rows } = await supabase
         .from("notifications")
-        .select("id", { count: "exact", head: true })
+        .select("id, type")
         .eq("user_id", userId)
         .is("read_at", null);
       if (Date.now() < suppressUntil.current) return;
@@ -56,13 +79,17 @@ export function NotificationBell({
         setUnread(0);
         return;
       }
-      setUnread(count ?? 0);
+      const count = ((rows as any[]) ?? []).filter(
+        (r) => !r.type || !hiddenTypes.current.has(r.type),
+      ).length;
+      setUnread(count);
     }
 
     // PERF (QW-9, jun/2026): layouts deixaram de fazer a query de
     // notificações para acelerar o paint do shell. Fazemos uma chamada
     // imediata aqui — não bloqueia o render, popula o badge em <100 ms.
-    refresh();
+    // Carrega primeiro os tipos ocultos, depois conta.
+    loadHidden().then(refresh);
 
     // Realtime channel (best effort — pode falhar em alguns ambientes).
     const channel = supabase
@@ -75,8 +102,11 @@ export function NotificationBell({
           table: "notifications",
           filter: `user_id=eq.${userId}`,
         },
-        () => {
+        (payload) => {
           if (onNotifPage) return;
+          // Categoria com push off não conta para o badge (espelha o push).
+          const t = (payload as any)?.new?.type as string | undefined;
+          if (t && hiddenTypes.current.has(t)) return;
           setUnread((c) => c + 1);
           // Sem new Notification() aqui: as notificações de sistema são
           // entregues por Web Push (service worker), com título/corpo ricos
