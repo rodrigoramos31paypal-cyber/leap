@@ -12,9 +12,13 @@
 //      attachment substituía a vista da app por um ecrã branco do sistema
 //      e não dava para voltar sem forçar o fecho.
 //
-// Solução: vai buscar o CSV via fetch, transforma em blob e dispara o
-// download com um <a download> temporário. A app NUNCA navega para fora,
-// por isso o utilizador continua exactamente onde estava.
+// Solução: vai buscar o CSV via fetch e transforma em blob. Depois:
+//   • Telemóvel (iOS/Android com Web Share): abre a FOLHA DE PARTILHA por
+//     cima da app — o utilizador guarda em Ficheiros/Notas, envia por
+//     email, etc., e ao tocar em "Concluído/Cancelar" VOLTA À APP. Sem
+//     visualizador de documentos preso sem botão de voltar.
+//   • Desktop / browsers sem partilha de ficheiros: download clássico com
+//     um <a download> temporário (a app nunca navega para fora).
 // ════════════════════════════════════════════════════════════════
 import { useState } from "react";
 import { Download } from "lucide-react";
@@ -44,6 +48,27 @@ export function ExportButton({
         return;
       }
       const blob = await res.blob();
+      const file = new File([blob], filename, { type: "text/csv" });
+
+      // Telemóvel: partilhar o ficheiro abre a folha de partilha SOBRE a
+      // app. Ao fechar (Concluído/Cancelar) o utilizador regressa à app —
+      // resolve o "ecrã do visualizador sem botão de voltar" no PWA iOS.
+      const nav = navigator as unknown as {
+        canShare?: (data: { files: File[] }) => boolean;
+        share?: (data: { files: File[]; title?: string }) => Promise<void>;
+      };
+      if (nav.canShare && nav.share && nav.canShare({ files: [file] })) {
+        try {
+          await nav.share({ files: [file], title: "Relatório LEAP" });
+          return;
+        } catch (err) {
+          // Utilizador cancelou → não é erro, não fazer mais nada.
+          if ((err as { name?: string })?.name === "AbortError") return;
+          // Qualquer outra falha → cai para o download clássico abaixo.
+        }
+      }
+
+      // Fallback (desktop / sem partilha de ficheiros): download blob.
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
