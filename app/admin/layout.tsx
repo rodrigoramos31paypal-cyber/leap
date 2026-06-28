@@ -6,6 +6,7 @@ import { BottomNav } from "@/components/bottom-nav";
 import { AdminNavItem } from "@/components/admin-nav-item";
 import { Toaster } from "@/components/toaster";
 import { AppUpdater } from "@/components/app-updater";
+import { AppHeight } from "@/components/app-height";
 import { consumeFlash } from "@/lib/flash";
 import { getAalInfo, isDeviceTrusted } from "@/lib/mfa";
 import { LayoutDashboard, Calendar, Users, CreditCard, BarChart3, Settings, Package, NotebookPen, Images, Store } from "lucide-react";
@@ -66,7 +67,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const flash = await consumeFlash();
 
   return (
-    <div className="flex h-[100dvh] flex-col overflow-hidden bg-bone-50 dark:bg-ink-900">
+    <div className="flex h-[var(--app-height,100dvh)] flex-col overflow-hidden bg-bone-50 dark:bg-ink-900">
+      <AppHeight />
       <TopBar
         title="Admin"
         unread={0}
