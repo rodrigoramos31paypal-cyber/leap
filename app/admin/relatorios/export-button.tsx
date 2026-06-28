@@ -27,10 +27,12 @@ export function ExportButton({
   href,
   filename,
   children,
+  className = "btn-primary inline-flex items-center gap-1.5 disabled:opacity-50",
 }: {
   href: string;
   filename: string;
   children: React.ReactNode;
+  className?: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,7 +95,7 @@ export function ExportButton({
         type="button"
         onClick={onClick}
         disabled={busy}
-        className="btn-primary inline-flex items-center gap-1.5 disabled:opacity-50"
+        className={className}
       >
         <Download size={16} />
         {busy ? "A preparar…" : children}
