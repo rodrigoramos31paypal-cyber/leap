@@ -81,7 +81,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html lang="pt-PT" className={theme === "dark" ? "dark" : ""}>
-      <body className="h-full bg-bone-50 text-ink-900 antialiased dark:bg-ink-900 dark:text-bone-50">
+      <body className="min-h-dvh bg-bone-50 text-ink-900 antialiased dark:bg-ink-900 dark:text-bone-50">
         {children}
         <InstallPrompt />
         <script

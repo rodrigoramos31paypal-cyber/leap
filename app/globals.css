@@ -20,16 +20,6 @@ html, body {
   text-rendering: optimizeLegibility;
 }
 
-/* iOS standalone PWA: no arranque a frio, TODAS as unidades de viewport
-   (vh/dvh/svh) e window.innerHeight são calculadas curtas e só corrigem
-   após uma navegação — a barra inferior "flutua". A cadeia de alturas em
-   percentagem (html→body→shell a 100%) ancora ao containing block do
-   documento, que o iOS calcula bem logo no primeiro paint. É o método
-   fiável quando as unidades de viewport falham no cold start. */
-html, body {
-  height: 100%;
-}
-
 /* Reserva sempre o espaço da scrollbar vertical, mesmo em páginas curtas.
    Sem isto, páginas que cabem no viewport (ex: /login, /recuperar) ficam
    ~8px mais largas que páginas com scroll (ex: /registar), e qualquer
