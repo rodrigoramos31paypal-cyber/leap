@@ -37,7 +37,7 @@ export default function HomePage() {
         </div>
       </header>
 
-      <section className="mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center px-6 py-10 text-center">
+      <section className="mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center px-6 pt-10 pb-6 text-center">
         {/* Hero centrado (horizontal + vertical); os 4 cards ficam logo
             por baixo, também centrados. Antes era um layout de 2 colunas
             com os cards à direita. */}
