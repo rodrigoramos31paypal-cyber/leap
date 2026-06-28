@@ -95,6 +95,13 @@ export async function deleteAccountAction(
       user_metadata: {},
     });
     if (banErr) logError("deleteAccountAction:ban", banErr);
+    // 0120: lockout total — qualquer outra sessão aberta (outro device)
+    // cai no próximo request pelo gate dos layouts.
+    const { error: blockErr } = await (admin as any)
+      .from("profiles")
+      .update({ access_blocked: true })
+      .eq("id", uid);
+    if (blockErr) logError("deleteAccountAction:block", blockErr);
   } catch (e) {
     logError("deleteAccountAction:ban", e);
   }

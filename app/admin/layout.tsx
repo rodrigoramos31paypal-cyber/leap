@@ -35,6 +35,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // app/app/layout.tsx para o racional. NotificationBell auto-popula.
   const profile = await getCurrentProfile();
 
+  // 0120: lockout total (ban / conta apagada). Gate por-request → uma
+  // sessão de staff bloqueada cai aqui no próximo request. Corre ANTES
+  // do gate de 2FA — uma conta bloqueada nem chega ao desafio.
+  if ((profile as any)?.access_blocked) {
+    redirect("/auth/force-logout");
+  }
+
   if (profile?.role !== "trainer" && profile?.role !== "owner") {
     redirect("/app/dashboard");
   }

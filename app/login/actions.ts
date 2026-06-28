@@ -18,9 +18,19 @@ export async function loginAction(formData: FormData) {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, access_blocked")
     .eq("id", data.user!.id)
     .single();
+
+  // 0120: conta bloqueada (ban / apagada). O ban no GoTrue já faz o
+  // signInWithPassword falhar na maioria dos casos; este check é defesa
+  // em profundidade e dá uma mensagem clara. Termina a sessão recém-criada.
+  if ((profile as any)?.access_blocked) {
+    await supabase.auth.signOut().catch(() => {});
+    redirect(
+      `/login?error=${encodeURIComponent("A tua conta foi bloqueada. Contacta o estúdio.")}`,
+    );
+  }
 
   // SEC (C3): isSafePath rejeita `//evil.com`, etc.
   const fallback = profile?.role === "client" ? "/app/dashboard" : "/admin/dashboard";

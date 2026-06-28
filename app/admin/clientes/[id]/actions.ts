@@ -279,6 +279,9 @@ export async function adminDeleteClientAction(
       email: `apagado+${clientId}@removido.invalid`,
       phone: null,
       calendar_feed_token: randomUUID(),
+      // 0120: lockout total — a sessão aberta do cliente cai no próximo
+      // request (gate nos layouts) em vez de durar até o token expirar.
+      access_blocked: true,
     })
     .eq("id", clientId);
   if (anonErr) {
