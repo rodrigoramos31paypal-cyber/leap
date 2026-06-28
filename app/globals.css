@@ -150,20 +150,6 @@ input[type="date"]::-webkit-date-and-time-value {
   }
 }
 
-/* Mobile (<640px): sem espaço para colunas lado-a-lado numa só coluna
-   estreita. Em vez disso, as sessões sobrepostas fazem CASCATA PARA BAIXO
-   — cada bloco do grupo desce 28px face ao anterior, mantendo-se ALINHADO
-   à esquerda e em largura total (sem desvio horizontal, para não atrapalhar
-   quando há muitas seguidas). O z-index crescente (já aplicado inline:
-   20+col) põe os mais recentes à frente, por isso a faixa de topo de cada
-   bloco de trás — hora + nome — fica destapada, em vez de a sessão da frente
-   tapar por completo a de trás. `--ov-col` = índice dentro do grupo. */
-@media (max-width: 639px) {
-  .booking-overlap-block {
-    transform: translateY(calc(var(--ov-col, 0) * 28px));
-  }
-}
-
 /* ──────────────────────────────────────────────────────────────
    Dark mode · cobertura ampla para utilities `text-ink-*` usadas
    por toda a app sem ter de adicionar `dark:` em cada componente.
