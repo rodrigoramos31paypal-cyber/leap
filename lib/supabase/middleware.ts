@@ -159,9 +159,12 @@ export async function updateSession(
     path.startsWith("/icons");
 
   if (!user && !isPublic) {
+    // Sem sessão → manda para a LANDING (/), não para o formulário de login.
+    // O utilizador vê a página inicial e clica "Entrar" quando quiser. Antes
+    // ía direto a /login (ex.: arranque a frio da PWA caía logo no login).
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("next", path);
+    url.pathname = "/";
+    url.search = "";
     return NextResponse.redirect(url);
   }
 
