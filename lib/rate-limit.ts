@@ -14,7 +14,7 @@
 //   • auth     5    (login)
 //   • register 3    (signup, password reset)
 //   • webhook  60   (callbacks de webhooks; retries em rajada)
-//   • export   5    (exportações CSV/XLSX — caras em CPU/memória)
+//   • export   30   (exportações CSV/XLSX — caras em CPU/memória)
 //   • generic  30   (fallback)
 // ════════════════════════════════════════════════════════════════
 import { Ratelimit } from "@upstash/ratelimit";
@@ -35,7 +35,7 @@ const LIMITS: Record<RateLimitKind, { tokens: number; windowMs: number }> = {
   auth: { tokens: 5, windowMs: 60_000 },
   register: { tokens: 3, windowMs: 60_000 },
   webhook: { tokens: 60, windowMs: 60_000 },
-  export: { tokens: 5, windowMs: 60_000 },
+  export: { tokens: 30, windowMs: 60_000 },
   generic: { tokens: 30, windowMs: 60_000 },
 };
 
