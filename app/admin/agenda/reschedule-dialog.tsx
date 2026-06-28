@@ -35,7 +35,9 @@ export function RescheduleDialog() {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [notify, setNotify] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [overlapConfirm, setOverlapConfirm] = useState(false);
+  // Pedido de confirmação pendente: "overlap" (sobrepõe outra sessão) ou
+  // "busy" (cai sobre um horário ocupado). null = sem confirmação pendente.
+  const [confirmKind, setConfirmKind] = useState<"overlap" | "busy" | null>(null);
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -44,7 +46,7 @@ export function RescheduleDialog() {
       setDetail(d);
       setNotify(true);
       setError(null);
-      setOverlapConfirm(false);
+      setConfirmKind(null);
     }
     window.addEventListener("agenda:reschedule", onReschedule as EventListener);
     return () => window.removeEventListener("agenda:reschedule", onReschedule as EventListener);
@@ -79,16 +81,21 @@ export function RescheduleDialog() {
         notify,
         force,
       });
+      if (res?.busy) {
+        // Cai sobre um horário ocupado → pede confirmação (não fecha).
+        setConfirmKind("busy");
+        return;
+      }
       if (res?.conflict) {
         // Vai sobrepor outra sessão → pede confirmação (não fecha).
-        setOverlapConfirm(true);
+        setConfirmKind("overlap");
         return;
       }
       if (res?.error) {
         setError(res.error);
         return;
       }
-      setOverlapConfirm(false);
+      setConfirmKind(null);
       setDetail(null);
       router.refresh();
     });
@@ -147,16 +154,25 @@ export function RescheduleDialog() {
           </div>
         )}
 
-        {overlapConfirm ? (
+        {confirmKind ? (
           <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
             <p>
-              Este horário <span className="font-semibold">vai sobrepor outra sessão</span>.
-              Reagendar à mesma?
+              {confirmKind === "busy" ? (
+                <>
+                  Este horário está <span className="font-semibold">ocupado</span>.
+                  Reagendar para cima à mesma?
+                </>
+              ) : (
+                <>
+                  Este horário <span className="font-semibold">vai sobrepor outra sessão</span>.
+                  Reagendar à mesma?
+                </>
+              )}
             </p>
             <div className="flex items-center justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setOverlapConfirm(false)}
+                onClick={() => setConfirmKind(null)}
                 disabled={pending}
                 className="btn-outline"
               >
