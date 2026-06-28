@@ -134,3 +134,29 @@ export function isSafePath(p: unknown): p is string {
 export function safePathOr(p: unknown, fallback: string): string {
   return isSafePath(p) ? p : fallback;
 }
+
+/**
+ * Base URL pública e de confiança para construir redirects server-side.
+ *
+ * PORQUÊ: atrás do proxy (Coolify/Traefik) o `request.url` que o Next vê
+ * resolve para o endereço INTERNO do container (`http://localhost:3000`),
+ * não para o domínio público. Qualquer redirect montado a partir de
+ * `new URL(path, request.url)` aterra em localhost — o utilizador é
+ * empurrado para um host inexistente (ERR_CONNECTION_REFUSED). Foi a causa
+ * de utilizadores caírem em `localhost:3000/...` após confirmar a conta /
+ * logout, apesar de o email e o Supabase estarem corretos.
+ *
+ * Preferimos `NEXT_PUBLIC_APP_URL` (domínio canónico, fixo e de confiança)
+ * e só caímos para o origin do pedido se a env var não estiver definida.
+ * Bónus de segurança: base fixa elimina o vetor de open-redirect via
+ * spoofing do header Host.
+ *
+ * Passar `request` permite o fallback; em produção a env var deve estar
+ * sempre definida (ver .env.example).
+ */
+export function publicBaseUrl(request?: { url: string }): string {
+  const env = (process.env.NEXT_PUBLIC_APP_URL ?? "").trim().replace(/\/$/, "");
+  if (env) return env;
+  if (request) return new URL(request.url).origin;
+  return "";
+}

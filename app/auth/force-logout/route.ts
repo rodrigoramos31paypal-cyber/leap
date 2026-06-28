@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { publicBaseUrl } from "@/lib/utils";
 
 // ════════════════════════════════════════════════════════════════
 // Force-logout · destino dos layouts quando a conta está bloqueada
@@ -25,7 +26,10 @@ export async function GET(request: NextRequest) {
   // noutros dispositivos; o gate por-request trata-os na próxima ação.)
   await supabase.auth.signOut().catch(() => {});
 
-  const url = new URL("/login", request.url);
+  // Base = domínio público de confiança (NEXT_PUBLIC_APP_URL). NÃO usar o
+  // origin do request.url: atrás do proxy resolve para localhost:3000 e o
+  // redirect aterra num host inexistente. Ver publicBaseUrl.
+  const url = new URL("/login", publicBaseUrl(request));
   url.searchParams.set("error", "A tua conta foi bloqueada. Contacta o estúdio.");
   // 303 → o browser faz GET ao seguir o redirect.
   return NextResponse.redirect(url, { status: 303 });
