@@ -342,8 +342,8 @@ export async function setClientBannedAction(formData: FormData): Promise<void> {
     });
     await setFlash(
       banned
-        ? "Conta suspensa — o cliente não consegue comprar packs."
-        : "Conta reativada — o cliente já pode comprar packs.",
+        ? "Compras bloqueadas — o cliente não consegue comprar packs."
+        : "Compras desbloqueadas — o cliente já pode comprar packs.",
     );
   } catch (e) {
     logError("setClientBannedAction", e);
