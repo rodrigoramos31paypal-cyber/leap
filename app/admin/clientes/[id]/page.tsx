@@ -12,6 +12,7 @@ import { Pagination } from "@/components/pagination";
 import { GrantPackForm } from "./grant-pack-form";
 import { DuoLinkSection } from "./duo-link-section";
 import { setClientBannedAction } from "./actions";
+import { BlockPurchasesButton } from "./block-purchases-button";
 import { DeleteClientSection } from "./delete-client-section";
 
 const SESSIONS_PAGE_SIZE = 10;
@@ -167,16 +168,7 @@ export default async function ClientDetail(props: {
               <form action={setClientBannedAction} className="min-w-0 flex-1">
                 <input type="hidden" name="clientId" value={profileId} />
                 <input type="hidden" name="banned" value={profile.banned ? "false" : "true"} />
-                <button
-                  className={
-                    "w-full text-xs " +
-                    (profile.banned
-                      ? "btn-primary"
-                      : "btn-outline border-red-200 text-red-700 hover:bg-red-50")
-                  }
-                >
-                  {profile.banned ? "Reativar conta" : "Bloquear compras"}
-                </button>
+                <BlockPurchasesButton banned={!!profile.banned} />
               </form>
               <div className="min-w-0 flex-1">
                 <DeleteClientSection clientId={profileId} />

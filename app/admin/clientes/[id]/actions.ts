@@ -311,10 +311,6 @@ export async function adminDeleteClientAction(
 }
 
 export async function setClientBannedAction(formData: FormData): Promise<void> {
-  // H-2 (audit jun/2026): suspender/reactivar conta é destrutivo
-  // (bloqueia o cliente de comprar packs) e owner-grade. Restringido
-  // a owner para evitar abuso por trainers.
-  await requireOwner();
   const clientId = String(formData.get("clientId") ?? "");
   const banned = formData.get("banned") === "true";
   if (!clientId) {
@@ -323,6 +319,16 @@ export async function setClientBannedAction(formData: FormData): Promise<void> {
   }
 
   try {
+    // Suspender/reactivar é destrutivo. Era owner-only (H-2), mas passou a
+    // permitir trainers: a RPC set_client_banned (migração 0083) já valida
+    // `_client_is_accessible` — um trainer só consegue bloquear clientes do
+    // SEU scope; fora disso a RPC rejeita com 42501. O guard de app desce
+    // para requireStaff e a defesa de scope fica garantida no DB.
+    //
+    // O guard fica DENTRO do try para que uma recusa vire um toast de erro
+    // visível, em vez de um throw silencioso (era a causa de "não acontece
+    // nada" quando um trainer carregava no botão).
+    await requireStaff();
     const supabase = await createClient();
     const { error } = await (supabase as any).rpc("set_client_banned", {
       p_client_id: clientId,
@@ -337,12 +343,16 @@ export async function setClientBannedAction(formData: FormData): Promise<void> {
     await setFlash(
       banned
         ? "Conta suspensa — o cliente não consegue comprar packs."
-        : "Conta reativada.",
+        : "Conta reativada — o cliente já pode comprar packs.",
     );
   } catch (e) {
     logError("setClientBannedAction", e);
-    if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "setClientBanned", clientId });
-    await setFlash("Não foi possível atualizar o estado da conta", "error");
+    if (isAccessDenied(e)) {
+      await captureAlert("admin_access_denied", { action: "setClientBanned", clientId });
+      await setFlash("Sem permissão para alterar este cliente.", "error");
+    } else {
+      await setFlash("Não foi possível atualizar o estado da conta.", "error");
+    }
   }
   revalidateCreditsViews(clientId);
 }
