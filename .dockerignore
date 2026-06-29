@@ -1,0 +1,34 @@
+# Mantém o contexto de build pequeno e a cache estável.
+# (Tudo o que está aqui NÃO é enviado para o Docker daemon nem entra
+#  na imagem — node_modules e .next são reconstruídos dentro do build.)
+
+# Dependências e artefactos de build (refeitos no Dockerfile)
+node_modules
+.next
+out
+
+# Segredos / ambiente — NUNCA copiar para a imagem.
+# Os valores de build vêm de --build-arg; os de runtime do Coolify.
+.env
+.env.*
+!.env.example
+
+# Git e metadados
+.git
+.gitignore
+.github
+
+# Material que não faz parte da app
+apresentacao
+AUDIT-*.md
+*.log
+npm-debug.log*
+
+# Editores / SO
+.vscode
+.idea
+.DS_Store
+
+# O próprio Docker
+Dockerfile
+.dockerignore

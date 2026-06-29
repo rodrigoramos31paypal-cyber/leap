@@ -5,6 +5,11 @@ const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
 
 const nextConfig = {
   reactStrictMode: true,
+  // Build self-contained para self-host (Coolify/Docker). Gera
+  // `.next/standalone` com o server + um node_modules mínimo já traçado
+  // — imagem final pequena e arranque rápido do container. Sem efeito no
+  // `next dev`. O Dockerfile copia standalone + .next/static + public.
+  output: "standalone",
   // H2 hardening: esconde `X-Powered-By: Next.js`. Information
   // disclosure trivial — diz ao atacante a stack e versão sem ele
   // ter de pedir. Zero custo a esconder.
