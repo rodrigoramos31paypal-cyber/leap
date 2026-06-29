@@ -1,0 +1,53 @@
+# ════════════════════════════════════════════════════════════════
+# CI · gate de tipos e lint
+#
+# PORQUÊ: o `next build` deixou de correr o type-check
+# (typescript.ignoreBuildErrors: true no next.config.mjs) para acelerar
+# os deploys no Coolify. Este workflow é a rede de segurança que
+# garante que os tipos continuam a ser verificados — corre em paralelo
+# ao deploy, fora do caminho crítico.
+#
+# NOTA: o Coolify faz deploy por webhook no momento do push e NÃO
+# espera por este CI. Se fizeres push de um commit com erro de tipos, a
+# imagem é construída e publicada na mesma (o build já não valida
+# tipos), e este job fica vermelho a avisar-te. TypeScript é
+# compile-time, portanto a app não rebenta — mas convém olhar para o
+# resultado do CI. Para tornar o gate bloqueante, configura o Coolify
+# para fazer deploy só depois do CI passar (deploy via GitHub Action em
+# vez de webhook direto).
+# ════════════════════════════════════════════════════════════════
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancela runs antigos do mesmo branch/PR quando há um push novo.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  type-check-and-lint:
+    name: Type-check & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Type-check
+        run: npm run type-check
+
+      - name: Lint
+        run: npm run lint
