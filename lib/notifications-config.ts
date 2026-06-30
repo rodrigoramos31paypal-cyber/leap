@@ -13,12 +13,21 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type Channel = "email" | "push";
 
-export type NotifCategory = { key: string; label: string; desc: string };
+// `pushOnly`: a categoria só tem canal PUSH (sem email). Usado nas vagas de
+// última hora — o aviso é só push na app, por isso o toggle de email nem
+// aparece nas preferências.
+export type NotifCategory = { key: string; label: string; desc: string; pushOnly?: boolean };
 
 export const CLIENT_CATEGORIES: NotifCategory[] = [
   { key: "sessions", label: "Sessões", desc: "Marcação, cancelamento e lembrete de sessões." },
   { key: "packs", label: "Packs e saldo", desc: "Pack ativo, saldo baixo e packs a expirar." },
   { key: "ratings", label: "Avaliações", desc: "Pedido de avaliação após a sessão." },
+  {
+    key: "vaga",
+    label: "Vagas de última hora",
+    desc: "Aviso quando abre uma vaga e podes marcar uma sessão de última hora. Só push, sem email.",
+    pushOnly: true,
+  },
 ];
 
 export const TRAINER_CATEGORIES: NotifCategory[] = [
