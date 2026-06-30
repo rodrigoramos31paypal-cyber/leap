@@ -47,12 +47,20 @@ export function NotificationCategoryPrefs({
               on={prefs[c.key].push}
               onChange={(v) => update(c.key, "push", v)}
             />
-            <ChannelSwitch
-              category={c.key}
-              channel="email"
-              on={prefs[c.key].email}
-              onChange={(v) => update(c.key, "email", v)}
-            />
+            {c.pushOnly ? (
+              // Categoria só-push (ex.: vagas): o canal email não existe, por
+              // isso mostramos um traço alinhado com a coluna Email.
+              <span className="w-10 text-center text-ink-400" aria-hidden="true">
+                —
+              </span>
+            ) : (
+              <ChannelSwitch
+                category={c.key}
+                channel="email"
+                on={prefs[c.key].email}
+                onChange={(v) => update(c.key, "email", v)}
+              />
+            )}
           </div>
         </div>
       ))}

@@ -23,15 +23,17 @@ import {
   Calendar as CalendarIcon,
   UserCog,
   Bell,
+  Images,
 } from "lucide-react";
 import Link from "next/link";
 import { ForceUpdateButton } from "@/components/force-update-button";
 
-type TabId = "perfil" | "notificacoes" | "regras" | "horarios" | "calendario" | "seguranca" | "equipa";
+type TabId = "perfil" | "notificacoes" | "slideshow" | "regras" | "horarios" | "calendario" | "seguranca" | "equipa";
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode; ownerOnly?: boolean }[] = [
   { id: "perfil",     label: "Perfil",     icon: <User size={14} /> },
   { id: "notificacoes", label: "Notificações", icon: <Bell size={14} /> },
+  { id: "slideshow",  label: "Slideshow",  icon: <Images size={14} /> },
   { id: "regras",     label: "Regras",     icon: <SlidersHorizontal size={14} /> },
   { id: "horarios",   label: "Horários",   icon: <Clock size={14} /> },
   { id: "calendario", label: "Calendário", icon: <CalendarIcon size={14} /> },
@@ -70,6 +72,7 @@ export default async function DefinicoesPage(
     const t = searchParams.tab;
     if (
       t === "notificacoes" ||
+      t === "slideshow" ||
       t === "regras" ||
       t === "horarios" ||
       t === "calendario" ||
@@ -100,6 +103,7 @@ export default async function DefinicoesPage(
       {activeTab === "notificacoes" && (
         <NotificacoesTab prefs={tabData.notifPrefs ?? {}} />
       )}
+      {activeTab === "slideshow" && <SlideshowTab />}
       {activeTab === "regras" && (
         <RegrasTab trainerId={trainer.id} settings={tabData.settings} />
       )}
@@ -244,6 +248,28 @@ function NotificacoesTab({ prefs }: { prefs: CategoryPrefs }) {
       </p>
       <NotificationCategoryPrefs categories={TRAINER_CATEGORIES} initial={prefs} />
     </div>
+  );
+}
+
+function SlideshowTab() {
+  return (
+    <Link
+      href="/admin/promocoes"
+      className="card flex items-center justify-between p-4 hover:border-gold-400"
+    >
+      <div className="flex items-center gap-3">
+        <span className="grid h-10 w-10 place-items-center rounded-lg bg-bone-100 text-ink-700 dark:bg-white/[0.04] dark:text-bone-100">
+          <Images size={18} />
+        </span>
+        <div>
+          <div className="text-sm font-semibold">Slideshow / Promoções</div>
+          <div className="text-xs text-ink-500">
+            Gere os banners que aparecem no início da app dos clientes.
+          </div>
+        </div>
+      </div>
+      <ChevronRight size={16} className="text-ink-500" />
+    </Link>
   );
 }
 
