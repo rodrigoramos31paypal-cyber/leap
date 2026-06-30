@@ -16,8 +16,8 @@ export function AnunciarForm() {
         <Megaphone size={14} /> Anunciar vaga
       </div>
       <p className="mt-1 text-sm text-ink-500">
-        Envia uma notificação a todos os clientes com notificações activas — ideal quando abre uma
-        vaga de última hora.
+        Avisa todos os clientes de uma vaga de última hora. Aparece no sininho da app e,
+        para quem tiver push activo, também como notificação no telemóvel.
       </p>
 
       <form action={action} className="mt-5 space-y-4">
@@ -58,9 +58,9 @@ export function AnunciarForm() {
         )}
         {state?.ok && (
           <div className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-            {state.sent === 0
-              ? "Nenhum cliente tem notificações activas ainda."
-              : `Notificação enviada a ${state.sent} de ${state.total} dispositivo(s).`}
+            {state.count === 0
+              ? "Nenhum cliente elegível (todos desligaram este aviso)."
+              : `Anúncio enviado a ${state.count} cliente(s). Aparece no sininho e por push (a quem tiver push activo).`}
           </div>
         )}
 
