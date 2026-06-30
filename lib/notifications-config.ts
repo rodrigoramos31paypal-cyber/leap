@@ -70,6 +70,7 @@ export function categoryForType(type: string, role: Role): string | null {
     return "packs";
   }
   if (type === "rating_prompt") return "ratings";
+  if (type === "vaga_open") return "vaga";
   return null;
 }
 
@@ -136,6 +137,7 @@ export const TYPES_BY_CATEGORY: Record<string, string[]> = {
   sessions: ["booking_created", "booking_cancelled", "session_reminder"],
   packs: ["purchase_confirmed", "low_credits", "no_credits", "credit_alert", "pack_expiring"],
   ratings: ["rating_prompt"],
+  vaga: ["vaga_open"],
 };
 
 /** Expande um conjunto de categorias para os `type`s que as compõem. */
