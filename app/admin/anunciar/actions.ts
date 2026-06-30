@@ -22,10 +22,41 @@ import { logError } from "@/lib/errors";
 
 export type AnunciarState = { ok?: true; count?: number; error?: string };
 
+const MESES = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+];
+
+// Etiqueta relativa do horário da vaga, em hora de Portugal:
+//   • mesmo dia      → "Hoje • HH:MM"
+//   • dia seguinte   → "Amanhã • HH:MM"
+//   • qualquer outro → "dd de Mês • HH:MM"  (ex.: "07 de Agosto • 17:45")
 function formatWhen(when: string): string {
   const m = when.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
   if (!m) return "";
-  return `${m[3]}/${m[2]} às ${m[4]}:${m[5]}`;
+  const [, y, mo, d, hh, mm] = m;
+  const time = `${hh}:${mm}`;
+  const vagaStr = `${y}-${mo}-${d}`;
+
+  // "Hoje" é calculado em Europe/Lisbon para não falhar quando o servidor
+  // corre em UTC (o picker datetime-local dá hora local de Portugal).
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Lisbon",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  const todayStr = `${get("year")}-${get("month")}-${get("day")}`;
+  const tomorrowStr = new Date(new Date(`${todayStr}T00:00:00Z`).getTime() + 86400000)
+    .toISOString()
+    .slice(0, 10);
+
+  let dayLabel: string;
+  if (vagaStr === todayStr) dayLabel = "Hoje";
+  else if (vagaStr === tomorrowStr) dayLabel = "Amanhã";
+  else dayLabel = `${d} de ${MESES[Number(mo) - 1] ?? mo}`;
+  return `${dayLabel} • ${time}`;
 }
 
 export async function anunciarVagaAction(
@@ -46,9 +77,7 @@ export async function anunciarVagaAction(
   if (custom) {
     body = custom;
   } else {
-    body = whenLabel
-      ? `Abriu uma vaga ${whenLabel}. Marca já antes que saia!`
-      : `Abriu uma vaga de última hora. Marca já!`;
+    body = whenLabel || "Vaga de última hora";
   }
 
   const admin = createAdminClient();
