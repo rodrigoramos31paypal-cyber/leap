@@ -1132,7 +1132,20 @@ function WeekView({
   // mínima por coluna (minmax(0,1fr)) e sem min-width total, as 7 colunas
   // encolhem para preencher a viewport — mesmo em telemóvel (~375px →
   // ~47px/dia). Eixo de horas reduzido a 22px para dar mais espaço aos dias.
-  const GRID_COLS = "22px repeat(7, minmax(0, 1fr))";
+  //
+  // Larguras DINÂMICAS: dias SEM sessões encolhem para ~metade (0.5fr),
+  // devolvendo esse espaço aos dias COM sessões — que ficam mais largos e
+  // dão folga aos nomes dos clientes (ex.: duas sessões à mesma hora). É
+  // recalculado a cada render a partir de `byDay`, por isso assim que um
+  // sábado/domingo (ou qualquer dia) recebe uma sessão volta logo a 1fr.
+  const dayHasSessions = days.map(
+    (d) => (byDay.get(dayKey(d))?.bookings.length ?? 0) > 0,
+  );
+  const GRID_COLS =
+    "22px " +
+    dayHasSessions
+      .map((has) => (has ? "minmax(0, 1fr)" : "minmax(0, 0.5fr)"))
+      .join(" ");
 
   return (
     <WeekSwipeNav prevHref={prevHref} nextHref={nextHref}>
