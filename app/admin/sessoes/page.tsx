@@ -34,7 +34,8 @@ export default async function SessoesPage(props: {
   searchParams: Promise<{ f?: string; hc?: string; page?: string }>;
 }) {
   const sp = await props.searchParams;
-  const tab: "marcadas" | "futuras" = sp.f === "futuras" ? "futuras" : "marcadas";
+  const tab: "marcadas" | "futuras" | "canceladas" =
+    sp.f === "futuras" ? "futuras" : sp.f === "canceladas" ? "canceladas" : "marcadas";
   const hideCancelled = sp.hc === "1";
   const pageNum = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
   const nowIso = new Date().toISOString();
@@ -50,11 +51,15 @@ export default async function SessoesPage(props: {
       { count: "exact" },
     )
     .in("trainer_id", scope);
-  if (hideCancelled) q = q.neq("status", "cancelled");
-  if (tab === "futuras") {
-    q = q.gte("starts_at", nowIso).order("starts_at", { ascending: true });
+  if (tab === "canceladas") {
+    q = q.eq("status", "cancelled").order("starts_at", { ascending: false });
   } else {
-    q = q.order("starts_at", { ascending: false });
+    if (hideCancelled) q = q.neq("status", "cancelled");
+    if (tab === "futuras") {
+      q = q.gte("starts_at", nowIso).order("starts_at", { ascending: true });
+    } else {
+      q = q.order("starts_at", { ascending: false });
+    }
   }
   const fromRow = (pageNum - 1) * PAGE_SIZE;
   q = q.range(fromRow, fromRow + PAGE_SIZE - 1);
@@ -67,8 +72,9 @@ export default async function SessoesPage(props: {
     const p = new URLSearchParams();
     const f = opts.f ?? tab;
     if (f === "futuras") p.set("f", "futuras");
+    else if (f === "canceladas") p.set("f", "canceladas");
     const hc = opts.hc ?? hideCancelled;
-    if (hc) p.set("hc", "1");
+    if (hc && f !== "canceladas") p.set("hc", "1");
     const pg = opts.page ?? 1;
     if (pg > 1) p.set("page", String(pg));
     const qs = p.toString();
@@ -94,15 +100,20 @@ export default async function SessoesPage(props: {
         <Link href={hrefFor({ f: "futuras", page: 1 })} className={tabCls(tab === "futuras")}>
           Futuras
         </Link>
+        <Link href={hrefFor({ f: "canceladas", page: 1 })} className={tabCls(tab === "canceladas")}>
+          Canceladas
+        </Link>
       </div>
 
       <div className="flex items-center justify-between">
         <span className="text-xs text-ink-500">
           {total} {total === 1 ? "sessão" : "sessões"}
         </span>
-        <Link href={hrefFor({ hc: !hideCancelled, page: 1 })} className="btn-outline text-xs">
-          {hideCancelled ? "Mostrar canceladas" : "Ocultar canceladas"}
-        </Link>
+        {tab !== "canceladas" && (
+          <Link href={hrefFor({ hc: !hideCancelled, page: 1 })} className="btn-outline text-xs">
+            {hideCancelled ? "Mostrar canceladas" : "Ocultar canceladas"}
+          </Link>
+        )}
       </div>
 
       {!rows || rows.length === 0 ? (
