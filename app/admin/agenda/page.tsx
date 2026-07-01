@@ -13,6 +13,7 @@ import { BusyBlock } from "./busy-block";
 import { SlotClickLayer } from "./slot-click-layer";
 import { CardSkeleton } from "@/components/skeleton";
 import { AgendaScrollTo7am } from "./agenda-scroll-to-7am";
+import { MonthPicker } from "./month-picker";
 import { WeekSwipeNav } from "./week-swipe-nav";
 // PERF (QW-11): lazy/no-SSR dos diálogos. Next 16 não deixa usar
 // `next/dynamic({ ssr: false })` em Server Components — vive num
@@ -556,9 +557,11 @@ function DayView({
           >
             {/* Day header — sticky, igual ao da semana, com faixa do mês/ano. */}
             <div className="sticky top-0 z-30 bg-bone-50">
-              <div className="border-b border-ink-900/10 px-2 py-1 text-center font-display text-sm font-semibold capitalize text-ink-700">
-                {monthRangeLabel(day, day)}
-              </div>
+              <MonthPicker
+                label={monthRangeLabel(day, day)}
+                anchorIso={isoDate(day)}
+                view="day"
+              />
               <div
                 className="grid border-b border-ink-900/10 bg-bone-50"
                 style={{ gridTemplateColumns: GRID_COLS }}
@@ -1253,9 +1256,11 @@ function WeekView({
               ao topo do scroll interno para o trainer não perder a
               referência do mês ao deslocar a agenda. */}
           <div className="sticky top-0 z-30 bg-bone-50">
-            <div className="border-b border-ink-900/10 px-2 py-1 text-center font-display text-sm font-semibold capitalize text-ink-700">
-              {monthLabel}
-            </div>
+            <MonthPicker
+              label={monthLabel}
+              anchorIso={isoDate(days[3])}
+              view="week"
+            />
             <div
               className="grid border-b border-ink-900/10 bg-bone-50"
               style={{ gridTemplateColumns: GRID_COLS }}
