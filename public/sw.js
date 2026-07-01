@@ -59,7 +59,7 @@
 // v23 (jun/2026): barra inferior passa a `position: fixed` + scroll normal
 // do documento (sem app-shell de altura fixa). O navegador ancora a barra
 // ao fundo REAL do viewport, imune ao bug de altura do cold start iOS.
-const CACHE_NAME = "leap-v23";
+const CACHE_NAME = "leap-v24";
 
 // Cache dedicada (NÃO versionada) para a navegação pendente de um push
 // tocado com a app fechada. Mantida à parte de CACHE_NAME para não ser
@@ -314,4 +314,44 @@ self.addEventListener("message", (event) => {
       })()
     );
   }
+});
+
+
+// ─── Rotação da subscrição de push ─────────────────────────────────
+// O browser/OS pode rodar ou invalidar a subscrição (ex.: iOS passados
+// uns dias). Quando isso acontece, este evento dispara: voltamos a
+// subscrever com a MESMA VAPID key (lida da subscrição antiga) e enviamos
+// o endpoint novo para /api/push/subscribe. Sem isto, a BD ficava com um
+// endpoint morto e o cliente deixava de receber push em silêncio.
+// Nota: nem todos os browsers disparam este evento (iOS é irregular) — o
+// <PushAutoHeal/> no layout cobre esse caso a cada abertura da app.
+self.addEventListener("pushsubscriptionchange", (event) => {
+  event.waitUntil(
+    (async () => {
+      try {
+        const appServerKey =
+          event.oldSubscription &&
+          event.oldSubscription.options &&
+          event.oldSubscription.options.applicationServerKey;
+        const sub = await self.registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: appServerKey || undefined,
+        });
+        const json = sub.toJSON();
+        await fetch("/api/push/subscribe", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            endpoint: json.endpoint,
+            p256dh: json.keys && json.keys.p256dh,
+            auth: json.keys && json.keys.auth,
+          }),
+        }).catch(() => {});
+      } catch (e) {
+        // Sem applicationServerKey não dá para re-subscrever aqui; o
+        // auto-heal trata na próxima abertura da app.
+      }
+    })()
+  );
 });

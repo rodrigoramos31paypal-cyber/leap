@@ -6,6 +6,7 @@ import { BottomNav } from "@/components/bottom-nav";
 import { ViewportKeyboard } from "@/components/viewport-keyboard";
 import { SwNavigator } from "@/components/sw-navigator";
 import { AppUpdater } from "@/components/app-updater";
+import { PushAutoHeal } from "@/components/push-auto-heal";
 import { Toaster } from "@/components/toaster";
 import { ReminderSync } from "@/components/reminder-sync";
 import { ClientTopNav } from "@/components/client-top-nav";
@@ -56,6 +57,7 @@ export default async function ClientLayout({ children }: { children: React.React
       <ViewportKeyboard />
       <SwNavigator />
       <AppUpdater />
+      <PushAutoHeal />
       <TopBar unread={0} userId={user.id} homeHref="/app/dashboard" />
       <ClientTopNav />
       <Toaster initial={flash} />
