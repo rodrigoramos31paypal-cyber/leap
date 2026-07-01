@@ -61,3 +61,43 @@ export async function enablePushForToggle(): Promise<boolean> {
     return false;
   }
 }
+
+// Auto-heal (corre a cada abertura da app, via <PushAutoHeal/> no layout).
+// Ao contrário do enablePushForToggle, NÃO força uma subscrição nova:
+// reutiliza a existente se houver, ou cria uma se o browser/OS a largou
+// (ex.: iOS passados uns dias sem abrir a app) e volta a gravá-la no
+// servidor — repondo a linha em push_subscriptions que o dispatch possa
+// ter apagado após um 410. É a rede de segurança para iOS, onde o evento
+// pushsubscriptionchange pode nem sequer disparar.
+export async function healPushSubscription(): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  if (
+    !("serviceWorker" in navigator) ||
+    !("PushManager" in window) ||
+    !("Notification" in window)
+  ) {
+    return false;
+  }
+  const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  if (!key) return false;
+  if (Notification.permission !== "granted") return false; // sem prompt aqui
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(key),
+      });
+    }
+    const json = sub.toJSON();
+    const r = await savePushSubscription({
+      endpoint: json.endpoint ?? "",
+      p256dh: json.keys?.p256dh ?? "",
+      auth: json.keys?.auth ?? "",
+    });
+    return !!r?.ok;
+  } catch {
+    return false;
+  }
+}
