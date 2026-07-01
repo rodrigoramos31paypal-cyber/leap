@@ -225,7 +225,7 @@ async function Kpis({ year, month }: { year: number; month: number }) {
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat icon={<Users size={16} />} label="Total de clientes" value={String(totalClientsInScope)} href="/admin/clientes?tab=todos" />
-        <Stat icon={<Calendar size={16} />} label="Sessões marcadas no mês" value={String(sessionsBooked)} />
+        <Stat icon={<Calendar size={16} />} label="Sessões marcadas no mês" value={String(sessionsBooked)} href="/admin/sessoes" />
         <Stat icon={<TrendingUp size={16} />} label="Receita média por cliente activo" value={eur(avgRevenuePerClient)} />
         <Stat
           icon={<Activity size={16} />}
