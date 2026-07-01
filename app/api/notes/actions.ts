@@ -162,7 +162,7 @@ export async function upsertNoteAction(formData: FormData): Promise<{ error?: st
     try {
       const { data: bk } = await supabase
         .from("bookings")
-        .select("client_id, trainer_id")
+        .select("client_id, trainer_id, starts_at")
         .eq("id", bookingId)
         .maybeSingle();
       if (bk && (bk as any).client_id === user.id) {
@@ -173,12 +173,22 @@ export async function upsertNoteAction(formData: FormData): Promise<{ error?: st
         ]);
         const name = ((prof as any)?.full_name ?? "").split(" ")[0] || "Um cliente";
         if ((tr as any)?.profile_id) {
+          // Deep-link para a SEMANA da sessão + abre o popover (?booking=)
+          // para o admin ler a nota logo ao chegar à agenda, em vez de o
+          // deixar na agenda sem contexto. Data-calendário LOCAL
+          // (Europe/Lisbon) para o ?d= não partir o dia em sessões noturnas.
+          const localDate = new Intl.DateTimeFormat("en-CA", {
+            timeZone: "Europe/Lisbon",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          }).format(new Date((bk as any).starts_at));
           await (admin as any).from("notifications").insert({
             user_id: (tr as any).profile_id,
             type: "client_note",
             title: "Nova nota de cliente",
             body: name + " adicionou uma nota numa sessão.",
-            link: "/admin/agenda",
+            link: `/admin/agenda?view=week&d=${localDate}&booking=${bookingId}`,
           });
         }
       }
