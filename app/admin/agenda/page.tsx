@@ -178,7 +178,7 @@ async function CalendarView({
     supabase
       .from("bookings")
       .select(
-        "id, starts_at, ends_at, session_type, status, client_id, trainer_id, series_id, purchase_id, partner_client_id, profiles:client_id(full_name), partner_profiles:partner_client_id(full_name), purchases:purchase_id(sessions_total, sessions_remaining, pack_snapshot)",
+        "id, starts_at, ends_at, session_type, status, client_id, trainer_id, series_id, purchase_id, partner_client_id, profiles:client_id(full_name, email), partner_profiles:partner_client_id(full_name), purchases:purchase_id(sessions_total, sessions_remaining, pack_snapshot)",
       )
       .in("trainer_id", scope)
       .gte("starts_at", rangeStart.toISOString())

@@ -602,7 +602,14 @@ export function BookingBlock({
                   <span className="block">{firstNameLong(b.partner_profiles?.full_name)}</span>
                 </div>
               ) : (
-                <div className="text-xs text-ink-500">{b.profiles?.full_name ?? "—"}</div>
+                <>
+                  <div className="text-xs text-ink-500">{b.profiles?.full_name ?? "—"}</div>
+                  {b.profiles?.email &&
+                    !b.profiles.email.endsWith("@sem-email.leap.local") &&
+                    !b.profiles.email.endsWith("@removido.invalid") && (
+                      <div className="text-[11px] text-ink-400">{b.profiles.email}</div>
+                    )}
+                </>
               )}
               {b.partner_profiles?.full_name && (
                 <div className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-gold-100 px-2 py-0.5 text-[10px] font-semibold text-gold-700 dark:bg-gold-400/15">
