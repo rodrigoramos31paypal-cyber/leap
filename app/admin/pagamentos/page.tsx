@@ -221,75 +221,62 @@ export default async function AdminPaymentsPage(
 }
 
 function renderPurchase(p: any) {
+  const pending =
+    p.status === "awaiting_confirmation" || p.status === "pending_payment";
+  const terminal = p.status === "rejected" || p.status === "cancelled";
+  const ref = `LEAP-${p.id.slice(0, 6).toUpperCase()}`;
+  const confirmCls =
+    "rounded-md bg-ink-900 px-2.5 py-1.5 text-xs font-semibold text-bone-50 hover:bg-ink-700 dark:bg-bone-50 dark:text-ink-900 dark:hover:bg-bone-100";
+  const dangerCls =
+    "rounded-md border border-red-200 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 dark:border-red-400/30 dark:text-red-300";
+
   return (
-    <li key={p.id} className="card p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="text-sm font-semibold">{p.profiles?.full_name ?? "—"}</div>
-          <div className="text-xs text-ink-500">{p.profiles?.email}</div>
-          {p.profiles?.phone && <div className="text-xs text-ink-500">{p.profiles.phone}</div>}
-        </div>
-        <div className="text-right">
-          <div className="text-sm font-semibold">{p.pack_snapshot.name}</div>
-          <div className="font-display text-lg font-bold">{eur(p.amount_cents)}</div>
-          <div className="text-xs text-ink-500">{formatDateTime(p.created_at)}</div>
-        </div>
-      </div>
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="text-xs text-ink-500">
-          Método: <span className="font-medium">{paymentMethodLabel(p.payment_method)}</span>{" "}
-          · Ref:{" "}
-          <code className="rounded bg-bone-100 px-1.5">
-            LEAP-{p.id.slice(0, 6).toUpperCase()}
-          </code>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className={`chip-${statusColor(p.status)}`}>
-            {(PURCHASE_STATUS as any)[p.status]}
-          </span>
-          <DeletePurchaseButton purchaseId={p.id} />
-        </div>
-      </div>
-
-      {(p.status === "awaiting_confirmation" || p.status === "pending_payment") && (
-        <div className="mt-3 space-y-2">
-          <div className="flex gap-2">
-            <form action={confirmPurchaseAction} className="flex-1">
-              <input type="hidden" name="purchaseId" value={p.id} />
-              <button className="btn-primary w-full">Confirmar</button>
-            </form>
-            <form action={rejectPurchaseAction} id={`reject-${p.id}`} className="flex-1">
-              <input type="hidden" name="purchaseId" value={p.id} />
-              <button className="btn-outline w-full border-red-200 text-red-700 hover:bg-red-50">
-                Rejeitar
-              </button>
-            </form>
+    <li key={p.id} className="card">
+      <div className="flex items-center justify-between gap-3 p-3">
+        <div className="min-w-0 flex-1">
+          <Link
+            href={`/admin/pagamentos?client=${p.client_id}`}
+            className={`block truncate text-sm font-semibold hover:underline ${
+              terminal ? "text-ink-400" : ""
+            }`}
+          >
+            {p.profiles?.full_name ?? "—"}
+          </Link>
+          <div className="truncate text-xs text-ink-500">
+            {formatDateTime(p.created_at)} · {p.pack_snapshot?.name ?? "—"} ·{" "}
+            {eur(p.amount_cents)} · {paymentMethodLabel(p.payment_method)} · {ref}
           </div>
-          <input
-            form={`reject-${p.id}`}
-            name="reason"
-            placeholder="Motivo de rejeição (opcional)"
-            className="input w-full"
-          />
         </div>
-      )}
 
-      {p.status === "confirmed" && (
-        <div className="mt-3 space-y-2">
-          <form action={cancelConfirmedPurchaseAction} id={`cancel-${p.id}`} className="flex">
-            <input type="hidden" name="purchaseId" value={p.id} />
-            <button className="btn-outline w-full border-red-200 text-red-700 hover:bg-red-50">
-              Cancelar pagamento
-            </button>
-          </form>
-          <input
-            form={`cancel-${p.id}`}
-            name="reason"
-            placeholder="Motivo de cancelamento (opcional)"
-            className="input w-full"
-          />
+        <div className="flex shrink-0 items-center gap-1.5">
+          {pending && (
+            <>
+              <form action={confirmPurchaseAction}>
+                <input type="hidden" name="purchaseId" value={p.id} />
+                <button className={confirmCls}>Confirmar</button>
+              </form>
+              <form action={rejectPurchaseAction}>
+                <input type="hidden" name="purchaseId" value={p.id} />
+                <button className={dangerCls}>Rejeitar</button>
+              </form>
+            </>
+          )}
+          {p.status === "confirmed" && (
+            <form action={cancelConfirmedPurchaseAction}>
+              <input type="hidden" name="purchaseId" value={p.id} />
+              <button className={dangerCls}>Cancelar</button>
+            </form>
+          )}
+          {terminal && (
+            <>
+              <span className={`chip-${statusColor(p.status)} text-[10px]`}>
+                {(PURCHASE_STATUS as any)[p.status]}
+              </span>
+              <DeletePurchaseButton purchaseId={p.id} />
+            </>
+          )}
         </div>
-      )}
+      </div>
     </li>
   );
 }
