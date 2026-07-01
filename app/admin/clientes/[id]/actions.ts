@@ -369,13 +369,15 @@ export async function setClientBannedAction(formData: FormData): Promise<void> {
 export async function linkDuoAction(formData: FormData): Promise<void> {
   await requireStaff();
   const clientId = String(formData.get("clientId") ?? "");
-  // Aceita EMAIL ou TELEFONE. `partnerIdentifier` é o campo novo; mantém-se
-  // compatibilidade com o campo antigo `partnerEmail`.
+  // `partnerId` (novo): escolhido directamente no typeahead por nome/email/
+  // telefone. Fallback: `partnerIdentifier`/`partnerEmail` (email ou telefone,
+  // escrito à mão) — mantido por compatibilidade.
+  const partnerId = String(formData.get("partnerId") ?? "").trim();
   const ident = String(
     formData.get("partnerIdentifier") ?? formData.get("partnerEmail") ?? "",
   ).trim();
-  if (!clientId || !ident) {
-    await setFlash("Indica o email ou telefone da conta a ligar.", "error");
+  if (!clientId || (!partnerId && !ident)) {
+    await setFlash("Escolhe a conta a ligar.", "error");
     return;
   }
 
@@ -384,7 +386,15 @@ export async function linkDuoAction(formData: FormData): Promise<void> {
     let partner: { id: string; role: string; email: string | null; phone: string | null } | null =
       null;
 
-    if (ident.includes("@")) {
+    if (partnerId) {
+      // ── Por ID (escolhido no typeahead) ────────────────────────
+      const { data } = await (supabase as any)
+        .from("profiles")
+        .select("id, role, email, phone")
+        .eq("id", partnerId)
+        .maybeSingle();
+      partner = (data as any) ?? null;
+    } else if (ident.includes("@")) {
       // ── Por email ──────────────────────────────────────────────
       const { data } = await (supabase as any)
         .from("profiles")
