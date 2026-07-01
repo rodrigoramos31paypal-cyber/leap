@@ -19,7 +19,9 @@ export async function getMyNoteForBooking(bookingId: string): Promise<SessionNot
   const { data: { user } } = await supabase.auth.getUser();
   const { data } = await supabase
     .from("session_notes")
-    .select("*")
+    // L-2 (audit jul/2026): colunas explícitas em vez de `*`. São exactamente
+    // os campos do tipo SessionNote — evita transferir/expor colunas não usadas.
+    .select("id, booking_id, subject_id, author_id, body, created_at, updated_at")
     .eq("booking_id", bookingId)
     .eq("author_id", user?.id ?? "")
     .maybeSingle();
