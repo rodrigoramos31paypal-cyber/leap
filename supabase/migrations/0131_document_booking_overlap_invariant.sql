@@ -1,0 +1,50 @@
+-- ════════════════════════════════════════════════════════════════
+-- 0131_document_booking_overlap_invariant  (L-1, audit jul/2026)
+--
+-- CONTEXTO
+-- A garantia ao nível da BASE DE DADOS contra sobreposição de sessões
+-- do mesmo trainer foi REMOVIDA de propósito:
+--   • EXCLUDE constraint `bookings_no_overlap`  → dropada em 0070
+--   • unique index      `idx_bookings_no_overlap`→ dropado em 0126
+-- (para permitir sobreposições INTENCIONAIS, ex.: ajuste de duração
+--  forçado pelo trainer, ver 0069/0070).
+--
+-- CONSEQUÊNCIA (o que este ficheiro documenta)
+-- A partir daqui, a correcção de "não há duas marcações no mesmo slot"
+-- vive INTEIRAMENTE na camada de aplicação: cada RPC que insere/move
+-- bookings serializa por trainer com `pg_advisory_xact_lock(trainer_id)`
+-- e faz a verificação de sobreposição antes de gravar. As RPCs são:
+--   • create_booking            (0015)
+--   • create_recurring_booking  (0017 e derivados)
+--   • reschedule_booking / reschedule_booking_admin (0042 / 0058)
+--   • update_booking_duration   (0069)  — único caminho que cria overlap
+--                                          intencional, após confirmação.
+--
+-- INVARIANTE A MANTER
+-- TODA a escrita em `bookings` DEVE passar por uma destas RPCs
+-- SECURITY DEFINER. Nenhum caminho de app deve fazer INSERT/UPDATE
+-- directo em `bookings` (à data desta migração, nenhum faz — confirmado
+-- por grep). A RLS já reforça isto: a policy "bookings: admin write"
+-- (0003) limita escrita directa a `is_admin()`, e o cliente só cria
+-- sessões via RPC. Se no futuro adicionares um novo caminho de escrita
+-- (ex.: sync de calendário, import), ELE TEM de reutilizar o advisory
+-- lock + verificação de overlap, senão podes recriar duas marcações no
+-- mesmo horário sem aviso.
+--
+-- OPÇÃO MAIS FORTE (não aplicada aqui — requer mudança de schema)
+-- Para repor uma rede de segurança na BD sem partir os overlaps
+-- intencionais, adicionar uma coluna discriminadora e um índice parcial:
+--   alter table bookings add column allow_overlap boolean not null default false;
+--   -- marcar allow_overlap=true só no caminho de duração forçada;
+--   create unique index bookings_no_overlap_client_path
+--     on bookings using gist (trainer_id with =,
+--       tstzrange(starts_at, ends_at, '[)') with &&)
+--     where (status in ('booked','confirmed') and allow_overlap = false);
+-- (Requer a extensão btree_gist e testar o caminho de duração forçada.)
+--
+-- Esta migração é PURAMENTE DOCUMENTAL — não altera o schema, é 100%
+-- segura de aplicar. Deixa a intenção registada na própria BD.
+-- ════════════════════════════════════════════════════════════════
+
+comment on table bookings is
+  'Sobreposições no mesmo trainer NÃO são bloqueadas pela BD (constraints removidas em 0070/0126, para permitir overlaps intencionais). A não-sobreposição é garantida na app: TODAS as escritas passam por RPCs SECURITY DEFINER (create_booking, create_recurring_booking, reschedule_booking[_admin], update_booking_duration) que fazem pg_advisory_xact_lock(trainer_id) + verificação de overlap. Qualquer novo caminho de escrita tem de reutilizar essa lógica. Ver migração 0131.';
