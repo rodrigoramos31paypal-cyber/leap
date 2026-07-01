@@ -55,3 +55,9 @@ Desktop.ini
 # FUSE mount orphans (deleted-but-open file handles from remote/container edits)
 .fuse_hidden*
 **/.fuse_hidden*
+
+# internal / não publicar em repo público
+apresentacao/
+AUDIT-2026-06-28.md
+GO-LIVE-NOTIFICATIONS.md
+GUIA-DEPLOY-VPS-COOLIFY.md
