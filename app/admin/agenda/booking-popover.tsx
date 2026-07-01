@@ -472,14 +472,19 @@ export function BookingBlock({
           className="pointer-events-none absolute right-0.5 top-0.5 z-10 h-2 w-2 rounded-full bg-red-500 ring-1 ring-white"
         />
       )}
-      {clientNote?.body && b.status !== "cancelled" && (
-        <span
-          title="O cliente deixou uma nota"
-          className="pointer-events-none absolute bottom-0.5 right-0.5 z-10 text-ink-900 dark:text-bone-50"
-        >
-          <StickyNote size={12} strokeWidth={2} />
-        </span>
-      )}
+      {b.status !== "cancelled" &&
+        (clientNote?.body || note?.body || (teamNotes && teamNotes.length > 0)) && (
+          <span
+            title={
+              clientNote?.body
+                ? "O cliente deixou uma nota"
+                : "Esta sessão tem notas"
+            }
+            className="pointer-events-none absolute bottom-0.5 right-0.5 z-10 text-ink-900 dark:text-bone-50"
+          >
+            <StickyNote size={12} strokeWidth={2} />
+          </span>
+        )}
       <button
         type="button"
         onPointerDown={onPointerDown}
