@@ -7,15 +7,21 @@ import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
 import { revalidateProfileViews } from "@/lib/revalidate";
 
-// Mudar palavra-passe do utilizador autenticado. Supabase permite a
-// actualização sem a password actual (a sessão prova a identidade), mas
-// pedimos confirmação para evitar erros e exigimos um mínimo de 8 chars
-// — igual ao fluxo de reset.
+// Mudar palavra-passe do utilizador autenticado.
+//
+// M-3 (audit jul/2026): re-autenticação obrigatória. O Supabase permite
+// `updateUser({ password })` só com base na sessão — o que significa que
+// uma sessão sequestrada (cookie roubado, device partilhado deixado aberto)
+// consegue mudar a password SEM conhecer a atual, consumando o takeover.
+// Passamos a exigir a palavra-passe atual e a verificá-la server-side num
+// cliente descartável (não toca na sessão vigente). O fluxo de RESET por
+// email fica como está — aí a prova de identidade é o link do email.
 export async function changePasswordAction(formData: FormData) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const currentPassword = String(formData.get("current_password") ?? "");
   const password = String(formData.get("password") ?? "");
   const confirm = String(formData.get("confirm") ?? "");
   if (password.length < 8) {
@@ -24,6 +30,28 @@ export async function changePasswordAction(formData: FormData) {
   }
   if (password !== confirm) {
     await setFlash("As palavras-passe não coincidem.", "error");
+    redirect("/app/perfil?tab=perfil");
+  }
+
+  // Verifica a palavra-passe ATUAL antes de permitir a mudança. Usamos um
+  // cliente anónimo descartável (chave anon pública, NUNCA a service_role)
+  // com persistSession:false para não interferir com os cookies da sessão
+  // real. Se as credenciais não baterem, aborta.
+  if (!user.email) {
+    await setFlash("Não foi possível verificar a identidade da conta.", "error");
+    redirect("/app/perfil?tab=perfil");
+  }
+  const verifier = createSupabaseAdmin(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
+  const { error: reauthError } = await verifier.auth.signInWithPassword({
+    email: user.email!,
+    password: currentPassword,
+  });
+  if (reauthError) {
+    await setFlash("A palavra-passe atual está incorreta.", "error");
     redirect("/app/perfil?tab=perfil");
   }
 

@@ -239,6 +239,17 @@ function PerfilTab({ profile, factors }: { profile: any; factors: any[] }) {
         </h2>
         <form action={changePasswordAction} className="card space-y-4 p-5">
           <div>
+            <label className="label">Palavra-passe atual</label>
+            <input
+              name="current_password"
+              type="password"
+              required
+              autoComplete="current-password"
+              className="input"
+              placeholder="A tua palavra-passe atual"
+            />
+          </div>
+          <div>
             <label className="label">Nova palavra-passe</label>
             <input
               name="password"

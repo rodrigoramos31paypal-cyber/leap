@@ -54,6 +54,17 @@ ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL \
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# M-1 (audit jul/2026): GATE DE TIPOS dentro do build de deploy.
+# `next build` corre com typescript.ignoreBuildErrors:true (perf), logo
+# NÃO valida tipos. O CI valida, mas o Coolify faz deploy por webhook e
+# não espera pelo CI — um erro de tipos (ex.: uma server action sem o
+# guard requireStaff/requireOwner, um retorno mal tipado) podia ser
+# publicado à mesma. Corremo-lo aqui: se falhar, a imagem NÃO é
+# construída e o Coolify mantém a versão anterior no ar, em vez de
+# publicar silenciosamente um deploy com regressões de tipo.
+# Custo: um `tsc --noEmit` por deploy (o cache do .next não o acelera).
+RUN npm run type-check
+
 # O cache mount no .next/cache é o ganho incremental. Persiste entre
 # builds → só recompila o que mudou desde o último deploy.
 RUN --mount=type=cache,target=/app/.next/cache \
