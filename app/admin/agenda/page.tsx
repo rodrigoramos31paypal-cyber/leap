@@ -235,6 +235,14 @@ async function CalendarView({
   const clientIds = Array.from(
     new Set(bookings.map((b: any) => b.client_id).filter(Boolean)),
   );
+  // DUO: parceiros das marcações duplas. O saldo PT Dupla é PARTILHADO e o
+  // pack pode viver só numa das contas — precisamos das compras do parceiro
+  // para não sinalizar "último crédito" a quem tem 0 packs próprios mas cujo
+  // par tem o pack (saldo partilhado > 0).
+  const partnerIds = Array.from(
+    new Set(bookings.map((b: any) => b.partner_client_id).filter(Boolean)),
+  );
+  const balanceIds = Array.from(new Set([...clientIds, ...partnerIds]));
   // Notas do CLIENTE por booking — visíveis ao trainer (RLS 0078).
   // Carregadas em Day/Week para o popover sinalizar e mostrar a nota
   // que o cliente deixou ao marcar (ou mais tarde). No Month não é
@@ -265,8 +273,8 @@ async function CalendarView({
     clientIds.length > 0
       ? (supabase
           .from("purchases")
-          .select("client_id, sessions_remaining, expires_at, status")
-          .in("client_id", clientIds)
+          .select("client_id, session_type, sessions_remaining, expires_at, status")
+          .in("client_id", balanceIds)
           .in("trainer_id", scope)
           .eq("status", "confirmed")
           .then((r: any) => (r.data ?? []) as any[]))
@@ -276,26 +284,46 @@ async function CalendarView({
   // Sessões restantes por cliente — soma de `sessions_remaining` em
   // purchases CONFIRMED e não expiradas.
   const sessionsLeftMap = new Map<string, number>();
+  // DUO: saldo só dos packs `dupla`, por cliente. Usado para somar o saldo
+  // PARTILHADO do par (own total + dupla do parceiro).
+  const duplaLeftMap = new Map<string, number>();
   // "Último crédito": IDs das marcações a sinalizar a vermelho. Um cliente
   // cujo saldo de packs chegou a 0 (gastou o último crédito) tem a sua
   // ÚLTIMA marcação ativa marcada aqui, para alertar o trainer.
   const lastCreditIds = new Set<string>();
+  // DUO: parceiro de cada cliente, inferido das marcações duplas visíveis.
+  const partnerOf = new Map<string, string>();
+  for (const b of bookings as any[]) {
+    if (b.partner_client_id && b.client_id) {
+      partnerOf.set(b.client_id, b.partner_client_id);
+      partnerOf.set(b.partner_client_id, b.client_id);
+    }
+  }
   if (clientIds.length > 0) {
     const now = Date.now();
     for (const row of creditRows as any[]) {
       if (row.expires_at && new Date(row.expires_at).getTime() < now) continue;
-      sessionsLeftMap.set(
-        row.client_id,
-        (sessionsLeftMap.get(row.client_id) ?? 0) + Number(row.sessions_remaining ?? 0),
-      );
+      const rem = Number(row.sessions_remaining ?? 0);
+      sessionsLeftMap.set(row.client_id, (sessionsLeftMap.get(row.client_id) ?? 0) + rem);
+      if (row.session_type === "dupla") {
+        duplaLeftMap.set(row.client_id, (duplaLeftMap.get(row.client_id) ?? 0) + rem);
+      }
     }
 
     // Clientes com saldo de packs == 0 (último crédito gasto). Têm de ter
     // um registo de saldo (>= 1 pack confirmado) — um cliente sem packs
-    // (ex.: cortesia) não entra no mapa e não é sinalizado.
-    const zeroClients = clientIds.filter(
-      (id: string) => sessionsLeftMap.get(id) === 0,
-    );
+    // (ex.: cortesia) não entra no mapa e não é sinalizado. DUO: soma o
+    // saldo dupla PARTILHADO do parceiro (o pack pode estar só na conta do
+    // par) — sem isto, o booker com 0 packs próprios era falsamente
+    // sinalizado apesar de o par ter sessões.
+    const zeroClients = clientIds.filter((id: string) => {
+      if (!sessionsLeftMap.has(id)) return false;
+      const partner = partnerOf.get(id);
+      const shared =
+        (sessionsLeftMap.get(id) ?? 0) +
+        (partner ? (duplaLeftMap.get(partner) ?? 0) : 0);
+      return shared === 0;
+    });
     if (zeroClients.length > 0) {
       // A ÚLTIMA marcação ativa (mais tardia) de cada cliente sem saldo é
       // a "sessão do último crédito". Sem limite de data para apanhar a
