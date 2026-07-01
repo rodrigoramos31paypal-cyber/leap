@@ -708,6 +708,12 @@ function DayView({
                         : new Date(x.starts_at).getTime() + 3_600_000,
                     }))
                     .sort((a: { s: number }, b: { s: number }) => a.s - b.s);
+                  // Sessões que começam EXACTAMENTE à mesma hora que outra
+                  // (mesmo start ms) — precisam de colunas lado-a-lado mesmo
+                  // em mobile, senão a de trás fica 100% tapada.
+                  const startCounts = new Map<number, number>();
+                  for (const it of act)
+                    startCounts.set(it.s, (startCounts.get(it.s) ?? 0) + 1);
                   const colOf = new Map<string, number>();
                   const groupOf = new Map<string, number>();
                   const groupCols = new Map<number, number>();
@@ -749,6 +755,8 @@ function DayView({
                     const cols = g !== undefined ? groupCols.get(g) ?? 1 : 1;
                     const col = colOf.get(b.id) ?? 0;
                     const isOverlap = cols > 1;
+                    const sameStart =
+                      (startCounts.get(new Date(b.starts_at).getTime()) ?? 0) > 1;
                     // Mobile: altura encolhida até ao início da sessão
                     // seguinte. Desktop repõe pos.height via --h-full (CSS).
                     const mobileH = isOverlap
@@ -778,6 +786,7 @@ function DayView({
                         isLastCredit={lastCreditIds.has(b.id)}
                         overlap={isOverlap}
                         overlapCol={col}
+                        sameStart={sameStart}
                         autoOpen={focusBookingId === b.id}
                       />
                     );
@@ -1328,6 +1337,12 @@ function WeekView({
                         : new Date(x.starts_at).getTime() + 3_600_000,
                     }))
                     .sort((a: { s: number }, b: { s: number }) => a.s - b.s);
+                  // Sessões que começam EXACTAMENTE à mesma hora que outra
+                  // (mesmo start ms) — precisam de colunas lado-a-lado mesmo
+                  // em mobile, senão a de trás fica 100% tapada.
+                  const startCounts = new Map<number, number>();
+                  for (const it of act)
+                    startCounts.set(it.s, (startCounts.get(it.s) ?? 0) + 1);
                   const colOf = new Map<string, number>();
                   const groupOf = new Map<string, number>();
                   const groupCols = new Map<number, number>();
@@ -1367,6 +1382,8 @@ function WeekView({
                     const cols = g !== undefined ? groupCols.get(g) ?? 1 : 1;
                     const col = colOf.get(b.id) ?? 0;
                     const isOverlap = cols > 1;
+                    const sameStart =
+                      (startCounts.get(new Date(b.starts_at).getTime()) ?? 0) > 1;
                     // Mobile: cascata por encolhimento (altura até ao início
                     // da sessão seguinte). Desktop (≥640px): colunas lado-a-
                     // lado + altura cheia, repostas por CSS via --h-full.
@@ -1401,6 +1418,7 @@ function WeekView({
                         isLastCredit={lastCreditIds.has(b.id)}
                         overlap={isOverlap}
                         overlapCol={col}
+                        sameStart={sameStart}
                         autoOpen={focusBookingId === b.id}
                       />
                     );
