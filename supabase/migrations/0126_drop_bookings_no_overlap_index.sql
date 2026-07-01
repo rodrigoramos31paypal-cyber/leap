@@ -1,0 +1,27 @@
+-- ════════════════════════════════════════════════════════════════
+-- 0126 · remove idx_bookings_no_overlap
+--
+-- A 0125 tirou o bloqueio de "mesmo horário de início" da função
+-- `create_booking_admin`, mas ao nível da BD continuava a existir um
+-- UNIQUE INDEX da 0001 que impede duas marcações activas do mesmo
+-- trainer com o mesmo `starts_at`:
+--
+--   create unique index idx_bookings_no_overlap
+--     on bookings(trainer_id, starts_at)
+--     where status in ('booked', 'confirmed');
+--
+-- Esse índice fazia a inserção rebentar com um erro de duplicate key
+-- (23505) — que a action não reconhece e mostra como "Não foi possível
+-- criar a marcação.". Removê-lo permite marcações em simultâneo.
+--
+-- Nota: a EXCLUDE constraint irmã (bookings_no_overlap, 0025) já tinha
+-- sido removida na 0070 para permitir sobreposições intencionais; este
+-- índice único era o que faltava tirar.
+--
+-- REVERT:
+--   create unique index idx_bookings_no_overlap
+--     on bookings(trainer_id, starts_at)
+--     where status in ('booked', 'confirmed');
+-- ════════════════════════════════════════════════════════════════
+
+drop index if exists idx_bookings_no_overlap;
