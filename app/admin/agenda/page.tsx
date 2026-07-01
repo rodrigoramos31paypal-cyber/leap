@@ -649,6 +649,8 @@ function DayView({
                     dateIso={isoDate(day)}
                     rowTops={layout.tops}
                     rowHeights={layout.heights}
+                    rowStopsMin={layout.stopsMin}
+                    rowStopsY={layout.stopsY}
                   />
                 )}
 
@@ -781,6 +783,8 @@ function DayView({
                         draggable={canDrag}
                         rowTops={layout.tops}
                         rowHeights={layout.heights}
+                        rowStopsMin={layout.stopsMin}
+                        rowStopsY={layout.stopsY}
                         snapMin={15}
                         sessionsLeft={sessionsLeftMap.get(b.client_id)}
                         isLastCredit={lastCreditIds.has(b.id)}
@@ -890,20 +894,41 @@ const HOUR_END = 24;
 const TOTAL_HOURS = HOUR_END - HOUR_START; // 24
 const FULL_HOUR_HEIGHT = 80; // px — hora útil (slot de 15 min ≈ 20 px)
 const COLLAPSED_HOUR_HEIGHT = 22; // px — hora não-marcável encolhida
-// Horas "densas" (várias sessões a arrancar com poucos minutos de intervalo)
-// esticam até MAX_HOUR_HEIGHT para que o intervalo mais apertado tenha pelo
-// menos STACK_MIN_PX de altura — o suficiente para mostrar nome + apelido da
-// sessão da frente antes de a seguinte começar (mobile, onde as sessões
-// empilham por z-index em vez de irem lado-a-lado).
-const STACK_MIN_PX = 44; // altura mínima do intervalo entre 2 arranques
-const MAX_HOUR_HEIGHT = 176; // teto (44px * 4 → intervalo de 15 min cabe)
+// Quando duas sessões arrancam com poucos minutos de intervalo dentro da
+// mesma hora, a da frente (mobile) fica cortada até ao arranque da seguinte
+// e não cabe o nome. Em vez de esticar a hora TODA (que inflava também as
+// sessões seguintes e os blocos "Ocupado"), esticamos APENAS esse pequeno
+// intervalo, via um mapa tempo→px por troços (stops). Assim o bloco cortado
+// ganha STACK_MIN_PX de altura e tudo o que começa depois fica intacto.
+const STACK_MIN_PX = 44; // altura-alvo do intervalo apertado entre 2 arranques
 
 type RowLayout = {
   heights: number[]; // length 24
   tops: number[]; // length 24, topo cumulativo de cada hora
   total: number; // altura total da grelha
   collapsed: boolean[]; // length 24
+  // Mapa tempo→px por troços (breakpoints monótonos crescentes). Permite
+  // esticar só sub-intervalos de uma hora sem inflar o resto. Mesmo
+  // comprimento; minutos-desde-meia-noite ↔ y em px.
+  stopsMin: number[];
+  stopsY: number[];
 };
+
+// Interpolação linear por troços sobre breakpoints monótonos crescentes.
+// Forward (min→px): _interp(stopsMin, stopsY, min).
+// Inverso (px→min): _interp(stopsY, stopsMin, y).
+function _interp(xs: number[], ys: number[], x: number): number {
+  const n = xs.length;
+  if (n === 0) return 0;
+  if (x <= xs[0]) return ys[0];
+  if (x >= xs[n - 1]) return ys[n - 1];
+  let i = 0;
+  while (i < n - 1 && xs[i + 1] < x) i++;
+  const x0 = xs[i];
+  const x1 = xs[i + 1];
+  if (x1 === x0) return ys[i];
+  return ys[i] + ((x - x0) / (x1 - x0)) * (ys[i + 1] - ys[i]);
+}
 
 // Devolve hora/minuto de `d` no timezone Europe/Lisbon, independente
 // do timezone do runtime. WeekView é Server Component — em Vercel o
@@ -956,10 +981,7 @@ function localMinutes(d: Date): number {
 // Posição vertical (px) de um instante (em minutos-desde-meia-noite)
 // dentro da grelha de altura variável.
 function yForMinutes(layout: RowLayout, totalMin: number): number {
-  const clamped = Math.max(0, Math.min(TOTAL_HOURS * 60, totalMin));
-  const h = Math.min(23, Math.floor(clamped / 60));
-  const frac = (clamped - h * 60) / 60;
-  return layout.tops[h] + frac * layout.heights[h];
+  return _interp(layout.stopsMin, layout.stopsY, totalMin);
 }
 
 function clampPosition(
@@ -1072,14 +1094,17 @@ function buildRowLayout(days: Date[], byDay: Map<string, DayBucket>, avail: Avai
     }
     collapsed[h] = !anyFull;
   }
-  // Menor intervalo (min) entre arranques DISTINTOS de sessões dentro de
-  // cada hora, olhando para todos os dias (as linhas-hora são partilhadas
-  // pelas 7 colunas). Arranques exactamente à mesma hora (gap 0) vão
-  // lado-a-lado — não precisam de altura extra, por isso são ignorados.
-  const minGapByHour: number[] = new Array(24).fill(Infinity);
+  // Para cada hora, o intervalo MAIS APERTADO entre dois arranques distintos
+  // de sessões (em qualquer dia — as linhas são partilhadas pelas colunas).
+  // Guardamos onde começa (winStart, min dentro da hora) e o tamanho
+  // (winLen). Arranques à mesma hora exacta (gap 0) vão lado-a-lado → ignorados.
+  const winStart: number[] = new Array(24).fill(0);
+  const winLen: number[] = new Array(24).fill(0);
   for (let h = 0; h < 24; h++) {
     const hs = h * 60;
     const he = hs + 60;
+    let bestGap = Infinity;
+    let bestStart = 0;
     for (const d of days) {
       const bucket = byDay.get(dayKey(d)) ?? EMPTY_DAY;
       const starts = Array.from(
@@ -1091,27 +1116,55 @@ function buildRowLayout(days: Date[], byDay: Map<string, DayBucket>, avail: Avai
       ).sort((a, b) => a - b);
       for (let i = 1; i < starts.length; i++) {
         const gap = starts[i] - starts[i - 1];
-        if (gap > 0 && gap < minGapByHour[h]) minGapByHour[h] = gap;
+        if (gap > 0 && gap < bestGap) {
+          bestGap = gap;
+          bestStart = starts[i - 1] - hs;
+        }
       }
+    }
+    if (bestGap !== Infinity) {
+      winStart[h] = bestStart;
+      winLen[h] = bestGap;
     }
   }
 
+  // Alturas por hora + mapa tempo→px por troços (stops). Só o intervalo
+  // apertado é esticado para STACK_MIN_PX (se o natural já for maior, fica);
+  // tudo o que arranca depois mantém o ritmo normal.
   const heights: number[] = [];
   const tops: number[] = [];
+  const stopsMin: number[] = [0];
+  const stopsY: number[] = [0];
   let acc = 0;
   for (let h = 0; h < 24; h++) {
-    let ht = collapsed[h] ? COLLAPSED_HOUR_HEIGHT : FULL_HOUR_HEIGHT;
-    // Estica a hora se o intervalo mais apertado não der para o nome.
-    const minGap = minGapByHour[h];
-    if (!collapsed[h] && minGap !== Infinity) {
-      const needed = Math.ceil((STACK_MIN_PX * 60) / minGap);
-      ht = Math.min(MAX_HOUR_HEIGHT, Math.max(ht, needed));
-    }
-    heights[h] = ht;
+    const base = collapsed[h] ? COLLAPSED_HOUR_HEIGHT : FULL_HOUR_HEIGHT;
+    const hs = h * 60;
     tops[h] = acc;
-    acc += ht;
+    const wl = collapsed[h] ? 0 : winLen[h];
+    if (wl > 0) {
+      const ws = winStart[h];
+      const we = ws + wl;
+      const naturalWin = (wl / 60) * base;
+      const winPx = Math.max(STACK_MIN_PX, naturalWin);
+      const yWs = acc + (ws / 60) * base;
+      if (ws > 0) {
+        stopsMin.push(hs + ws);
+        stopsY.push(yWs);
+      }
+      const yWe = yWs + winPx;
+      stopsMin.push(hs + we);
+      stopsY.push(yWe);
+      const ht = (ws / 60) * base + winPx + ((60 - we) / 60) * base;
+      heights[h] = ht;
+      acc += ht;
+    } else {
+      heights[h] = base;
+      acc += base;
+    }
+    stopsMin.push((h + 1) * 60);
+    stopsY.push(acc);
   }
-  return { heights, tops, total: acc, collapsed };
+  return { heights, tops, total: acc, collapsed, stopsMin, stopsY };
 }
 
 function WeekView({
@@ -1318,6 +1371,8 @@ function WeekView({
                     dateIso={isoDate(d)}
                     rowTops={layout.tops}
                     rowHeights={layout.heights}
+                    rowStopsMin={layout.stopsMin}
+                    rowStopsY={layout.stopsY}
                   />
                 )}
 
@@ -1463,6 +1518,8 @@ function WeekView({
                         draggable={canDrag}
                         rowTops={layout.tops}
                         rowHeights={layout.heights}
+                        rowStopsMin={layout.stopsMin}
+                        rowStopsY={layout.stopsY}
                         snapMin={15}
                         sessionsLeft={sessionsLeftMap.get(b.client_id)}
                         isLastCredit={lastCreditIds.has(b.id)}
