@@ -36,18 +36,18 @@ const nextConfig = {
   // repo passa `npm run lint` a zero erros — adicionar esse comando
   // como step obrigatório no CI para manter o gate.
   //
-  // PERF (deploy jun/2026): o `next build` deixa de correr o type-check.
-  // Numa app strict com 54 rotas isto poupa dezenas de segundos por
-  // deploy — a parte mais lenta do build que o cache do .next NÃO
-  // acelera. Os tipos NÃO deixam de ser verificados: passam a correr no
-  // CI (.github/workflows/ci.yml → `tsc --noEmit`) em cada push/PR, fora
-  // do caminho crítico do deploy. Um retorno mal tipado ou uma action
-  // sem o guard `requireStaff`/`requireOwner` falha o CI (vermelho no
-  // GitHub), mas o deploy do Coolify não espera por ele — confia no CI
-  // como gate. TypeScript é compile-time, logo um erro de tipos não
-  // rebenta a app em runtime.
+  // M-1 (audit jul/2026): o `next build` volta a correr o type-check.
+  //
+  // Antes, `ignoreBuildErrors: true` deixava o CI como ÚNICO gate de tipos.
+  // Mas o Coolify faz deploy por webhook no push e NÃO espera pelo CI, por
+  // isso um commit com erro de tipos (ex.: uma action sem o guard
+  // `requireStaff`/`requireOwner`, ou um retorno de authz mal tipado) era
+  // construído e publicado na mesma, com o CI só a ficar vermelho DEPOIS.
+  // Com `false`, o próprio build falha antes de publicar — o gate deixa de
+  // depender de o deploy passar pelo CI. Custo: +alguns segundos por build
+  // (o type-check já corre em CI em <1 min, aqui é o mesmo trabalho).
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   experimental: {
     serverActions: {
@@ -115,6 +115,16 @@ const nextConfig = {
         // Bloqueia que browsers velhos exponham informação cross-origin
         // sobre o documento.
         { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+        // L-5 (audit jul/2026): impede que OUTROS sites carreguem/embebam
+        // directamente os nossos recursos (imagens, JSON, etc.) a partir de
+        // outra origem. Complementa o COOP + `frame-ancestors`. Seguro aqui
+        // porque as imagens do Supabase Storage são buscadas server-side
+        // pelo optimizer do next/image (mesma origem para o browser), não
+        // cross-origin — logo `same-origin` não parte a entrega de imagens.
+        // NOTA: não adicionamos COEP (require-corp) de propósito — é mais
+        // agressivo e exigiria CORP/CORS em TODOS os subrecursos, com risco
+        // de partir terceiros; o CORP sozinho já fecha o furo apontado.
+        { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
       ],
     },
   ],
