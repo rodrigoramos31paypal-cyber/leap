@@ -288,10 +288,6 @@ function renderPurchase(p: any) {
             placeholder="Motivo de cancelamento (opcional)"
             className="input w-full"
           />
-          <p className="text-[11px] text-ink-500">
-            Cancelar reverte o pagamento, retira as sessões restantes do
-            saldo do cliente e move o registo para &quot;Rejeitados&quot;.
-          </p>
         </div>
       )}
     </li>
