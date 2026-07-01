@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { setNotificationChannelPref } from "@/lib/notification-actions";
+import { enablePushForToggle } from "@/lib/push-client";
 import type { NotifCategory } from "@/lib/notifications-config";
 
 export type CategoryPrefs = Record<string, { email: boolean; push: boolean }>;
@@ -88,7 +89,15 @@ function ChannelSwitch({
     onChange(next);
     startTransition(async () => {
       const r = await setNotificationChannelPref(category, channel, next);
-      if (!r?.ok) onChange(!next);
+      if (!r?.ok) {
+        onChange(!next);
+        return;
+      }
+      // Ligar o push tem de RE-ESTABELECER a subscrição do browser — mudar
+      // só a flag não chega se a subscrição tiver morrido (ver push-client).
+      if (channel === "push" && next) {
+        void enablePushForToggle();
+      }
     });
   }
   return (
