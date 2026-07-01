@@ -17,7 +17,7 @@
 // isto. A asserção abaixo replica o gate do layout NO boundary de dados,
 // para que o 2FA passe a "estar de pé sozinho" fora do layout.
 // ════════════════════════════════════════════════════════════════
-import { getCurrentProfile } from "@/lib/supabase/server";
+import { getCurrentProfile, getAuthUser } from "@/lib/supabase/server";
 import { getAalInfo, isDeviceTrusted } from "@/lib/mfa";
 
 /** S-13: replica o gate de 2FA do `app/admin/layout.tsx` no boundary de
@@ -44,11 +44,25 @@ export async function requireStaff() {
   return profile;
 }
 
-/** Garante que o caller é owner E satisfez o 2FA (S-13). Lança se não for. */
+/** Garante que o caller é owner E satisfez o 2FA (S-13). Lança se não for.
+ *
+ *  M-3 (audit jul/2026): as ações de OWNER são as mais sensíveis (conceder/
+ *  revogar admin, apagar/anonimizar contas, banir). Por isso, ao contrário
+ *  do `requireStaff` (que confia no JWT verificado localmente até expirar),
+ *  aqui fazemos um round-trip ao GoTrue via `getAuthUser()`. Assim, uma
+ *  REVOGAÇÃO server-side (sign-out forçado noutro device, ban do owner) é
+ *  apanhada de IMEDIATO, sem esperar pelo fim do TTL do access token. Custo:
+ *  1 chamada extra ao auth server — desprezável porque ações de owner são
+ *  raras. `getAuthUser` é cached por request. */
 export async function requireOwner() {
   const profile = await getCurrentProfile();
   if (!profile || profile.role !== "owner") {
     throw new Error("Acesso restrito ao owner.");
+  }
+  // Revalida a sessão contra o auth server (apanha revogação instantânea).
+  const fresh = await getAuthUser();
+  if (!fresh || fresh.id !== profile.id) {
+    throw new Error("Sessão inválida ou revogada.");
   }
   await assertMfaSatisfied(profile.id);
   return profile;
