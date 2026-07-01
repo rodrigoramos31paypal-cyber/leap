@@ -80,6 +80,7 @@ export function BookingBlock({
   isLastCredit = false,
   overlap = false,
   overlapCol = 0,
+  sameStart = false,
   autoOpen = false,
 }: {
   b: any;
@@ -110,6 +111,10 @@ export function BookingBlock({
   // Mapeia para uma cor de bordo diferente, ajudando a distinguir
   // visualmente sessões empilhadas em mobile.
   overlapCol?: number;
+  // `true` quando esta sessão começa EXACTAMENTE à mesma hora que outra.
+  // Força colunas lado-a-lado a qualquer largura (também em mobile), já que
+  // o empilhamento por z-index tapava por completo a sessão de trás.
+  sameStart?: boolean;
   /** Quando true (deep-link `?booking=<id>`), abre o popover ao montar. */
   autoOpen?: boolean;
 }) {
@@ -405,7 +410,7 @@ export function BookingBlock({
       data-event-block
       className={`absolute left-0.5 right-0.5 overflow-hidden rounded border text-[10px] transition-colors select-none ${tone} ${lastCreditRing} ${
         overlap
-          ? `booking-overlap-block ${
+          ? `booking-overlap-block ${sameStart ? "booking-samestart-block" : ""} ${
               // Sem !border-2: a borda fica na mesma espessura (1px) que
               // sessões sem sobreposição. A cor distinta é que sinaliza
               // o stack, não a espessura.

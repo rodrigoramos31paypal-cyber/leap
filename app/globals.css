@@ -153,6 +153,18 @@ input[type="date"]::-webkit-date-and-time-value {
   }
 }
 
+/* Início EXACTAMENTE à mesma hora: o truque mobile de encolher a altura e
+   empilhar por z-index não chega — como ambas arrancam no mesmo topo, a de
+   trás fica 100% tapada e o trainer não vê que há 2 sessões. Nestes casos
+   forçamos colunas lado-a-lado a QUALQUER largura (também em mobile), com a
+   altura cheia, para as duas ficarem sempre visíveis. */
+.booking-samestart-block {
+  left: calc(var(--ov-col, 0) / var(--ov-cols, 1) * 100% + 2px) !important;
+  width: calc(100% / var(--ov-cols, 1) - 4px) !important;
+  right: auto !important;
+  height: var(--h-full) !important;
+}
+
 /* ──────────────────────────────────────────────────────────────
    Dark mode · cobertura ampla para utilities `text-ink-*` usadas
    por toda a app sem ter de adicionar `dark:` em cada componente.
