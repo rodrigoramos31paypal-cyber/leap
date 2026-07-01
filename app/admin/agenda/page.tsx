@@ -890,6 +890,13 @@ const HOUR_END = 24;
 const TOTAL_HOURS = HOUR_END - HOUR_START; // 24
 const FULL_HOUR_HEIGHT = 80; // px — hora útil (slot de 15 min ≈ 20 px)
 const COLLAPSED_HOUR_HEIGHT = 22; // px — hora não-marcável encolhida
+// Horas "densas" (várias sessões a arrancar com poucos minutos de intervalo)
+// esticam até MAX_HOUR_HEIGHT para que o intervalo mais apertado tenha pelo
+// menos STACK_MIN_PX de altura — o suficiente para mostrar nome + apelido da
+// sessão da frente antes de a seguinte começar (mobile, onde as sessões
+// empilham por z-index em vez de irem lado-a-lado).
+const STACK_MIN_PX = 44; // altura mínima do intervalo entre 2 arranques
+const MAX_HOUR_HEIGHT = 176; // teto (44px * 4 → intervalo de 15 min cabe)
 
 type RowLayout = {
   heights: number[]; // length 24
@@ -1065,11 +1072,41 @@ function buildRowLayout(days: Date[], byDay: Map<string, DayBucket>, avail: Avai
     }
     collapsed[h] = !anyFull;
   }
+  // Menor intervalo (min) entre arranques DISTINTOS de sessões dentro de
+  // cada hora, olhando para todos os dias (as linhas-hora são partilhadas
+  // pelas 7 colunas). Arranques exactamente à mesma hora (gap 0) vão
+  // lado-a-lado — não precisam de altura extra, por isso são ignorados.
+  const minGapByHour: number[] = new Array(24).fill(Infinity);
+  for (let h = 0; h < 24; h++) {
+    const hs = h * 60;
+    const he = hs + 60;
+    for (const d of days) {
+      const bucket = byDay.get(dayKey(d)) ?? EMPTY_DAY;
+      const starts = Array.from(
+        new Set(
+          bucket.bookings
+            .map((b: any) => _minsFromIso(b.starts_at))
+            .filter((m: number) => m >= hs && m < he),
+        ),
+      ).sort((a, b) => a - b);
+      for (let i = 1; i < starts.length; i++) {
+        const gap = starts[i] - starts[i - 1];
+        if (gap > 0 && gap < minGapByHour[h]) minGapByHour[h] = gap;
+      }
+    }
+  }
+
   const heights: number[] = [];
   const tops: number[] = [];
   let acc = 0;
   for (let h = 0; h < 24; h++) {
-    const ht = collapsed[h] ? COLLAPSED_HOUR_HEIGHT : FULL_HOUR_HEIGHT;
+    let ht = collapsed[h] ? COLLAPSED_HOUR_HEIGHT : FULL_HOUR_HEIGHT;
+    // Estica a hora se o intervalo mais apertado não der para o nome.
+    const minGap = minGapByHour[h];
+    if (!collapsed[h] && minGap !== Infinity) {
+      const needed = Math.ceil((STACK_MIN_PX * 60) / minGap);
+      ht = Math.min(MAX_HOUR_HEIGHT, Math.max(ht, needed));
+    }
     heights[h] = ht;
     tops[h] = acc;
     acc += ht;
