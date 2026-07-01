@@ -13,9 +13,17 @@
 // cookie. O token é uma capability: quem o tem pode descarregar o .ics
 // DESSA marcação (mesmo nível de exposição que o feed por-utilizador).
 //
-// Segredo: reutiliza um segredo de servidor já existente (nunca vai ao
-// cliente). Se rodar, os links antigos deixam de validar — sem problema,
-// são regenerados a cada render da página.
+// Segredo: usa um segredo de servidor dedicado (nunca vai ao cliente). Se
+// rodar, os links antigos deixam de validar — sem problema, são
+// regenerados a cada render da página.
+//
+// L-2 (audit jul/2026): REMOVIDO o fallback para SUPABASE_SERVICE_ROLE_KEY.
+// Reutilizar a service_role key (que ignora toda a RLS e pode ler/escrever
+// tudo) como chave HMAC de um recurso secundário é reuso indevido de um
+// segredo crítico — se alguma vez vazasse por outra via, seria a chave
+// mestra da BD. Preferimos CALENDAR_ICS_SECRET dedicado; CRON_SECRET fica
+// só como fallback de compatibilidade. Define CALENDAR_ICS_SECRET em
+// produção (ver .env.example).
 // ════════════════════════════════════════════════════════════════
 import { createHmac, timingSafeEqual } from "crypto";
 
@@ -23,7 +31,6 @@ function icsSecret(): string {
   return (
     process.env.CALENDAR_ICS_SECRET ||
     process.env.CRON_SECRET ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
     ""
   );
 }

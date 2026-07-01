@@ -51,3 +51,12 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      # M-2 (audit jul/2026): advisory de vulnerabilidades em deps de
+      # RUNTIME. `--omit=dev` ignora as cadeias de build/dev (glob via
+      # eslint, postcss/uuid aninhados) que não correm em produção,
+      # focando o que realmente é servido. Non-blocking (`|| true`) —
+      # informa sem partir o CI; promover a bloqueante (remover o
+      # `|| true`) quando o baseline de runtime estiver limpo.
+      - name: Audit (runtime deps · advisory)
+        run: npm audit --omit=dev --audit-level=high || true
