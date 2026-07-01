@@ -232,7 +232,7 @@ function renderPurchase(p: any) {
 
   return (
     <li key={p.id} className="card">
-      <div className="flex items-center justify-between gap-3 p-3">
+      <div className="flex items-start justify-between gap-3 p-3">
         <div className="min-w-0 flex-1">
           <Link
             href={`/admin/pagamentos?client=${p.client_id}`}
@@ -242,9 +242,16 @@ function renderPurchase(p: any) {
           >
             {p.profiles?.full_name ?? "—"}
           </Link>
-          <div className="truncate text-xs text-ink-500">
-            {formatDateTime(p.created_at)} · {p.pack_snapshot?.name ?? "—"} ·{" "}
-            {eur(p.amount_cents)} · {paymentMethodLabel(p.payment_method)} · {ref}
+          <div className="mt-0.5 space-y-0.5 text-xs text-ink-500">
+            <div className="tabular-nums">{formatDateTime(p.created_at)}</div>
+            <div className="truncate">
+              {p.pack_snapshot?.name ?? "—"} · {paymentMethodLabel(p.payment_method)} ·{" "}
+              {eur(p.amount_cents)}
+            </div>
+            <div className="truncate">
+              Ref{" "}
+              <code className="rounded bg-bone-100 px-1 dark:bg-white/10">{ref}</code>
+            </div>
           </div>
         </div>
 
