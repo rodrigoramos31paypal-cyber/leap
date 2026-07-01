@@ -134,36 +134,71 @@ export async function rateLimit(kind: RateLimitKind, key: string): Promise<Limit
 }
 
 /**
- * Devolve o IP do request a partir de headers que o Vercel define.
+ * Nº de reverse-proxies DE CONFIANÇA à frente da app.
  *
- * S-14 (audit jun/2026): `x-vercel-forwarded-for` é definido pelo proxy do
- * Vercel e NÃO é forjável pelo cliente — é a única fonte de confiança em
- * produção. `x-forwarded-for` / `x-real-ip` são enviáveis pelo cliente;
- * usá-los como chave de rate-limit permitiria a um atacante rodar a chave a
- * cada request (`x-forwarded-for: <aleatório>`) e contornar o limite de
- * brute-force em /login,/registar.
+ * No self-host (Coolify/Traefik) há exatamente 1 proxy (o Traefik) à frente,
+ * por isso o IP REAL do cliente é o ÚLTIMO valor que o Traefik acrescentou a
+ * `x-forwarded-for`. Se puseres uma CDN/WAF à frente do Traefik (ex.:
+ * Cloudflare), aumenta este valor para o nº total de proxies de confiança
+ * (2, 3, …) definindo `TRUSTED_PROXY_HOPS` no ambiente.
+ */
+const TRUSTED_PROXY_HOPS = (() => {
+  const n = Number.parseInt(process.env.TRUSTED_PROXY_HOPS ?? "", 10);
+  return Number.isFinite(n) && n > 0 ? n : 1;
+})();
+
+/**
+ * Devolve o IP do cliente para chave de rate-limit, de forma resistente a
+ * spoofing atrás de um reverse-proxy.
  *
- * Política:
- *   • Sempre que houver `x-vercel-forwarded-for`, é esse o IP (comportamento
- *     idêntico ao anterior — no Vercel está SEMPRE presente, logo zero
- *     mudança em produção).
- *   • Em produção SEM esse header (cenário que não ocorre no Vercel), NÃO
- *     confiamos em headers do cliente: devolvemos uma chave fixa. Isto faz
- *     o limiter degradar para um bucket global mais apertado — falha
- *     SEGURO (nunca ABRE o brute-force), em vez de confiar em input forjável.
- *   • Em dev/local (sem proxy) mantemos o fallback para os headers comuns
- *     para o limiter continuar funcional ao testar.
+ * H-1 (audit jul/2026): a versão anterior só confiava em
+ * `x-vercel-forwarded-for` e devolvia a constante `"no-trusted-ip"` em
+ * qualquer produção não-Vercel. No deploy real (Coolify/Traefik) esse header
+ * NUNCA existe → todos os pedidos partilhavam o MESMO bucket global e o
+ * anti-brute-force ficava efetivamente desligado (além de risco de auto-DoS).
+ *
+ * Modelo de confiança (porque é resistente a spoofing):
+ *   • `x-forwarded-for` é uma lista `cliente, proxy1, proxy2, …`. Cada proxy
+ *     de confiança ACRESCENTA à DIREITA o IP de quem lhe abriu a ligação. Um
+ *     atacante só controla o que envia no SEU pedido, ou seja valores à
+ *     ESQUERDA. Logo, o valor a `TRUSTED_PROXY_HOPS` posições a contar da
+ *     DIREITA é o IP fidedigno observado pelo proxy mais externo de confiança.
+ *     Isto NÃO depende de o Traefik reescrever o header (só de o acrescentar,
+ *     que é o comportamento por omissão).
+ *
+ * Ordem de preferência:
+ *   1. `x-vercel-forwarded-for` (não forjável; mantido caso se migre p/ Vercel).
+ *   2. `x-forwarded-for` → valor à direita segundo `TRUSTED_PROXY_HOPS`.
+ *   3. `x-real-ip` (Traefik/nginx podem defini-lo com o IP da ligação TCP).
+ *   4. Fail-closed: `"no-trusted-ip"` (bucket global apertado; nunca ABRE
+ *      o brute-force, apenas o restringe).
+ *
+ * ATENÇÃO à config do proxy: garante no Traefik que os `forwardedHeaders`
+ * NÃO são de confiança para clientes arbitrários (não exponhas a app
+ * diretamente, sem o Traefik à frente). Com o Traefik como edge, o append
+ * do IP real é automático e o modelo acima é seguro.
  */
 export function getRequestIp(headers: Headers): string {
+  // 1) Vercel edge — não forjável.
   const vercel = headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim();
   if (vercel) return vercel;
-  if (process.env.NODE_ENV === "production") {
-    // Sem header de confiança em produção → fail-closed (chave fixa).
-    return "no-trusted-ip";
+
+  // 2) Self-host atrás de Traefik/Coolify: contar da DIREITA.
+  const xff = headers.get("x-forwarded-for");
+  if (xff) {
+    const parts = xff.split(",").map((s) => s.trim()).filter(Boolean);
+    if (parts.length > 0) {
+      const idx = Math.max(0, parts.length - TRUSTED_PROXY_HOPS);
+      const ip = parts[idx];
+      if (ip) return ip;
+    }
   }
-  return (
-    headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    headers.get("x-real-ip")?.trim() ||
-    "anon"
-  );
+
+  // 3) IP da ligação TCP escrito pelo proxy.
+  const real = headers.get("x-real-ip")?.trim();
+  if (real) return real;
+
+  // 4) Sem fonte de confiança → fail-closed (bucket global apertado;
+  //    nunca ABRE o brute-force, apenas o restringe a um contador único).
+  return "no-trusted-ip";
 }
