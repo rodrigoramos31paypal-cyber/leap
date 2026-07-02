@@ -1,28 +1,31 @@
 -- ════════════════════════════════════════════════════════════════
--- 0130 · Revisão de CANCELAMENTOS TARDIOS pelo admin
+-- 0132 · Revisão de CANCELAMENTOS TARDIOS pelo admin
+--
+-- (Consolida o trabalho antes numerado 0130/0131, renumerado para 0132
+-- por colisão com 0130_scope_anon_profiles_columns e
+-- 0131_document_booking_overlap_invariant.)
 --
 -- Contexto: quando um CLIENTE cancela com menos de
 -- `cancellation_window_hours` (default 12h) de antecedência e o trainer
 -- cobra o cancelamento tardio (`charge_late_cancel`), a sessão é
--- DESCONTADA (credit_charged = true, sem devolução) — comportamento
--- inalterado e o DEFAULT (o cliente perde sempre a sessão).
+-- DESCONTADA (credit_charged = true, sem devolução) — o DEFAULT: o
+-- cliente perde a sessão.
 --
--- NOVO: essa cobrança passa a ficar "por rever". O admin abre a
--- notificação do sino (deep-link para o perfil do cliente) e decide:
---   • APROVAR o cancelamento → devolve a sessão ao saldo (e ao par duo,
---     por espelho) e avisa o cliente que foi reembolsada;
---   • REJEITAR → a sessão mantém-se descontada (decisão default), sem
---     notificação extra ao cliente.
--- A decisão é reversível: o admin pode alternar aprovar/rejeitar quantas
--- vezes quiser — cada alternância aplica/desfaz a devolução idempotente-
--- mente com base em `credit_charged`.
+-- NOVO:
+--   1. Essa cobrança fica "por rever". O admin abre a notificação do sino
+--      (deep-link ao perfil do cliente) e decide APROVAR (devolve a sessão
+--      + avisa o cliente) ou REJEITAR (mantém descontada, sem aviso
+--      extra). Reversível e idempotente via `credit_charged`.
+--   2. QUALQUER cancelamento feito pelo cliente leva o admin ao PERFIL do
+--      cliente (?tab=sessoes&review=<booking>) — a página escolhe o
+--      separador (Futuras/Passadas) conforme a data. O pop-up de decisão
+--      só surge nos cancelamentos tardios (só esses têm a linha
+--      `late_cancel_review`; nos restantes é só navegação).
 --
 -- Alterações:
---   1. bookings.late_cancel_review  text  null|'pending'|'approved'|'rejected'
---   2. cancel_booking (base: 0096) — marca 'pending' no cancelamento
---      tardio do cliente e aponta a notif do admin para o perfil do
---      cliente (?tab=sessoes&review=<booking>). Restante = cópia fiel.
---   3. review_late_cancel(uuid, boolean) — RPC de decisão (staff-only).
+--   • bookings.late_cancel_review  text  null|'pending'|'approved'|'rejected'
+--   • cancel_booking (base: 0096) — marca 'pending' + deep-link ao perfil.
+--   • review_late_cancel(uuid, boolean) — RPC de decisão (staff-only).
 --
 -- REVERT: repor cancel_booking da 0096, dropar review_late_cancel e a
 -- coluna late_cancel_review.
@@ -34,9 +37,9 @@ alter table bookings
   check (late_cancel_review in ('pending', 'approved', 'rejected'));
 
 comment on column bookings.late_cancel_review is
-  '0130: estado da revisão de cancelamento tardio pelo admin. null = não aplicável; pending = à espera de decisão; approved = sessão devolvida; rejected = mantém-se descontada.';
+  '0132: estado da revisão de cancelamento tardio pelo admin. null = não aplicável; pending = à espera de decisão; approved = sessão devolvida; rejected = mantém-se descontada.';
 
--- ── 2. cancel_booking (cópia fiel da 0096 + marcação/deep-link) ──
+-- ── 2. cancel_booking (cópia fiel da 0096 + marcação + deep-link) ─
 create or replace function cancel_booking(
   p_booking_id uuid,
   p_reason text default null
@@ -56,7 +59,7 @@ declare
   v_when text;
   v_trainer_profile uuid;
   v_client_name text;
-  v_late_client_cancel boolean := false;   -- 0130
+  v_late_client_cancel boolean := false;
 begin
   select * into v_booking from bookings where id = p_booking_id for update;
   if not found then raise exception 'Marcação não encontrada'; end if;
@@ -101,7 +104,7 @@ begin
     v_refund := false;
   end if;
 
-  -- 0130: cancelamento TARDIO do cliente (descontado) fica "por rever".
+  -- Cancelamento TARDIO do cliente (descontado) fica "por rever".
   v_late_client_cancel := (not v_by_admin) and (not v_refund);
 
   update bookings
@@ -112,7 +115,7 @@ begin
         confirmed_at = null,
         confirmed_by = null,
         credit_charged = not v_refund,
-        late_cancel_review = case when v_late_client_cancel then 'pending' else null end   -- 0130
+        late_cancel_review = case when v_late_client_cancel then 'pending' else null end
     where id = p_booking_id;
 
   if v_refund and v_booking.credit_charged then
@@ -176,9 +179,10 @@ begin
   end if;
 
   -- Quando foi o CLIENTE a cancelar, avisa o trainer/admin.
-  -- 0130: num cancelamento TARDIO (descontado) o link vai para o perfil do
-  -- cliente com ?review=<booking> — o admin abre o pop-up de decisão e pode
-  -- devolver ou manter a sessão. Nos restantes casos mantém-se /admin/agenda.
+  -- O link aponta SEMPRE ao perfil do cliente (?review=<booking>): a página
+  -- escolhe o separador (Futuras/Passadas) conforme a data da sessão. O
+  -- pop-up de decisão só surge nos cancelamentos tardios (só esses têm a
+  -- linha `late_cancel_review` — nos restantes é apenas navegação).
   if not v_by_admin then
     select profile_id into v_trainer_profile from trainers where id = v_booking.trainer_id;
     select full_name into v_client_name from profiles where id = v_booking.client_id;
@@ -191,9 +195,7 @@ begin
                         then ' Cancelou com menos de ' || v_settings.cancellation_window_hours
                              || 'h — toca para reveres se devolves a sessão.'
                         else ' O horário ficou livre.' end,
-              case when v_late_client_cancel
-                   then '/admin/clientes/' || v_booking.client_id || '?tab=sessoes&review=' || p_booking_id
-                   else '/admin/agenda' end);
+              '/admin/clientes/' || v_booking.client_id || '?tab=sessoes&review=' || p_booking_id);
     end if;
   end if;
 end;
@@ -251,7 +253,7 @@ begin
                 'Cancelamento tardio aprovado — sessão devolvida (par duo)');
       end if;
 
-      -- Notifica o cliente do reembolso.
+      -- Notifica o cliente do reembolso (push + in-app; ver notifications-config).
       insert into notifications (user_id, type, title, body, link)
       values (v_booking.client_id, 'booking_refunded', 'Sessão reembolsada',
               'A tua sessão de ' || v_when || ' foi reembolsada e voltou ao teu saldo.',
@@ -296,4 +298,4 @@ revoke all on function review_late_cancel(uuid, boolean) from public, anon;
 grant execute on function review_late_cancel(uuid, boolean) to authenticated, service_role;
 
 comment on function review_late_cancel(uuid, boolean) is
-  '0130: admin aprova (devolve sessão + avisa cliente) ou rejeita (mantém descontada) um cancelamento tardio. Idempotente/reversível via credit_charged.';
+  '0132: admin aprova (devolve sessão + avisa cliente) ou rejeita (mantém descontada) um cancelamento tardio. Idempotente/reversível via credit_charged.';
