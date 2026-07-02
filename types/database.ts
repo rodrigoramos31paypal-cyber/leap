@@ -167,6 +167,7 @@ export type Database = {
           credit_charged: boolean
           ends_at: string
           id: string
+          late_cancel_review: string | null
           notes: string | null
           partner_client_id: string | null
           partner_purchase_id: string | null
@@ -189,6 +190,7 @@ export type Database = {
           credit_charged?: boolean
           ends_at: string
           id?: string
+          late_cancel_review?: string | null
           notes?: string | null
           partner_client_id?: string | null
           partner_purchase_id?: string | null
@@ -211,6 +213,7 @@ export type Database = {
           credit_charged?: boolean
           ends_at?: string
           id?: string
+          late_cancel_review?: string | null
           notes?: string | null
           partner_client_id?: string | null
           partner_purchase_id?: string | null

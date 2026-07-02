@@ -14,23 +14,39 @@ import { DuoLinkSection } from "./duo-link-section";
 import { setClientBannedAction } from "./actions";
 import { BlockPurchasesButton } from "./block-purchases-button";
 import { DeleteClientSection } from "./delete-client-section";
+import { LateCancelReview } from "./late-cancel-review";
 
 const SESSIONS_PAGE_SIZE = 10;
 
 export default async function ClientDetail(props: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string; hc?: string; f?: string; page?: string }>;
+  searchParams: Promise<{ tab?: string; hc?: string; f?: string; page?: string; review?: string }>;
 }) {
   const params = await props.params;
-  const { tab: tabParam, hc, f, page: pageParam } = await props.searchParams;
+  const { tab: tabParam, hc, f, page: pageParam, review: reviewParam } = await props.searchParams;
   const tab: "resumo" | "compras" | "sessoes" =
     tabParam === "compras" || tabParam === "sessoes" ? tabParam : "resumo";
   const hideCancelled = hc === "1";
-  const sessFilter: "todas" | "futuras" | "passadas" =
-    f === "futuras" || f === "passadas" ? f : "todas";
   const pageNum = Math.max(1, Math.floor(Number(pageParam)) || 1);
   const nowIso = new Date().toISOString();
   const supabase = await createClient();
+
+  // Deep-link da notificação de cancelamento tardio (?review=<booking>): sem
+  // filtro explícito, escolhemos futuras/passadas conforme a sessão a rever
+  // ainda estar no futuro — garante que ela aparece na lista mostrada.
+  let reviewFilter: "futuras" | "passadas" | null = null;
+  if (reviewParam && !f) {
+    const { data: reviewBooking } = await supabase
+      .from("bookings")
+      .select("starts_at")
+      .eq("id", reviewParam)
+      .maybeSingle();
+    if (reviewBooking?.starts_at) {
+      reviewFilter = reviewBooking.starts_at >= nowIso ? "futuras" : "passadas";
+    }
+  }
+  const sessFilter: "todas" | "futuras" | "passadas" =
+    f === "futuras" || f === "passadas" ? f : reviewFilter ?? "todas";
   const { data: profile } = await (supabase as any)
     .from("profiles")
     .select("id, full_name, email, phone, banned")
@@ -71,7 +87,7 @@ export default async function ClientDetail(props: {
   // de quem fez a marcação, mesmo descontando sessão a ambos.
   let bookingsQuery = supabase
     .from("bookings")
-    .select("id, starts_at, session_type, status", { count: "exact" })
+    .select("id, starts_at, session_type, status, late_cancel_review", { count: "exact" })
     .or(`client_id.eq.${profileId},partner_client_id.eq.${profileId}`);
   if (hideCancelled) bookingsQuery = bookingsQuery.neq("status", "cancelled");
   if (sessFilter === "futuras") {
@@ -283,13 +299,24 @@ export default async function ClientDetail(props: {
                         <div className="text-sm font-semibold">{formatDateTime(b.starts_at)}</div>
                         <div className="text-xs text-ink-500 capitalize">{b.session_type}</div>
                       </div>
-                      <span className={
-                        b.status === "confirmed" ? "chip-ok" :
-                        b.status === "no_show" ? "chip-danger" :
-                        b.status === "cancelled" ? "chip-mute" : "chip-gold"
-                      }>
-                        {(BOOKING_STATUS as any)[b.status] ?? b.status}
-                      </span>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={
+                          b.status === "confirmed" ? "chip-ok" :
+                          b.status === "no_show" ? "chip-danger" :
+                          b.status === "cancelled" ? "chip-mute" : "chip-gold"
+                        }>
+                          {(BOOKING_STATUS as any)[b.status] ?? b.status}
+                        </span>
+                        {b.status === "cancelled" && b.late_cancel_review && (
+                          <LateCancelReview
+                            bookingId={b.id}
+                            clientId={profileId}
+                            status={b.late_cancel_review}
+                            whenLabel={formatDateTime(b.starts_at)}
+                            autoOpen={reviewParam === b.id}
+                          />
+                        )}
+                      </div>
                     </div>
                     {clientNotesMap.get(b.id)?.body && (
                       <div className="mt-3 rounded-lg border border-gold-200 bg-gold-50 p-3 dark:border-gold-400/30 dark:bg-gold-400/10">

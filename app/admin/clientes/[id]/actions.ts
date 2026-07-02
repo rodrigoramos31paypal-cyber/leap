@@ -9,6 +9,7 @@ import {
   createCustomPurchase,
   confirmPurchase,
   removeClientSessions,
+  reviewLateCancel,
 } from "@/lib/credits";
 import { getCurrentTrainerId, getAccessibleTrainerIds } from "@/lib/trainer";
 import { linkDuo, unlinkDuo, getActiveDuoPartnerId } from "@/lib/duo";
@@ -60,6 +61,38 @@ async function revalidateForClientAndPartner(clientId: string) {
     if (partnerId) revalidateCreditsViews(partnerId);
   } catch (e) {
     logError("revalidateForClientAndPartner", e);
+  }
+}
+
+/**
+ * Admin aprova/rejeita um cancelamento tardio feito pelo cliente.
+ * approve=true devolve a sessão ao saldo (e notifica o cliente); false
+ * mantém-na descontada. Reversível — pode alternar as vezes que quiser.
+ */
+export async function reviewLateCancelAction(input: {
+  bookingId: string;
+  clientId: string;
+  approve: boolean;
+}): Promise<{ ok: boolean; error?: string }> {
+  await requireStaff();
+  const { bookingId, clientId, approve } = input;
+  if (!bookingId) return { ok: false, error: "Sessão não identificada." };
+  try {
+    await reviewLateCancel(bookingId, approve);
+    await logAudit("credits_adjust", {
+      targetTable: "bookings",
+      targetId: bookingId,
+      payload: { action: "late_cancel_review", approve, clientId },
+    });
+    await revalidateForClientAndPartner(clientId);
+    return { ok: true };
+  } catch (e) {
+    logError("reviewLateCancelAction", e);
+    if (isAccessDenied(e)) {
+      await captureAlert("admin_access_denied", { action: "reviewLateCancel", bookingId });
+      return { ok: false, error: "Sem permissão para rever este cancelamento." };
+    }
+    return { ok: false, error: "Não foi possível registar a decisão. Tenta novamente." };
   }
 }
 
