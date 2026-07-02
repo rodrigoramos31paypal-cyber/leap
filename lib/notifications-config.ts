@@ -59,7 +59,8 @@ export function categoryForType(type: string, role: Role): string | null {
   if (type === "payment_pending") return "payments";
   if (type === "client_note") return "notes";
   if (type === "session_reminder") return role === "client" ? "sessions" : "reminders";
-  if (type === "booking_created" || type === "booking_cancelled") return "sessions";
+  // booking_refunded (0130): reembolso de cancelamento tardio aprovado pelo admin.
+  if (type === "booking_created" || type === "booking_cancelled" || type === "booking_refunded") return "sessions";
   if (
     type === "purchase_confirmed" ||
     type === "low_credits" ||
@@ -134,7 +135,7 @@ export const TYPES_BY_CATEGORY: Record<string, string[]> = {
   signups: ["new_signup_admin"],
   reminders: ["session_reminder"],
   // cliente
-  sessions: ["booking_created", "booking_cancelled", "session_reminder"],
+  sessions: ["booking_created", "booking_cancelled", "booking_refunded", "session_reminder"],
   packs: ["purchase_confirmed", "low_credits", "no_credits", "credit_alert", "pack_expiring"],
   ratings: ["rating_prompt"],
   vaga: ["vaga_open"],
