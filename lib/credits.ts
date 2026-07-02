@@ -397,6 +397,20 @@ export async function cancelBooking(bookingId: string, reason?: string) {
   if (error) throw error;
 }
 
+/**
+ * Decisão do admin sobre um cancelamento tardio do cliente.
+ * approve=true devolve a sessão ao saldo (e avisa o cliente); approve=false
+ * mantém-na descontada (revertendo uma aprovação anterior, se existir).
+ */
+export async function reviewLateCancel(bookingId: string, approve: boolean) {
+  const supabase = await createClient();
+  const { error } = await (supabase as any).rpc("review_late_cancel", {
+    p_booking_id: bookingId,
+    p_approve: approve,
+  });
+  if (error) throw error;
+}
+
 export async function markNoShow(bookingId: string) {
   const supabase = await createClient();
   const { error } = await supabase.rpc("mark_no_show", { p_booking_id: bookingId });
