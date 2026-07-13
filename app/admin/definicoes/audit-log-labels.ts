@@ -15,7 +15,7 @@ export type AuditActionMeta = {
 
 export const AUDIT_ACTIONS: Record<string, AuditActionMeta> = {
   // ── Ações de admin ────────────────────────────────────────────
-  client_create_admin: { label: "Conta de cliente criada", actor: "admin" },
+  client_create_admin: { label: "Conta criada (admin)", actor: "admin" },
   client_delete_admin: { label: "Conta de cliente apagada", actor: "admin" },
   client_ban: { label: "Cliente bloqueado", actor: "admin" },
   client_unban: { label: "Cliente desbloqueado", actor: "admin" },
@@ -33,6 +33,7 @@ export const AUDIT_ACTIONS: Record<string, AuditActionMeta> = {
   export_pii: { label: "Dados exportados (admin)", actor: "admin" },
 
   // ── Ações do próprio cliente ──────────────────────────────────
+  account_create_self: { label: "Conta criada (pelo cliente)", actor: "cliente" },
   booking_create_client: { label: "Sessão marcada", actor: "cliente" },
   booking_reschedule_client: { label: "Sessão movida", actor: "cliente" },
   booking_cancel_client: { label: "Sessão cancelada", actor: "cliente" },
