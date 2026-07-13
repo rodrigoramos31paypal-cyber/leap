@@ -28,8 +28,9 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { ForceUpdateButton } from "@/components/force-update-button";
-import { AuditFilter } from "./audit-filter";
-import { auditActionLabel, AUDIT_ACTIONS } from "./audit-log-labels";
+import { AuditControls } from "./audit-filter";
+import { AUDIT_ACTIONS } from "./audit-log-labels";
+import { AuditTable, type AuditRow } from "./audit-table";
 
 type TabId = "perfil" | "notificacoes" | "slideshow" | "regras" | "horarios" | "calendario" | "seguranca" | "registo" | "equipa";
 
@@ -54,6 +55,7 @@ export default async function DefinicoesPage(
       integration_removed?: string;
       action?: string;
       page?: string;
+      q?: string;
     }>;
   }
 ) {
@@ -138,6 +140,7 @@ export default async function DefinicoesPage(
           page={tabData.auditPage ?? 1}
           pageSize={tabData.auditPageSize ?? 10}
           action={tabData.auditAction ?? ""}
+          search={tabData.auditSearch ?? ""}
         />
       )}
       {activeTab === "equipa" && isOwner && <EquipaSection />}
@@ -181,7 +184,7 @@ async function loadTabData(
   supabase: Awaited<ReturnType<typeof createClient>>,
   trainer: NonNullable<Awaited<ReturnType<typeof getCurrentTrainer>>>,
   userId: string | undefined,
-  searchParams: { action?: string; page?: string },
+  searchParams: { action?: string; page?: string; q?: string },
 ) {
   const data: any = {};
 
@@ -192,9 +195,12 @@ async function loadTabData(
     // Só aceita ações conhecidas como filtro (evita queries com lixo).
     const rawAction = String(searchParams.action ?? "");
     const action = rawAction && rawAction in AUDIT_ACTIONS ? rawAction : "";
+    // Pesquisa por cliente (nome/email/telefone). Limita o tamanho.
+    const search = String(searchParams.q ?? "").trim().slice(0, 120);
 
     const { data: rows, error } = await (supabase as any).rpc("audit_log_page", {
       p_action: action || undefined,
+      p_search: search || undefined,
       p_limit: pageSize,
       p_offset: (pageNum - 1) * pageSize,
     });
@@ -210,6 +216,7 @@ async function loadTabData(
     data.auditPage = pageNum;
     data.auditPageSize = pageSize;
     data.auditAction = action;
+    data.auditSearch = search;
     return data;
   }
 
@@ -721,48 +728,23 @@ function SegurancaTab() {
 
 // ════════════════════════════════════════════════════════════════
 // Registo de atividade (audit log). Lista cronológica (mais recentes
-// primeiro), 10 por página, filtrável por ação. Visível a toda a equipa.
+// primeiro), 10 por página, filtrável por ação e pesquisável por cliente.
+// A tabela/cartões e o modal de detalhe vivem em audit-table.tsx (client).
 // ════════════════════════════════════════════════════════════════
-type AuditRow = {
-  id: string;
-  created_at: string;
-  action: string;
-  actor_name: string | null;
-  target_table: string | null;
-  target_id: string | null;
-  client_name: string | null;
-  ip_address: string | null;
-  payload: any;
-};
-
-function formatAuditDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString("pt-PT", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-      timeZone: "Europe/Lisbon",
-    });
-  } catch {
-    return iso;
-  }
-}
-
 function RegistoTab({
   rows,
   total,
   page,
   pageSize,
   action,
+  search,
 }: {
   rows: AuditRow[];
   total: number;
   page: number;
   pageSize: number;
   action: string;
+  search: string;
 }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -772,84 +754,26 @@ function RegistoTab({
     const params = new URLSearchParams();
     params.set("tab", "registo");
     if (action) params.set("action", action);
+    if (search) params.set("q", search);
     if (p > 1) params.set("page", String(p));
     return `/admin/definicoes?${params.toString()}`;
   };
 
   return (
     <div className="space-y-4">
-      <div className="card space-y-2 p-5">
+      <div className="card space-y-3 p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">
           Registo de atividade
         </h2>
         <p className="text-xs text-ink-500">
-          Todas as ações sensíveis — de administradores e de clientes — ficam
-          aqui registadas: quem fez, sobre que cliente, quando e a partir de que
-          IP. Útil para perceber alterações inesperadas em sessões ou contas.
+          Todas as ações sensíveis de admins ou clientes ficam aqui registadas.
         </p>
         <div className="pt-1">
-          <AuditFilter current={action} />
+          <AuditControls action={action} search={search} />
         </div>
       </div>
 
-      {/* Tabela (desktop) */}
-      <div className="card hidden overflow-x-auto p-0 md:block">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-ink-900/10 text-xs uppercase tracking-wide text-ink-500">
-            <tr>
-              <th className="px-4 py-3 font-medium">Ação</th>
-              <th className="px-4 py-3 font-medium">Cliente afetado</th>
-              <th className="px-4 py-3 font-medium">Feito por</th>
-              <th className="px-4 py-3 font-medium">Data e hora</th>
-              <th className="px-4 py-3 font-medium">IP</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-ink-500">
-                  Sem registos para mostrar.
-                </td>
-              </tr>
-            )}
-            {rows.map((r) => (
-              <tr key={r.id} className="border-b border-ink-900/5 last:border-0">
-                <td className="px-4 py-3">
-                  <span className="font-medium">{auditActionLabel(r.action)}</span>
-                </td>
-                <td className="px-4 py-3">{r.client_name ?? "—"}</td>
-                <td className="px-4 py-3">{r.actor_name ?? "Sistema / desconhecido"}</td>
-                <td className="px-4 py-3 tabular-nums">{formatAuditDate(r.created_at)}</td>
-                <td className="px-4 py-3 font-mono text-xs text-ink-500">{r.ip_address ?? "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Cartões (mobile) */}
-      <div className="space-y-2 md:hidden">
-        {rows.length === 0 && (
-          <div className="card p-5 text-center text-sm text-ink-500">
-            Sem registos para mostrar.
-          </div>
-        )}
-        {rows.map((r) => (
-          <div key={r.id} className="card space-y-1 p-4 text-sm">
-            <div className="font-medium">{auditActionLabel(r.action)}</div>
-            <div className="text-ink-500">
-              Cliente: <span className="text-ink-700 dark:text-bone-100">{r.client_name ?? "—"}</span>
-            </div>
-            <div className="text-ink-500">
-              Por: <span className="text-ink-700 dark:text-bone-100">{r.actor_name ?? "Sistema / desconhecido"}</span>
-            </div>
-            <div className="flex items-center justify-between text-xs text-ink-500">
-              <span className="tabular-nums">{formatAuditDate(r.created_at)}</span>
-              <span className="font-mono">{r.ip_address ?? "—"}</span>
-            </div>
-          </div>
-        ))}
-      </div>
+      <AuditTable rows={rows} />
 
       {/* Paginação */}
       <div className="flex items-center justify-between text-sm">
