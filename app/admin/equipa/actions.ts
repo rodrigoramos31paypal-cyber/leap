@@ -28,7 +28,9 @@ export async function addTrainerAction(formData: FormData): Promise<{ error?: st
       email,
       password,
       email_confirm: true,
-      user_metadata: { full_name: fullName },
+      // created_by_admin: evita que o trigger handle_new_user registe esta
+      // criação como auto-registo de cliente (é uma conta de staff).
+      user_metadata: { full_name: fullName, created_by_admin: true },
     });
     if (authErr || !created.user) {
       logError("addTrainerAction:createUser", authErr);

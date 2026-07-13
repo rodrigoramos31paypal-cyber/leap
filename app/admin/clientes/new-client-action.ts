@@ -46,7 +46,9 @@ export async function createClientAction(
       email,
       password: randomUUID() + randomUUID(), // aleatória — o cliente nunca faz login
       email_confirm: true, // sem email de confirmação
-      user_metadata: { full_name: name, phone, trainer_id: trainerId ?? undefined },
+      // created_by_admin: marca para o trigger handle_new_user NÃO registar
+      // isto como auto-registo (já registamos client_create_admin abaixo).
+      user_metadata: { full_name: name, phone, trainer_id: trainerId ?? undefined, created_by_admin: true },
     });
     if (authErr || !created?.user) {
       const m = String(authErr?.message ?? "");
