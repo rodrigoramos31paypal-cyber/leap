@@ -5,6 +5,7 @@ import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
+import { logAudit } from "@/lib/audit";
 import { revalidateProfileViews } from "@/lib/revalidate";
 
 // Mudar palavra-passe do utilizador autenticado.
@@ -61,6 +62,12 @@ export async function changePasswordAction(formData: FormData) {
     await setFlash("Não foi possível atualizar a palavra-passe.", "error");
     redirect("/app/perfil?tab=perfil");
   }
+  // Auditoria: mudança de palavra-passe pelo próprio utilizador (actor +
+  // IP). Antes do redirect — o redirect() lança internamente no Next.
+  await logAudit("password_change_self", {
+    targetTable: "profiles",
+    targetId: user.id,
+  });
   await setFlash("Palavra-passe atualizada");
   redirect("/app/perfil?tab=perfil");
 }
@@ -82,6 +89,13 @@ export async function updateProfileAction(formData: FormData) {
     logError("updateProfileAction", error);
     await setFlash("Não foi possível guardar o perfil", "error");
   } else {
+    // Auditoria: o cliente alterou o próprio nome/telefone (actor + IP).
+    // Antes do redirect, que lança internamente no Next.
+    await logAudit("profile_update_self", {
+      targetTable: "profiles",
+      targetId: user.id,
+      payload: { fields: ["full_name", "phone"] },
+    });
     await setFlash("Perfil actualizado");
   }
   revalidateProfileViews(user.id);
@@ -110,6 +124,14 @@ export async function deleteAccountAction(
     logError("deleteAccountAction:anonymize", rpcErr);
     return { ok: false, error: "Não foi possível apagar a conta. Tenta de novo ou contacta-nos." };
   }
+
+  // Auditoria: apagar/anonimizar a própria conta. Registamos AGORA, ainda
+  // com sessão válida (auth.uid() = uid) — antes do ban/signOut abaixo, que
+  // invalidariam o caller e fariam a RPC de auditoria falhar.
+  await logAudit("account_delete_self", {
+    targetTable: "profiles",
+    targetId: uid,
+  });
 
   try {
     const admin = createSupabaseAdmin(

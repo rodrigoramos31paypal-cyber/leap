@@ -24,11 +24,14 @@ import {
   UserCog,
   Bell,
   Images,
+  ScrollText,
 } from "lucide-react";
 import Link from "next/link";
 import { ForceUpdateButton } from "@/components/force-update-button";
+import { AuditFilter } from "./audit-filter";
+import { auditActionLabel, AUDIT_ACTIONS } from "./audit-log-labels";
 
-type TabId = "perfil" | "notificacoes" | "slideshow" | "regras" | "horarios" | "calendario" | "seguranca" | "equipa";
+type TabId = "perfil" | "notificacoes" | "slideshow" | "regras" | "horarios" | "calendario" | "seguranca" | "registo" | "equipa";
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode; ownerOnly?: boolean }[] = [
   { id: "perfil",     label: "Perfil",     icon: <User size={14} /> },
@@ -38,6 +41,7 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode; ownerOnly?: boole
   { id: "horarios",   label: "Horários",   icon: <Clock size={14} /> },
   { id: "calendario", label: "Calendário", icon: <CalendarIcon size={14} /> },
   { id: "seguranca",  label: "Segurança",  icon: <ShieldCheck size={14} /> },
+  { id: "registo",    label: "Registo de atividade", icon: <ScrollText size={14} /> },
   { id: "equipa",     label: "Equipa",     icon: <UserCog size={14} />, ownerOnly: true },
 ];
 
@@ -48,6 +52,8 @@ export default async function DefinicoesPage(
       integration_ok?: string;
       integration_error?: string;
       integration_removed?: string;
+      action?: string;
+      page?: string;
     }>;
   }
 ) {
@@ -76,7 +82,8 @@ export default async function DefinicoesPage(
       t === "regras" ||
       t === "horarios" ||
       t === "calendario" ||
-      t === "seguranca"
+      t === "seguranca" ||
+      t === "registo"
     )
       return t;
     if (t === "equipa" && isOwner) return "equipa";
@@ -86,7 +93,7 @@ export default async function DefinicoesPage(
   // PERF: só carrega os dados necessários para a aba activa. Antes carregava
   // tudo independentemente do que estava visível — agora só pagamos o que
   // mostramos.
-  const tabData = await loadTabData(activeTab, supabase, trainer, user?.id);
+  const tabData = await loadTabData(activeTab, supabase, trainer, user?.id, searchParams);
 
   return (
     <div className="space-y-5">
@@ -124,6 +131,15 @@ export default async function DefinicoesPage(
         />
       )}
       {activeTab === "seguranca" && <SegurancaTab />}
+      {activeTab === "registo" && (
+        <RegistoTab
+          rows={tabData.auditRows ?? []}
+          total={tabData.auditTotal ?? 0}
+          page={tabData.auditPage ?? 1}
+          pageSize={tabData.auditPageSize ?? 10}
+          action={tabData.auditAction ?? ""}
+        />
+      )}
       {activeTab === "equipa" && isOwner && <EquipaSection />}
     </div>
   );
@@ -165,8 +181,37 @@ async function loadTabData(
   supabase: Awaited<ReturnType<typeof createClient>>,
   trainer: NonNullable<Awaited<ReturnType<typeof getCurrentTrainer>>>,
   userId: string | undefined,
+  searchParams: { action?: string; page?: string },
 ) {
   const data: any = {};
+
+  if (tab === "registo") {
+    const pageSize = 10;
+    // Página 1-based no URL; offset 0-based na RPC.
+    const pageNum = Math.max(1, Number.parseInt(searchParams.page ?? "1", 10) || 1);
+    // Só aceita ações conhecidas como filtro (evita queries com lixo).
+    const rawAction = String(searchParams.action ?? "");
+    const action = rawAction && rawAction in AUDIT_ACTIONS ? rawAction : "";
+
+    const { data: rows, error } = await (supabase as any).rpc("audit_log_page", {
+      p_action: action || undefined,
+      p_limit: pageSize,
+      p_offset: (pageNum - 1) * pageSize,
+    });
+    if (error) {
+      // Falha a carregar não deve rebentar a página inteira das Definições.
+      data.auditRows = [];
+      data.auditTotal = 0;
+    } else {
+      const list = (rows ?? []) as any[];
+      data.auditRows = list;
+      data.auditTotal = list.length > 0 ? Number(list[0].total_count ?? 0) : 0;
+    }
+    data.auditPage = pageNum;
+    data.auditPageSize = pageSize;
+    data.auditAction = action;
+    return data;
+  }
 
   if (tab === "notificacoes") {
     const { data: prefsRows } = await (supabase as any)
@@ -669,6 +714,167 @@ function SegurancaTab() {
           em segundos; as fechadas já abrem na versão nova.
         </p>
         <ForceUpdateButton />
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════
+// Registo de atividade (audit log). Lista cronológica (mais recentes
+// primeiro), 10 por página, filtrável por ação. Visível a toda a equipa.
+// ════════════════════════════════════════════════════════════════
+type AuditRow = {
+  id: string;
+  created_at: string;
+  action: string;
+  actor_name: string | null;
+  target_table: string | null;
+  target_id: string | null;
+  client_name: string | null;
+  ip_address: string | null;
+  payload: any;
+};
+
+function formatAuditDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString("pt-PT", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: "Europe/Lisbon",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function RegistoTab({
+  rows,
+  total,
+  page,
+  pageSize,
+  action,
+}: {
+  rows: AuditRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  action: string;
+}) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, total);
+
+  const pageHref = (p: number) => {
+    const params = new URLSearchParams();
+    params.set("tab", "registo");
+    if (action) params.set("action", action);
+    if (p > 1) params.set("page", String(p));
+    return `/admin/definicoes?${params.toString()}`;
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="card space-y-2 p-5">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">
+          Registo de atividade
+        </h2>
+        <p className="text-xs text-ink-500">
+          Todas as ações sensíveis — de administradores e de clientes — ficam
+          aqui registadas: quem fez, sobre que cliente, quando e a partir de que
+          IP. Útil para perceber alterações inesperadas em sessões ou contas.
+        </p>
+        <div className="pt-1">
+          <AuditFilter current={action} />
+        </div>
+      </div>
+
+      {/* Tabela (desktop) */}
+      <div className="card hidden overflow-x-auto p-0 md:block">
+        <table className="w-full text-left text-sm">
+          <thead className="border-b border-ink-900/10 text-xs uppercase tracking-wide text-ink-500">
+            <tr>
+              <th className="px-4 py-3 font-medium">Ação</th>
+              <th className="px-4 py-3 font-medium">Cliente afetado</th>
+              <th className="px-4 py-3 font-medium">Feito por</th>
+              <th className="px-4 py-3 font-medium">Data e hora</th>
+              <th className="px-4 py-3 font-medium">IP</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-4 py-8 text-center text-ink-500">
+                  Sem registos para mostrar.
+                </td>
+              </tr>
+            )}
+            {rows.map((r) => (
+              <tr key={r.id} className="border-b border-ink-900/5 last:border-0">
+                <td className="px-4 py-3">
+                  <span className="font-medium">{auditActionLabel(r.action)}</span>
+                </td>
+                <td className="px-4 py-3">{r.client_name ?? "—"}</td>
+                <td className="px-4 py-3">{r.actor_name ?? "Sistema / desconhecido"}</td>
+                <td className="px-4 py-3 tabular-nums">{formatAuditDate(r.created_at)}</td>
+                <td className="px-4 py-3 font-mono text-xs text-ink-500">{r.ip_address ?? "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Cartões (mobile) */}
+      <div className="space-y-2 md:hidden">
+        {rows.length === 0 && (
+          <div className="card p-5 text-center text-sm text-ink-500">
+            Sem registos para mostrar.
+          </div>
+        )}
+        {rows.map((r) => (
+          <div key={r.id} className="card space-y-1 p-4 text-sm">
+            <div className="font-medium">{auditActionLabel(r.action)}</div>
+            <div className="text-ink-500">
+              Cliente: <span className="text-ink-700 dark:text-bone-100">{r.client_name ?? "—"}</span>
+            </div>
+            <div className="text-ink-500">
+              Por: <span className="text-ink-700 dark:text-bone-100">{r.actor_name ?? "Sistema / desconhecido"}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs text-ink-500">
+              <span className="tabular-nums">{formatAuditDate(r.created_at)}</span>
+              <span className="font-mono">{r.ip_address ?? "—"}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Paginação */}
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-ink-500">
+          {total === 0 ? "0 registos" : `${from}–${to} de ${total}`}
+        </span>
+        <div className="flex items-center gap-2">
+          {page > 1 ? (
+            <Link href={pageHref(page - 1)} className="btn-outline">
+              Anterior
+            </Link>
+          ) : (
+            <span className="btn-outline pointer-events-none opacity-40">Anterior</span>
+          )}
+          <span className="text-xs text-ink-500 tabular-nums">
+            Página {page} de {totalPages}
+          </span>
+          {page < totalPages ? (
+            <Link href={pageHref(page + 1)} className="btn-outline">
+              Seguinte
+            </Link>
+          ) : (
+            <span className="btn-outline pointer-events-none opacity-40">Seguinte</span>
+          )}
+        </div>
       </div>
     </div>
   );

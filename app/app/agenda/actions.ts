@@ -10,6 +10,7 @@ import { setFlash } from "@/lib/flash";
 import { logError, userFacingRpcError } from "@/lib/errors";
 import { revalidateBookingViews } from "@/lib/revalidate";
 import { formatDateTime } from "@/lib/utils";
+import { logAudit } from "@/lib/audit";
 import type { SessionType } from "@/types/database";
 
 const NOTE_MAX_LEN = 5000;
@@ -244,6 +245,13 @@ export async function bookAction({
 
     await sideEffects;
 
+    // Auditoria: marcação criada pelo PRÓPRIO cliente (actor = auth.uid()).
+    await logAudit("booking_create_client", {
+      targetTable: "bookings",
+      targetId: bookingId,
+      payload: { trainerId, sessionType, durationMin },
+    });
+
     const pending = (b as any)?.status === "booked";
     await setFlash(pending ? "Marcação criada — a aguardar aprovação" : "Marcação confirmada");
     revalidateBookingViews();
@@ -320,6 +328,15 @@ export async function rescheduleAction({
 
   await sideEffects;
 
+  // Auditoria: reagendamento feito pelo PRÓPRIO cliente. Guarda a NOVA
+  // marcação como target e a antiga no payload (a RPC cancela a antiga e
+  // cria a nova). actor = auth.uid() + IP.
+  await logAudit("booking_reschedule_client", {
+    targetTable: "bookings",
+    targetId: newId as string,
+    payload: { from: oldBookingId },
+  });
+
   const pending = (b as any)?.status === "booked";
   await setFlash(pending ? "Sessão reagendada — a aguardar aprovação" : "Sessão reagendada");
   revalidateBookingViews();
@@ -374,6 +391,22 @@ export async function bookRecurringAction({
         tasks.push(persistClientSeriesNote(result.booking_ids, note));
       }
       await Promise.allSettled(tasks);
+
+      // Auditoria: série marcada pelo próprio cliente. Um único evento
+      // (target = 1ª marcação) com a contagem no payload, para não encher
+      // o registo com uma linha por sessão.
+      await logAudit("booking_create_client", {
+        targetTable: "bookings",
+        targetId: result.booking_ids[0],
+        payload: {
+          trainerId,
+          sessionType,
+          durationMin,
+          series: true,
+          count: result.booking_ids.length,
+        },
+      });
+
       revalidateBookingViews();
     }
 

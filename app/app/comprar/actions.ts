@@ -7,6 +7,7 @@ import { logError, userFacingRpcError } from "@/lib/errors";
 import { revalidateCreditsViews } from "@/lib/revalidate";
 import { setFlash } from "@/lib/flash";
 import { rateLimit } from "@/lib/rate-limit";
+import { logAudit } from "@/lib/audit";
 import type { PaymentMethod } from "@/types/database";
 
 // Apenas pagamentos manuais (MB WAY / Revolut). Ambos exigem confirmação
@@ -35,6 +36,13 @@ export async function startPurchaseAction({
 
   try {
     const purchaseId = await createPurchase(packId, method);
+    // Auditoria: compra iniciada pelo cliente (fica a aguardar confirmação
+    // manual do admin). actor = auth.uid() + IP.
+    await logAudit("purchase_create_client", {
+      targetTable: "purchases",
+      targetId: purchaseId,
+      payload: { packId, method },
+    });
     await dispatchPurchasePending(purchaseId).catch(() => {});
     revalidateCreditsViews();
     await setFlash("Compra criada — segue as instruções de pagamento", "info");
