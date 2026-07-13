@@ -154,11 +154,10 @@ export async function getAvailableSlots(args: {
     }
   }
 
-  const slots: Slot[] = [];
   const slotMs = durationMin * 60_000;
   const stepMs = (durationMin + buffer) * 60_000;
-  const now = Date.now();
-  const bookableFrom = now + noticeHours * 3_600_000;
+  const bufferMs = buffer * 60_000;
+  const bookableFrom = Date.now() + noticeHours * 3_600_000;
 
   // Janelas de disponibilidade do dia (em ms), calculadas uma só vez.
   const windows = avail.map((a) => {
@@ -170,8 +169,29 @@ export async function getAvailableSlots(args: {
     };
   });
 
-  const bufferMs = buffer * 60_000;
+  const slots = generateSlots(windows, busy, { slotMs, stepMs, bufferMs, bookableFrom });
+  slots.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+  return slots;
+}
 
+// ════════════════════════════════════════════════════════════════
+// generateSlots · núcleo PURO do cálculo de slots, partilhado por
+// getAvailableSlots (um dia) e getAvailableDays (um intervalo). Manter
+// UMA só implementação garante que "dia tem disponibilidade" e "lista de
+// horários do dia" nunca divergem (um dia nunca aparece sem horários, nem
+// desaparece tendo-os).
+//
+// `stopAtFirst`: devolve assim que encontra o 1.º slot — usado para saber
+// apenas SE o dia tem disponibilidade, sem gerar a lista inteira.
+// ════════════════════════════════════════════════════════════════
+function generateSlots(
+  windows: Array<{ start: number; end: number }>,
+  busy: Array<{ start: number; end: number }>,
+  opts: { slotMs: number; stepMs: number; bufferMs: number; bookableFrom: number },
+  stopAtFirst = false,
+): Slot[] {
+  const { slotMs, stepMs, bufferMs, bookableFrom } = opts;
+  const slots: Slot[] = [];
   for (const win of windows) {
     // Um cursor avança pela janela. Em condições normais isto é apenas a
     // grelha de (duração + buffer) a partir do início da janela: 07:15,
@@ -198,13 +218,178 @@ export async function getAvailableSlots(args: {
       }
       if (cursor >= bookableFrom) {
         slots.push({ startsAt: new Date(cursor), endsAt: new Date(slotEnd) });
+        if (stopAtFirst) return slots;
       }
       cursor += stepMs;
     }
   }
-
-  slots.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
   return slots;
+}
+
+// ════════════════════════════════════════════════════════════════
+// getAvailableDays · devolve, para um intervalo de dias [from, to], as
+// datas ("YYYY-MM-DD") que têm PELO MENOS 1 horário livre para o trainer
+// e duração dados. Usado pelo fluxo de marcação do cliente para esconder
+// dias sem disponibilidade (cheios ou fora de horário).
+//
+// PERF: faz um punhado de queries de INTERVALO (disponibilidade, settings,
+// ocupação, bloqueios, recorrentes, skips) e depois varre os dias EM
+// MEMÓRIA — em vez de ~6 queries por dia. Reutiliza generateSlots com
+// stopAtFirst, por isso o resultado é sempre coerente com /api/slots.
+//
+// `from`/`to` são a meia-noite UTC do 1.º e último dia-calendário (como o
+// `date` de getAvailableSlots). O intervalo é limitado a 100 dias.
+// ════════════════════════════════════════════════════════════════
+export async function getAvailableDays(args: {
+  trainerId: string;
+  from: Date;
+  to: Date;
+  durationMin: number;
+}): Promise<string[]> {
+  const { trainerId, from, to, durationMin } = args;
+  if (!durationMin || durationMin <= 0) return [];
+
+  const supabase = await createClient();
+
+  const fromY = from.getUTCFullYear();
+  const fromMo = from.getUTCMonth();
+  const fromD = from.getUTCDate();
+  const toY = to.getUTCFullYear();
+  const toMo = to.getUTCMonth();
+  const toD = to.getUTCDate();
+
+  const rangeStart = wallToUtc(fromY, fromMo, fromD, 0, 0);
+  const rangeEnd = wallToUtc(toY, toMo, toD + 1, 0, 0);
+  const ymdUTC = (y: number, mo: number, d: number) =>
+    `${y}-${String(mo + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  const fromDateStr = ymdUTC(fromY, fromMo, fromD);
+  const toDateStr = ymdUTC(toY, toMo, toD);
+
+  const [{ data: avail }, { data: settings }] = await Promise.all([
+    supabase
+      .from("trainer_availability")
+      .select("day_of_week, start_time, end_time, active")
+      .eq("trainer_id", trainerId)
+      .eq("active", true),
+    (supabase as any)
+      .from("trainer_settings")
+      .select("buffer_between_sessions_min, min_booking_notice_hours")
+      .eq("trainer_id", trainerId)
+      .single(),
+  ]);
+  if (!avail || avail.length === 0) return [];
+
+  const buffer = (settings as any)?.buffer_between_sessions_min ?? 0;
+  const noticeHraw = Number((settings as any)?.min_booking_notice_hours);
+  const noticeHours = Number.isFinite(noticeHraw) && noticeHraw >= 0 ? noticeHraw : 12;
+
+  const [{ data: bookings }, { data: blocks }, { data: recurring }, { data: skips }] =
+    await Promise.all([
+      (supabase as any)
+        .from("public_busy_times")
+        .select("starts_at, ends_at")
+        .eq("trainer_id", trainerId)
+        .gte("starts_at", rangeStart.toISOString())
+        .lt("starts_at", rangeEnd.toISOString()),
+      supabase
+        .from("public_blocked_times")
+        .select("starts_at, ends_at")
+        .eq("trainer_id", trainerId)
+        .lt("starts_at", rangeEnd.toISOString())
+        .gt("ends_at", rangeStart.toISOString()),
+      (supabase as any)
+        .from("public_recurring_blocks")
+        .select("day_of_week, start_time, end_time")
+        .eq("trainer_id", trainerId),
+      (supabase as any)
+        .from("public_recurring_block_skips")
+        .select("skip_date")
+        .eq("trainer_id", trainerId)
+        .gte("skip_date", fromDateStr)
+        .lte("skip_date", toDateStr),
+    ]);
+
+  // Agrupa por dia-da-semana / data para o varrimento em memória.
+  const availByDow = new Map<number, Array<{ start_time: string; end_time: string }>>();
+  for (const a of avail as any[]) {
+    const arr = availByDow.get(a.day_of_week) ?? [];
+    arr.push(a);
+    availByDow.set(a.day_of_week, arr);
+  }
+  const recurringByDow = new Map<number, Array<{ start_time: string; end_time: string }>>();
+  for (const r of (recurring ?? []) as any[]) {
+    const arr = recurringByDow.get(r.day_of_week) ?? [];
+    arr.push(r);
+    recurringByDow.set(r.day_of_week, arr);
+  }
+  const skipSet = new Set<string>(((skips ?? []) as any[]).map((s) => String(s.skip_date)));
+  const bookingIntervals = ((bookings ?? []) as any[]).map((b) => ({
+    start: new Date(b.starts_at).getTime(),
+    end: new Date(b.ends_at).getTime(),
+  }));
+  const blockIntervals = ((blocks ?? []) as any[]).map((b) => ({
+    start: new Date(b.starts_at!).getTime(),
+    end: new Date(b.ends_at!).getTime(),
+  }));
+
+  const slotMs = durationMin * 60_000;
+  const stepMs = (durationMin + buffer) * 60_000;
+  const bufferMs = buffer * 60_000;
+  const bookableFrom = Date.now() + noticeHours * 3_600_000;
+
+  const result: string[] = [];
+  const cur = new Date(Date.UTC(fromY, fromMo, fromD));
+  const last = new Date(Date.UTC(toY, toMo, toD));
+  let guardDays = 0;
+  while (cur.getTime() <= last.getTime() && guardDays++ < 400) {
+    const y = cur.getUTCFullYear();
+    const mo = cur.getUTCMonth();
+    const d = cur.getUTCDate();
+    const dow = cur.getUTCDay();
+    const dayAvail = availByDow.get(dow);
+    if (dayAvail && dayAvail.length > 0) {
+      const dayStart = wallToUtc(y, mo, d, 0, 0).getTime();
+      const dayEnd = wallToUtc(y, mo, d + 1, 0, 0).getTime();
+      const dateStr = ymdUTC(y, mo, d);
+
+      const busy: Array<{ start: number; end: number }> = [];
+      // Marcações: incluídas se COMEÇAM neste dia (igual a getAvailableSlots).
+      for (const b of bookingIntervals) {
+        if (b.start >= dayStart && b.start < dayEnd) busy.push(b);
+      }
+      // Bloqueios: incluídos se SOBREPÕEM o dia.
+      for (const b of blockIntervals) {
+        if (b.start < dayEnd && b.end > dayStart) busy.push(b);
+      }
+      // Recorrentes: aplicam-se ao dia-da-semana, salvo skip nessa data.
+      if (!skipSet.has(dateStr)) {
+        for (const rb of recurringByDow.get(dow) ?? []) {
+          const [rsh, rsm] = String(rb.start_time).split(":").map(Number);
+          const [reh, rem] = String(rb.end_time).split(":").map(Number);
+          busy.push({
+            start: wallToUtc(y, mo, d, rsh, rsm).getTime(),
+            end: wallToUtc(y, mo, d, reh, rem).getTime(),
+          });
+        }
+      }
+
+      const windows = dayAvail.map((a) => {
+        const [sh, sm] = a.start_time.split(":").map(Number);
+        const [eh, em] = a.end_time.split(":").map(Number);
+        return {
+          start: wallToUtc(y, mo, d, sh, sm).getTime(),
+          end: wallToUtc(y, mo, d, eh, em).getTime(),
+        };
+      });
+
+      const hasAny =
+        generateSlots(windows, busy, { slotMs, stepMs, bufferMs, bookableFrom }, true).length > 0;
+      if (hasAny) result.push(dateStr);
+    }
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+
+  return result;
 }
 
 
