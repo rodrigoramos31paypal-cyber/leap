@@ -115,7 +115,7 @@ export function AuditControls({
   };
 
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-2">
       <label className="flex items-center gap-2 text-sm">
         <span className="text-ink-500">Filtrar:</span>
         <select
@@ -144,7 +144,7 @@ export function AuditControls({
 
       <div ref={wrapRef} className="relative">
         <div className="flex items-center gap-2">
-          <div className="relative">
+          <div className="relative flex-1">
             <Search
               size={14}
               className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-ink-500"
@@ -157,7 +157,7 @@ export function AuditControls({
               onKeyDown={onKeyDown}
               placeholder="nome/e-mail/telefone"
               autoComplete="off"
-              className="input h-9 w-full py-1 pl-7 sm:w-72"
+              className="input h-9 w-full py-1 pl-7"
             />
           </div>
           {clientId || search ? (
