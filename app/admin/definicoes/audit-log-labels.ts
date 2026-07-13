@@ -43,10 +43,33 @@ export const AUDIT_ACTIONS: Record<string, AuditActionMeta> = {
   export_pii_self: { label: "Dados exportados (cliente)", actor: "cliente" },
 };
 
-/** Ordem de apresentação no dropdown de filtro (agrupada e estável). */
+/** Ordem de apresentação no dropdown de filtro (lista plana). */
 export const AUDIT_FILTER_OPTIONS: { value: string; label: string }[] = Object.entries(
   AUDIT_ACTIONS,
 ).map(([value, meta]) => ({ value, label: meta.label }));
+
+/**
+ * Opções agrupadas para o dropdown de filtro (Admin vs Cliente). Encurta
+ * visualmente a lista e ajuda a escolher — cada ação aparece sob o grupo
+ * de quem tipicamente a faz.
+ */
+export const AUDIT_FILTER_GROUPS: {
+  group: string;
+  options: { value: string; label: string }[];
+}[] = [
+  {
+    group: "Admin",
+    options: Object.entries(AUDIT_ACTIONS)
+      .filter(([, m]) => m.actor === "admin")
+      .map(([value, m]) => ({ value, label: m.label })),
+  },
+  {
+    group: "Cliente",
+    options: Object.entries(AUDIT_ACTIONS)
+      .filter(([, m]) => m.actor === "cliente")
+      .map(([value, m]) => ({ value, label: m.label })),
+  },
+];
 
 /** Rótulo legível para uma ação; cai para a própria string se desconhecida. */
 export function auditActionLabel(action: string): string {
