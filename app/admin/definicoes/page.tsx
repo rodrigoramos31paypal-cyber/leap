@@ -56,6 +56,7 @@ export default async function DefinicoesPage(
       action?: string;
       page?: string;
       q?: string;
+      client?: string;
     }>;
   }
 ) {
@@ -141,6 +142,8 @@ export default async function DefinicoesPage(
           pageSize={tabData.auditPageSize ?? 10}
           action={tabData.auditAction ?? ""}
           search={tabData.auditSearch ?? ""}
+          clientId={tabData.auditClientId ?? ""}
+          clientName={tabData.auditClientName ?? ""}
         />
       )}
       {activeTab === "equipa" && isOwner && <EquipaSection />}
@@ -184,7 +187,7 @@ async function loadTabData(
   supabase: Awaited<ReturnType<typeof createClient>>,
   trainer: NonNullable<Awaited<ReturnType<typeof getCurrentTrainer>>>,
   userId: string | undefined,
-  searchParams: { action?: string; page?: string; q?: string },
+  searchParams: { action?: string; page?: string; q?: string; client?: string },
 ) {
   const data: any = {};
 
@@ -197,10 +200,27 @@ async function loadTabData(
     const action = rawAction && rawAction in AUDIT_ACTIONS ? rawAction : "";
     // Pesquisa por cliente (nome/email/telefone). Limita o tamanho.
     const search = String(searchParams.q ?? "").trim().slice(0, 120);
+    // Filtro exato por cliente escolhido no typeahead (só uuid válido).
+    const rawClient = String(searchParams.client ?? "");
+    const clientId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawClient)
+      ? rawClient
+      : "";
+
+    // Nome do cliente escolhido, para pré-preencher a caixa de pesquisa.
+    let clientName = "";
+    if (clientId) {
+      const { data: cp } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", clientId)
+        .maybeSingle();
+      clientName = ((cp as any)?.full_name as string | undefined) ?? "";
+    }
 
     const { data: rows, error } = await (supabase as any).rpc("audit_log_page", {
       p_action: action || undefined,
-      p_search: search || undefined,
+      p_search: clientId ? undefined : search || undefined,
+      p_client_id: clientId || undefined,
       p_limit: pageSize,
       p_offset: (pageNum - 1) * pageSize,
     });
@@ -217,6 +237,8 @@ async function loadTabData(
     data.auditPageSize = pageSize;
     data.auditAction = action;
     data.auditSearch = search;
+    data.auditClientId = clientId;
+    data.auditClientName = clientName;
     return data;
   }
 
@@ -738,6 +760,8 @@ function RegistoTab({
   pageSize,
   action,
   search,
+  clientId,
+  clientName,
 }: {
   rows: AuditRow[];
   total: number;
@@ -745,6 +769,8 @@ function RegistoTab({
   pageSize: number;
   action: string;
   search: string;
+  clientId: string;
+  clientName: string;
 }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -754,7 +780,8 @@ function RegistoTab({
     const params = new URLSearchParams();
     params.set("tab", "registo");
     if (action) params.set("action", action);
-    if (search) params.set("q", search);
+    if (clientId) params.set("client", clientId);
+    else if (search) params.set("q", search);
     if (p > 1) params.set("page", String(p));
     return `/admin/definicoes?${params.toString()}`;
   };
@@ -769,7 +796,12 @@ function RegistoTab({
           Todas as ações sensíveis de admins ou clientes ficam aqui registadas.
         </p>
         <div className="pt-1">
-          <AuditControls action={action} search={search} />
+          <AuditControls
+            action={action}
+            search={search}
+            clientId={clientId}
+            clientName={clientName}
+          />
         </div>
       </div>
 
