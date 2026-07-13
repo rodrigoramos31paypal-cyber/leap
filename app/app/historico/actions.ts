@@ -8,6 +8,7 @@ import { removeBookingFromCalendars } from "@/lib/calendar-sync";
 import { createClient } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
+import { logAudit } from "@/lib/audit";
 
 async function wasRefunded(bookingId: string): Promise<boolean> {
   const supabase = await createClient();
@@ -29,6 +30,14 @@ export async function cancelBookingAction(formData: FormData) {
     // abaixo usam service role mas só correm com um bookingId que o
     // cliente comprovou ser seu — e não devolvem dados ao caller.
     const refunded = await wasRefunded(bookingId);
+    // Auditoria: cancelamento feito pelo PRÓPRIO cliente. Regista actor
+    // (=cliente, via auth.uid()) + IP, para distinguir de cancelamentos
+    // de admin (booking_cancel_admin) e de eventuais acessos indevidos.
+    await logAudit("booking_cancel_client", {
+      targetTable: "bookings",
+      targetId: bookingId,
+      payload: { refunded },
+    });
     await dispatchBookingCancelled(bookingId, refunded).catch(() => {});
     await removeBookingFromCalendars(bookingId).catch(() => {});
     await setFlash(
