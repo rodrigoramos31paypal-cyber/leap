@@ -7,11 +7,12 @@ import { Pagination } from "@/components/pagination";
 import { ClientSearch } from "@/components/client-search";
 import { ListSkeleton } from "@/components/skeleton";
 import { NewClientButton } from "./new-client-button";
+import { RecentToggle } from "./recent-toggle";
 
 // "new" foi removido (decisão de produto). "todos" passou a "Todos clientes"
 // no label e a incluir clientes que se registaram com o trainer mas ainda
 // não compraram/marcaram (ver lib/trainer.ts getClientIdsInScope).
-type Tab = "todos" | "upcoming" | "past" | "esgotar";
+type Tab = "todos" | "recent" | "upcoming" | "past" | "esgotar";
 
 type ClientRow = {
   id: string;
@@ -23,7 +24,7 @@ type ClientRow = {
 const PAGE_SIZE = 10;
 
 function resolveTab(raw?: string): Tab {
-  if (raw === "todos" || raw === "past" || raw === "esgotar" || raw === "upcoming") return raw as Tab;
+  if (raw === "todos" || raw === "recent" || raw === "past" || raw === "esgotar" || raw === "upcoming") return raw as Tab;
   // "new" foi removido — qualquer link antigo cai em "todos" (que agora
   // inclui também os recém-registados). Default da página: "todos clientes".
   return "todos";
@@ -32,6 +33,7 @@ function resolveTab(raw?: string): Tab {
 function labelFor(tab: Tab, q: string): string {
   if (q) return "";
   if (tab === "todos") return "Todos os clientes";
+  if (tab === "recent") return "Últimos clientes (mais recentes primeiro)";
   if (tab === "upcoming") return "Clientes com próximas sessões";
   if (tab === "past") return "Clientes com sessões passadas";
   return "Clientes a esgotar sessões (≤ 2)";
@@ -70,12 +72,15 @@ export default async function ClientesPage(
 
       {!q && (
         <div className="flex flex-wrap gap-1 rounded-lg border border-ink-900/10 bg-white p-1 text-sm dark:border-white/10 dark:bg-ink-800">
-          <TabLink current={tab} value="todos" label="Todos clientes" />
-          <TabLink current={tab} value="upcoming" label="Próximas sessões" />
-          <TabLink current={tab} value="past" label="Sessões passadas" />
-          <TabLink current={tab} value="esgotar" label="Esgotar sessões" />
+          {/* "recent" é um sub-modo de "todos" → realça o separador "Todos". */}
+          <TabLink current={tab === "recent" ? "todos" : tab} value="todos" label="Todos clientes" />
+          <TabLink current={tab === "recent" ? "todos" : tab} value="upcoming" label="Próximas sessões" />
+          <TabLink current={tab === "recent" ? "todos" : tab} value="past" label="Sessões passadas" />
+          <TabLink current={tab === "recent" ? "todos" : tab} value="esgotar" label="Esgotar sessões" />
         </div>
       )}
+
+      {!q && (tab === "todos" || tab === "recent") && <RecentToggle tab={tab} />}
 
       <Suspense key={`${tab}-${q}-${page}`} fallback={<ListSkeleton rows={PAGE_SIZE} />}>
         <ClientList q={q} tab={tab} page={page} />
@@ -124,8 +129,8 @@ async function ClientList({ q, tab, page }: { q: string; tab: Tab; page: number 
       clients = (data ?? []) as ClientRow[];
       total = count ?? clients.length;
     }
-  } else if (tab === "todos") {
-    ({ clients, total } = await loadAllClientsPage(trainerIds, from));
+  } else if (tab === "todos" || tab === "recent") {
+    ({ clients, total } = await loadAllClientsPage(trainerIds, from, tab === "recent"));
   } else if (tab === "upcoming" || tab === "past") {
     ({ clients, total } = await loadScopedClientPage(tab, trainerIds, trainerScope, from));
   } else {
@@ -214,8 +219,13 @@ async function ClientList({ q, tab, page }: { q: string; tab: Tab; page: number 
 async function loadAllClientsPage(
   trainerIds: string[],
   from: number,
+  // recent=true → ordena por data de criação (mais recentes primeiro),
+  // em vez de por nome. Usado pela vista "Últimos clientes".
+  recent = false,
 ): Promise<{ clients: ClientRow[]; total: number }> {
   const supabase = await createClient();
+  const applyOrder = (query: any) =>
+    recent ? query.order("created_at", { ascending: false }) : query.order("full_name");
 
   // OWNER: vê TODOS os clientes do estúdio, incluindo "órfãos" — contas que
   // se registaram fora de um link de trainer (profiles.trainer_id NULL) e
@@ -225,26 +235,26 @@ async function loadAllClientsPage(
   // owner isso é indesejado — ele gere o estúdio todo. Exclui anonimizados.
   const profile = await getCurrentProfile();
   if (profile?.role === "owner") {
-    const { data, count } = await (supabase as any)
-      .from("profiles")
-      .select("id, full_name, email, phone", { count: "exact" })
-      .eq("role", "client")
-      .not("email", "ilike", "%@removido.invalid")
-      .order("full_name")
-      .range(from, from + PAGE_SIZE - 1);
+    const { data, count } = await applyOrder(
+      (supabase as any)
+        .from("profiles")
+        .select("id, full_name, email, phone", { count: "exact" })
+        .eq("role", "client")
+        .not("email", "ilike", "%@removido.invalid"),
+    ).range(from, from + PAGE_SIZE - 1);
     return { clients: (data ?? []) as ClientRow[], total: count ?? 0 };
   }
 
   // TRAINER: mantém-se scoped — só os seus clientes.
   const ids = await getClientIdsInScope(trainerIds);
   if (ids.length === 0) return { clients: [], total: 0 };
-  const { data, count } = await supabase
-    .from("profiles")
-    .select("id, full_name, email, phone", { count: "exact" })
-    .eq("role", "client")
-    .in("id", ids)
-    .order("full_name")
-    .range(from, from + PAGE_SIZE - 1);
+  const { data, count } = await applyOrder(
+    supabase
+      .from("profiles")
+      .select("id, full_name, email, phone", { count: "exact" })
+      .eq("role", "client")
+      .in("id", ids),
+  ).range(from, from + PAGE_SIZE - 1);
   return { clients: (data ?? []) as ClientRow[], total: count ?? 0 };
 }
 

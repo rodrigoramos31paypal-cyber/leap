@@ -497,6 +497,26 @@ export async function rescheduleBookingAdminAction(args: {
     return { error: "Data ou hora inválida." };
   }
 
+  // Captura o horário ANTIGO antes de reagendar. A RPC admin actualiza a
+  // marcação NO LUGAR (sobrescreve starts_at/ends_at e devolve o MESMO id),
+  // por isso sem isto o "de" perde-se. Guardamos no payload de auditoria
+  // para o Registo mostrar "de → para". Best-effort: se falhar, o modal cai
+  // no modo simples.
+  let fromStartsAt: string | undefined;
+  let fromEndsAt: string | undefined;
+  try {
+    const supabase = await createClient();
+    const { data: ob } = await supabase
+      .from("bookings")
+      .select("starts_at, ends_at")
+      .eq("id", bookingId)
+      .maybeSingle();
+    fromStartsAt = (ob as any)?.starts_at ?? undefined;
+    fromEndsAt = (ob as any)?.ends_at ?? undefined;
+  } catch {
+    /* best-effort */
+  }
+
   try {
     const newId = await rescheduleBookingAdmin({
       oldBookingId: bookingId,
@@ -517,7 +537,7 @@ export async function rescheduleBookingAdminAction(args: {
     await logAudit("booking_reschedule_admin", {
       targetTable: "bookings",
       targetId: newId,
-      payload: { from: bookingId, notify },
+      payload: { from: bookingId, notify, fromStartsAt, fromEndsAt },
     });
     await setFlash("Sessão reagendada");
     // Um reagendamento liberta o horário antigo e ocupa um novo → afecta

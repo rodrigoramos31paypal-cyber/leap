@@ -277,13 +277,18 @@ export async function rescheduleAction({
   note?: string;
 }): Promise<{ ok?: true; error?: string; pending?: boolean }> {
   const supabase = await createClient();
-  // Antecedência mínima também se aplica ao novo horário do reagendamento.
+  // Horário ANTIGO (para o Registo mostrar "de → para") + verificação da
+  // antecedência mínima, ambas a partir da mesma leitura da marcação.
+  let fromStartsAt: string | undefined;
+  let fromEndsAt: string | undefined;
   {
     const { data: ob } = await supabase
       .from("bookings")
-      .select("trainer_id")
+      .select("trainer_id, starts_at, ends_at")
       .eq("id", oldBookingId)
       .maybeSingle();
+    fromStartsAt = (ob as any)?.starts_at ?? undefined;
+    fromEndsAt = (ob as any)?.ends_at ?? undefined;
     const noticeErr = ob
       ? await bookingNoticeError((ob as any).trainer_id, startsAtIso)
       : null;
@@ -334,7 +339,7 @@ export async function rescheduleAction({
   await logAudit("booking_reschedule_client", {
     targetTable: "bookings",
     targetId: newId as string,
-    payload: { from: oldBookingId },
+    payload: { from: oldBookingId, fromStartsAt, fromEndsAt },
   });
 
   const pending = (b as any)?.status === "booked";

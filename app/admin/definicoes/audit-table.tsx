@@ -106,6 +106,18 @@ function DetailModal({
   onClose: () => void;
 }) {
   const reschedule = isReschedule(row);
+  // Horário anterior: preferimos o que ficou gravado no payload (funciona
+  // mesmo para o reagendamento de ADMIN, que actualiza a marcação no lugar
+  // e perderia o "de"). Fallback: o que o servidor conseguir buscar da
+  // marcação antiga (rows antigas só têm `from`).
+  const payloadPrev =
+    reschedule && row.payload?.fromStartsAt && row.payload?.fromEndsAt
+      ? {
+          startsAt: String(row.payload.fromStartsAt),
+          endsAt: String(row.payload.fromEndsAt),
+        }
+      : null;
+  const previous = payloadPrev ?? detail?.previous ?? null;
 
   return (
     <div
@@ -143,12 +155,12 @@ function DetailModal({
             <Field label="Cliente" value={detail.clientName ?? row.client_name ?? "—"} />
             <Field label="Trainer" value={detail.trainerName ?? "—"} />
 
-            {reschedule && detail.previous ? (
+            {reschedule && previous ? (
               <div className="space-y-1">
                 <div className="text-xs uppercase tracking-wide text-ink-500">Alteração de horário</div>
                 <div className="flex flex-col gap-1 rounded-lg bg-bone-100 p-3 dark:bg-white/[0.04] sm:flex-row sm:items-center sm:gap-2">
                   <span className="text-ink-500 line-through">
-                    {fmtSlot(detail.previous.startsAt, detail.previous.endsAt)}
+                    {fmtSlot(previous.startsAt, previous.endsAt)}
                   </span>
                   <ArrowRight size={14} className="hidden shrink-0 text-ink-500 sm:block" />
                   <span className="font-medium">
