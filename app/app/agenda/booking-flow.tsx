@@ -72,6 +72,11 @@ export function BookingFlow({
   // Mês seleccionado no filtro (chave "ano-mês"). Por defeito, o mês de hoje.
   const [monthKey, setMonthKey] = useState<string>(() => monthKeyOf(startOfDay(new Date())));
   const [slots, setSlots] = useState<{ startsAt: string; endsAt: string }[]>([]);
+  // Dias com >=1 horário livre (para esconder dias cheios/sem horário).
+  // null = ainda a carregar → fallback: mostra todos os dias.
+  const [availableDays, setAvailableDays] = useState<Set<string> | null>(null);
+  // Contador para forçar recarregar a disponibilidade (ex.: ao voltar à app).
+  const [reloadTick, setReloadTick] = useState(0);
   const [picked, setPicked] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -153,6 +158,50 @@ export function BookingFlow({
     };
   }, [trainerId, date, duration]);
 
+  // Carrega os dias com disponibilidade (janela de 90 dias) para o trainer
+  // e duração atuais. Refeito quando a duração muda. Sem cache → reflecte
+  // marcações/cancelamentos a cada carregamento (o pedido "dinâmico").
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const today = startOfDay(new Date());
+      const toD = new Date(today);
+      toD.setDate(toD.getDate() + 89);
+      const params = new URLSearchParams({
+        trainer: trainerId,
+        from: ymd(today),
+        to: ymd(toD),
+        duration: String(duration),
+      });
+      try {
+        const res = await fetch(`/api/available-days?${params.toString()}`, {
+          credentials: "same-origin",
+        });
+        if (cancelled) return;
+        if (res.ok) {
+          const data = await res.json();
+          setAvailableDays(new Set<string>((data.days ?? []) as string[]));
+        }
+      } catch {
+        // falha de rede → mantém null (fallback: mostra todos os dias).
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [trainerId, duration, reloadTick]);
+
+  // Recarrega a disponibilidade quando o cliente volta à app (troca de
+  // separador/app e regressa). Cobre o caso "outro cliente marcou entretanto
+  // o último horário deste dia" sem precisar de recarregar a página.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") setReloadTick((t) => t + 1);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
   const days = useMemo(() => {
     const today = startOfDay(new Date());
     // 90 dias de horizonte de marcação (cliente). Como são muitos dias para
@@ -167,11 +216,20 @@ export function BookingFlow({
 
   const currentYear = new Date().getFullYear();
 
-  // Meses abrangidos pela janela de 90 dias (para o filtro de mês). Guarda o
-  // 1.º dia disponível de cada mês para saltar lá ao clicar.
+  // Dias efectivamente mostráveis: se já sabemos a disponibilidade, filtra
+  // os que têm >=1 horário livre; enquanto não sabemos (null), mostra todos
+  // (fallback gracioso — nunca deixa o cliente sem opções por causa de rede).
+  const availableDaysList = useMemo(
+    () => (availableDays ? days.filter((d) => availableDays.has(ymd(d))) : days),
+    [days, availableDays],
+  );
+
+  // Meses abrangidos pelos dias disponíveis (para o filtro de mês). Guarda o
+  // 1.º dia disponível de cada mês para saltar lá ao clicar. Meses sem
+  // qualquer dia disponível deixam de aparecer.
   const months = useMemo(() => {
     const seen = new Map<string, Date>();
-    for (const d of days) {
+    for (const d of availableDaysList) {
       const k = monthKeyOf(d);
       if (!seen.has(k)) seen.set(k, d);
     }
@@ -180,19 +238,31 @@ export function BookingFlow({
       label: MONTHS_PT[first.getMonth()],
       year: first.getFullYear(),
     }));
-  }, [days]);
+  }, [availableDaysList]);
 
-  // Só os dias do mês seleccionado (dentro da janela de 90 dias).
+  // Só os dias disponíveis do mês seleccionado.
   const visibleDays = useMemo(
-    () => days.filter((d) => monthKeyOf(d) === monthKey),
-    [days, monthKey],
+    () => availableDaysList.filter((d) => monthKeyOf(d) === monthKey),
+    [availableDaysList, monthKey],
   );
 
-  // Trocar de mês: selecciona o 1.º dia disponível desse mês (hoje, se for o
-  // mês corrente) e carrega os respectivos horários.
+  // Quando a disponibilidade carrega/muda, garante que o dia selecionado
+  // ainda é válido; senão salta para o 1.º dia disponível (e o seu mês).
+  useEffect(() => {
+    if (!availableDays || availableDaysList.length === 0) return;
+    if (!availableDays.has(ymd(date))) {
+      const first = availableDaysList[0];
+      setDate(first);
+      setMonthKey(monthKeyOf(first));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableDays]);
+
+  // Trocar de mês: selecciona o 1.º dia disponível desse mês e carrega os
+  // respectivos horários.
   function pickMonth(key: string) {
     setMonthKey(key);
-    const first = days.find((d) => monthKeyOf(d) === key);
+    const first = availableDaysList.find((d) => monthKeyOf(d) === key);
     if (first) setDate(first);
   }
 
@@ -349,31 +419,40 @@ export function BookingFlow({
         </div>
       </div>
 
-      <div>
-        <div className="label">Mês</div>
-        <div className="flex gap-1.5 overflow-x-auto pb-2">
-          {months.map((m) => {
-            const active = m.key === monthKey;
-            return (
-              <button
-                key={m.key}
-                type="button"
-                onClick={() => pickMonth(m.key)}
-                className={cn(
-                  "shrink-0 rounded-lg border px-3 py-1.5 text-sm capitalize",
-                  active ? "border-ink-900 bg-ink-900 text-bone-50" : "border-ink-900/10",
-                )}
-              >
-                {m.label}
-                {m.year !== currentYear ? ` ${m.year}` : ""}
-              </button>
-            );
-          })}
+      {months.length > 0 && (
+        <div>
+          <div className="label">Mês</div>
+          <div className="flex gap-1.5 overflow-x-auto pb-2">
+            {months.map((m) => {
+              const active = m.key === monthKey;
+              return (
+                <button
+                  key={m.key}
+                  type="button"
+                  onClick={() => pickMonth(m.key)}
+                  className={cn(
+                    "shrink-0 rounded-lg border px-3 py-1.5 text-sm capitalize",
+                    active ? "border-ink-900 bg-ink-900 text-bone-50" : "border-ink-900/10",
+                  )}
+                >
+                  {m.label}
+                  {m.year !== currentYear ? ` ${m.year}` : ""}
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       <div>
         <div className="label">Dia</div>
+        {visibleDays.length === 0 ? (
+          <div className="card p-4 text-center text-sm text-ink-500">
+            {availableDays === null
+              ? "A carregar dias disponíveis…"
+              : "Sem dias disponíveis para marcação."}
+          </div>
+        ) : (
         <div className="flex gap-1.5 overflow-x-auto pb-2">
           {visibleDays.map((d) => {
             const active = isSameDay(d, date);
@@ -401,6 +480,7 @@ export function BookingFlow({
             );
           })}
         </div>
+        )}
       </div>
 
       <div ref={slotsRef} className="scroll-mt-3">
