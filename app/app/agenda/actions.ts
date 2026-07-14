@@ -11,6 +11,7 @@ import { logError, userFacingRpcError } from "@/lib/errors";
 import { revalidateBookingViews } from "@/lib/revalidate";
 import { formatDateTime } from "@/lib/utils";
 import { logAudit } from "@/lib/audit";
+import { pendingApprovalBlock } from "@/lib/authz";
 import type { SessionType } from "@/types/database";
 
 const NOTE_MAX_LEN = 5000;
@@ -205,6 +206,11 @@ export async function bookAction({
   note?: string;
 }): Promise<{ ok?: true; error?: string; pending?: boolean }> {
   try {
+    const blocked = await pendingApprovalBlock();
+    if (blocked) {
+      await setFlash(blocked, "error");
+      return { error: blocked };
+    }
     const noticeErr = await bookingNoticeError(trainerId, startsAtIso);
     if (noticeErr) {
       await setFlash(noticeErr, "error");
@@ -276,6 +282,11 @@ export async function rescheduleAction({
   /** Nota opcional do cliente para o trainer (ligada à NOVA marcação). */
   note?: string;
 }): Promise<{ ok?: true; error?: string; pending?: boolean }> {
+  const blocked = await pendingApprovalBlock();
+  if (blocked) {
+    await setFlash(blocked, "error");
+    return { error: blocked };
+  }
   const supabase = await createClient();
   // Horário ANTIGO (para o Registo mostrar "de → para") + verificação da
   // antecedência mínima, ambas a partir da mesma leitura da marcação.
@@ -365,6 +376,11 @@ export async function bookRecurringAction({
   note?: string;
 }): Promise<{ ok?: true; error?: string; result?: RecurringBookingResult }> {
   try {
+    const blocked = await pendingApprovalBlock();
+    if (blocked) {
+      await setFlash(blocked, "error");
+      return { error: blocked };
+    }
     const noticeErr = await bookingNoticeError(trainerId, startsAtIso);
     if (noticeErr) {
       await setFlash(noticeErr, "error");

@@ -8,11 +8,12 @@ import { ClientSearch } from "@/components/client-search";
 import { ListSkeleton } from "@/components/skeleton";
 import { NewClientButton } from "./new-client-button";
 import { RecentToggle } from "./recent-toggle";
+import { PendingAccounts } from "./pending-accounts";
 
 // "new" foi removido (decisão de produto). "todos" passou a "Todos clientes"
 // no label e a incluir clientes que se registaram com o trainer mas ainda
 // não compraram/marcaram (ver lib/trainer.ts getClientIdsInScope).
-type Tab = "todos" | "recent" | "upcoming" | "past" | "esgotar";
+type Tab = "todos" | "recent" | "upcoming" | "past" | "esgotar" | "pendentes";
 
 type ClientRow = {
   id: string;
@@ -24,7 +25,7 @@ type ClientRow = {
 const PAGE_SIZE = 10;
 
 function resolveTab(raw?: string): Tab {
-  if (raw === "todos" || raw === "recent" || raw === "past" || raw === "esgotar" || raw === "upcoming") return raw as Tab;
+  if (raw === "todos" || raw === "recent" || raw === "past" || raw === "esgotar" || raw === "upcoming" || raw === "pendentes") return raw as Tab;
   // "new" foi removido — qualquer link antigo cai em "todos" (que agora
   // inclui também os recém-registados). Default da página: "todos clientes".
   return "todos";
@@ -36,6 +37,7 @@ function labelFor(tab: Tab, q: string): string {
   if (tab === "recent") return "Últimos clientes (mais recentes primeiro)";
   if (tab === "upcoming") return "Clientes com próximas sessões";
   if (tab === "past") return "Clientes com sessões passadas";
+  if (tab === "pendentes") return "Contas pendentes de aprovação";
   return "Clientes a esgotar sessões (≤ 2)";
 }
 
@@ -64,27 +66,35 @@ export default async function ClientesPage(
         <NewClientButton />
       </div>
 
-      <ClientSearch
-        initialQ={q}
-        submitAction="/admin/clientes"
-        resultHrefTemplate="/admin/clientes/{id}"
-      />
+      {tab !== "pendentes" && (
+        <ClientSearch
+          initialQ={q}
+          submitAction="/admin/clientes"
+          resultHrefTemplate="/admin/clientes/{id}"
+        />
+      )}
 
       {!q && (
         <div className="flex flex-wrap gap-1 rounded-lg border border-ink-900/10 bg-white p-1 text-sm dark:border-white/10 dark:bg-ink-800">
           {/* "recent" é um sub-modo de "todos" → realça o separador "Todos". */}
           <TabLink current={tab === "recent" ? "todos" : tab} value="todos" label="Todos clientes" />
           <TabLink current={tab === "recent" ? "todos" : tab} value="upcoming" label="Próximas sessões" />
-          <TabLink current={tab === "recent" ? "todos" : tab} value="past" label="Sessões passadas" />
+          <TabLink current={tab === "recent" ? "todos" : tab} value="pendentes" label="Contas pendentes" />
           <TabLink current={tab === "recent" ? "todos" : tab} value="esgotar" label="Esgotar sessões" />
         </div>
       )}
 
       {!q && (tab === "todos" || tab === "recent") && <RecentToggle tab={tab} />}
 
-      <Suspense key={`${tab}-${q}-${page}`} fallback={<ListSkeleton rows={PAGE_SIZE} />}>
-        <ClientList q={q} tab={tab} page={page} />
-      </Suspense>
+      {tab === "pendentes" && !q ? (
+        <Suspense key={`pendentes-${page}`} fallback={<ListSkeleton rows={PAGE_SIZE} />}>
+          <PendingAccounts page={page} />
+        </Suspense>
+      ) : (
+        <Suspense key={`${tab}-${q}-${page}`} fallback={<ListSkeleton rows={PAGE_SIZE} />}>
+          <ClientList q={q} tab={tab} page={page} />
+        </Suspense>
+      )}
     </div>
   );
 }

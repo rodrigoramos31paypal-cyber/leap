@@ -50,6 +50,14 @@ export default async function ClientLayout({ children }: { children: React.React
     redirect("/admin/dashboard");
   }
 
+  // 0138: aprovação de conta. Um cliente que se auto-registou fica pendente
+  // até um admin aprovar — bloqueado da app até lá (ecrã de espera). Contas
+  // criadas por admin e as já existentes ficam approved (default), por isso
+  // não são afectadas.
+  if (profile?.role === "client" && (profile as any)?.approval_status === "pending") {
+    redirect("/aprovacao-pendente");
+  }
+
   const flash = await consumeFlash();
 
   return (

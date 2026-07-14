@@ -15,6 +15,9 @@ export async function GET(request: NextRequest) {
   if (code) {
     const supabase = await createClient();
     await supabase.auth.exchangeCodeForSession(code);
+    // 0138: acabou de verificar o email → se a conta está pendente, avisa a
+    // equipa (uma vez). Best-effort: nunca parte o fluxo de confirmação.
+    await (supabase as any).rpc("notify_pending_approval").catch(() => {});
   }
 
   // Base = domínio público de confiança (NEXT_PUBLIC_APP_URL). NÃO usar o
