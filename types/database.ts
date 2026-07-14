@@ -532,6 +532,11 @@ export type Database = {
       profiles: {
         Row: {
           access_blocked: boolean
+          approval_status: string
+          approval_requested_at: string | null
+          approval_decided_at: string | null
+          approval_decided_by: string | null
+          approval_notified_at: string | null
           banned: boolean
           calendar_feed_token: string
           created_at: string
@@ -545,6 +550,11 @@ export type Database = {
         }
         Insert: {
           access_blocked?: boolean
+          approval_status?: string
+          approval_requested_at?: string | null
+          approval_decided_at?: string | null
+          approval_decided_by?: string | null
+          approval_notified_at?: string | null
           banned?: boolean
           calendar_feed_token?: string
           created_at?: string
@@ -558,6 +568,11 @@ export type Database = {
         }
         Update: {
           access_blocked?: boolean
+          approval_status?: string
+          approval_requested_at?: string | null
+          approval_decided_at?: string | null
+          approval_decided_by?: string | null
+          approval_notified_at?: string | null
           banned?: boolean
           calendar_feed_token?: string
           created_at?: string

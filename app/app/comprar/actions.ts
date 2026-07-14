@@ -8,6 +8,7 @@ import { revalidateCreditsViews } from "@/lib/revalidate";
 import { setFlash } from "@/lib/flash";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
+import { pendingApprovalBlock } from "@/lib/authz";
 import type { PaymentMethod } from "@/types/database";
 
 // Apenas pagamentos manuais (MB WAY / Revolut). Ambos exigem confirmação
@@ -20,6 +21,9 @@ export async function startPurchaseAction({
   packId: string;
   method: PaymentMethod;
 }): Promise<{ error?: string; redirect?: string }> {
+  const blocked = await pendingApprovalBlock();
+  if (blocked) return { error: blocked };
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Sessão expirada." };

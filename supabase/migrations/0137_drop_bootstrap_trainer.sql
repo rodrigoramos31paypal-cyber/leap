@@ -1,0 +1,46 @@
+-- ════════════════════════════════════════════════════════════════
+-- 0137 · [CRÍTICO] Remover bootstrap_trainer — escalada anónima a OWNER
+--
+-- VULNERABILIDADE
+-- A função `bootstrap_trainer(text,text,text)` (seed inicial, 0004) é
+-- SECURITY DEFINER e faz `update profiles set role='owner'`. Nunca teve
+-- REVOKE, por isso herdou o `EXECUTE TO PUBLIC` default do Postgres — ou
+-- seja, era chamável pelo role `anon` (a chave pública que está no browser),
+-- via PostgREST: POST /rest/v1/rpc/bootstrap_trainer.
+--
+-- Pior: o trigger `protect_profile_role` (0120) isenta `auth.uid() IS NULL`
+-- (para deixar passar service role/signup). Um pedido ANÓNIMO tem uid NULL,
+-- por isso o trigger não bloqueia a mudança de role. Resultado — cadeia de
+-- exploração só com a anon key, sem sessão:
+--   1. auto-registo de attacker@evil.com (cria a linha em auth.users)
+--   2. rpc bootstrap_trainer('attacker@evil.com', ...) SEM Bearer
+--   3. role passa a 'owner' → login → acesso admin total (cancelar sessões
+--      de qualquer cliente, gerir contas, etc.)
+--
+-- É a "gémea" das 6 RPCs endurecidas em 0129 que ficou de fora.
+--
+-- CORREÇÃO
+-- A app NUNCA chama esta função (só aparecia no seed e nos tipos gerados).
+-- O estúdio já tem owner. Por isso a remoção é a correção mais segura —
+-- elimina por completo a superfície de ataque, sem afetar nada.
+--
+-- (Se algum dia precisares de criar outro estúdio/owner, faz o UPDATE de
+-- role diretamente no SQL editor com a service role, ou volta a criar a
+-- função temporariamente com REVOKE ... FROM public, anon, authenticated.)
+--
+-- REVERT: reaplicar a definição de 0004 seguida de
+--   revoke all on function bootstrap_trainer(text,text,text) from public, anon, authenticated;
+--   grant execute on function bootstrap_trainer(text,text,text) to service_role;
+-- ════════════════════════════════════════════════════════════════
+
+drop function if exists bootstrap_trainer(text, text, text);
+
+
+-- ── VERIFICAÇÃO (opcional, só leitura) ────────────────────────────
+-- Confirma que a função já não existe / nenhum role a pode executar.
+-- Não deve devolver nenhuma linha:
+--
+--   select p.proname
+--   from pg_proc p
+--   join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
+--   where p.proname = 'bootstrap_trainer';

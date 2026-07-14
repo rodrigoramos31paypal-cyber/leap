@@ -16,6 +16,8 @@ export type AuditActionMeta = {
 export const AUDIT_ACTIONS: Record<string, AuditActionMeta> = {
   // ── Ações de admin ────────────────────────────────────────────
   client_create_admin: { label: "Conta criada (admin)", actor: "admin" },
+  account_approve: { label: "Conta aprovada", actor: "admin" },
+  account_reject: { label: "Conta rejeitada", actor: "admin" },
   client_delete_admin: { label: "Conta de cliente apagada", actor: "admin" },
   client_ban: { label: "Cliente bloqueado", actor: "admin" },
   client_unban: { label: "Cliente desbloqueado", actor: "admin" },
