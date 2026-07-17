@@ -25,24 +25,34 @@ export async function cancelBookingAction(formData: FormData) {
   const bookingId = String(formData.get("bookingId") ?? "");
   if (!bookingId) return;
   try {
-    await cancelBooking(bookingId, "Cancelado pelo cliente");
-    // SEC: cancelBooking (RPC) já validou ownership acima. As chamadas
-    // abaixo usam service role mas só correm com um bookingId que o
-    // cliente comprovou ser seu — e não devolvem dados ao caller.
-    const refunded = await wasRefunded(bookingId);
-    // Auditoria: cancelamento feito pelo PRÓPRIO cliente. Regista actor
-    // (=cliente, via auth.uid()) + IP, para distinguir de cancelamentos
-    // de admin (booking_cancel_admin) e de eventuais acessos indevidos.
-    await logAudit("booking_cancel_client", {
-      targetTable: "bookings",
-      targetId: bookingId,
-      payload: { refunded },
-    });
-    await dispatchBookingCancelled(bookingId, refunded).catch(() => {});
-    await removeBookingFromCalendars(bookingId).catch(() => {});
-    await setFlash(
-      refunded ? "Sessão cancelada e devolvida" : "Sessão cancelada (cancelamento tardio)",
-    );
+    // IDEMPOTÊNCIA: a RPC devolve `true` só quando ESTE pedido cancelou de
+    // facto a sessão. Em duplo/triplo-clique (ou reenvio do form), só a 1ª
+    // chamada devolve `true`; as seguintes devolvem `false` porque a sessão
+    // já está cancelada. Gate no email/audit/calendário evita enviar N
+    // cópias do email de cancelamento pela mesma sessão.
+    const didCancel = await cancelBooking(bookingId, "Cancelado pelo cliente");
+    if (didCancel) {
+      // SEC: cancelBooking (RPC) já validou ownership acima. As chamadas
+      // abaixo usam service role mas só correm com um bookingId que o
+      // cliente comprovou ser seu — e não devolvem dados ao caller.
+      const refunded = await wasRefunded(bookingId);
+      // Auditoria: cancelamento feito pelo PRÓPRIO cliente. Regista actor
+      // (=cliente, via auth.uid()) + IP, para distinguir de cancelamentos
+      // de admin (booking_cancel_admin) e de eventuais acessos indevidos.
+      await logAudit("booking_cancel_client", {
+        targetTable: "bookings",
+        targetId: bookingId,
+        payload: { refunded },
+      });
+      await dispatchBookingCancelled(bookingId, refunded).catch(() => {});
+      await removeBookingFromCalendars(bookingId).catch(() => {});
+      await setFlash(
+        refunded ? "Sessão cancelada e devolvida" : "Sessão cancelada (cancelamento tardio)",
+      );
+    } else {
+      // Já estava cancelada (clique repetido) — sucesso silencioso, sem email.
+      await setFlash("Esta sessão já tinha sido cancelada");
+    }
   } catch (e) {
     logError("cancelBookingAction", e);
     await setFlash("Não foi possível cancelar", "error");

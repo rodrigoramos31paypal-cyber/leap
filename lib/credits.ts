@@ -388,13 +388,17 @@ export async function confirmAttendance(bookingId: string) {
   if (error) throw error;
 }
 
-export async function cancelBooking(bookingId: string, reason?: string) {
+export async function cancelBooking(bookingId: string, reason?: string): Promise<boolean> {
   const supabase = await createClient();
-  const { error } = await supabase.rpc("cancel_booking", {
+  const { data, error } = await supabase.rpc("cancel_booking", {
     p_booking_id: bookingId,
     p_reason: reason,
   });
   if (error) throw error;
+  // A RPC devolve `true` só quando ESTE cancelamento transitou a sessão de
+  // activa → cancelada. Chamadas repetidas (duplo-clique) sobre uma sessão
+  // já cancelada devolvem `false` — o caller não deve reenviar email/audit.
+  return (data as unknown as boolean) ?? false;
 }
 
 /**

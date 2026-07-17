@@ -5,6 +5,7 @@ import { cancelBookingAction, rebookAction } from "@/app/app/historico/actions";
 import { CalendarPlus, RefreshCcw, X, NotebookPen, ChevronRight, Star, Users } from "lucide-react";
 import { BackLink } from "@/components/back-link";
 import { NoteEditor } from "@/components/note-editor";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { getMyNoteForBooking } from "@/lib/notes";
 import { getMyRatingForBooking } from "@/lib/ratings";
 import { signBookingIcs } from "@/lib/calendar-token";
@@ -115,7 +116,10 @@ export default async function SessaoPage(props: { params: Promise<{ id: string }
 
           <form action={cancelBookingAction}>
             <input type="hidden" name="bookingId" value={b.id} />
-            <button className="card flex w-full items-center gap-3 p-4 text-left hover:border-red-300">
+            <PendingSubmitButton
+              className="card flex w-full items-center gap-3 p-4 text-left hover:border-red-300"
+              pendingLabel="A cancelar…"
+            >
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-red-50 text-red-600">
                 <X size={18} />
               </span>
@@ -126,7 +130,7 @@ export default async function SessaoPage(props: { params: Promise<{ id: string }
                   de {cancelWindowHours} horas de antecedência).
                 </div>
               </div>
-            </button>
+            </PendingSubmitButton>
           </form>
         </div>
       ) : canRate ? (

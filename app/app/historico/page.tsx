@@ -6,6 +6,7 @@ import { eur, formatDateTime, BOOKING_STATUS, PURCHASE_STATUS } from "@/lib/util
 import { cancelBookingAction, rebookAction } from "./actions";
 import { CalendarPlus, RefreshCcw, NotebookPen, Users, EyeOff, Eye } from "lucide-react";
 import { NoteEditor } from "@/components/note-editor";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { getMyNotesMapForBookings } from "@/lib/notes";
 import { signBookingIcs } from "@/lib/calendar-token";
 
@@ -196,9 +197,12 @@ async function SessoesTab({ userId, filter, hideCancelled }: { userId: string; f
                 </form>
                 <form action={cancelBookingAction}>
                   <input type="hidden" name="bookingId" value={b.id} />
-                  <button className="btn-outline w-full text-xs text-red-700 hover:bg-red-50 border-red-200">
+                  <PendingSubmitButton
+                    className="btn-outline w-full text-xs text-red-700 hover:bg-red-50 border-red-200"
+                    pendingLabel="A cancelar…"
+                  >
                     Cancelar
-                  </button>
+                  </PendingSubmitButton>
                 </form>
               </div>
             )}
