@@ -230,14 +230,19 @@ export async function cancelAdminAction(formData: FormData) {
   const reasonRaw = String(formData.get("reason") ?? "").trim().slice(0, 500);
   const reason = `Cancelado pelo trainer — ${reasonRaw}`;
   try {
-    await cancelBooking(id, reason);
-    await logAudit("booking_cancel_admin", {
-      targetTable: "bookings",
-      targetId: id,
-      payload: { reason },
-    });
-    await dispatchBookingCancelled(id, true).catch(() => {});
-    await removeBookingFromCalendars(id).catch(() => {});
+    // IDEMPOTÊNCIA: só envia email/audit/calendário quando ESTE pedido
+    // cancelou de facto a sessão (a RPC devolve `false` em cliques
+    // repetidos sobre uma sessão já cancelada). Evita emails duplicados.
+    const didCancel = await cancelBooking(id, reason);
+    if (didCancel) {
+      await logAudit("booking_cancel_admin", {
+        targetTable: "bookings",
+        targetId: id,
+        payload: { reason },
+      });
+      await dispatchBookingCancelled(id, true).catch(() => {});
+      await removeBookingFromCalendars(id).catch(() => {});
+    }
     await setFlash("Sessão cancelada");
   } catch (e) {
     logError("cancelAdminAction", e);
