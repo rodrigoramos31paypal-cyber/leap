@@ -3,12 +3,27 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSafePath } from "@/lib/utils";
+import { rateLimit } from "@/lib/rate-limit";
 import { listVerifiedFactors, isDeviceTrusted } from "@/lib/mfa";
 
 export async function loginAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const next = formData.get("next");
+
+  // M7 (audit jul/2026): lockout POR CONTA, além do limite por IP no
+  // middleware. Um ataque de credential-stuffing distribuído (muitos IPs
+  // contra o mesmo email) escapava ao limite por IP; aqui limitamos também
+  // por email normalizado (5/min, bucket "auth").
+  const emailKey = email.toLowerCase();
+  if (emailKey) {
+    const r = await rateLimit("auth", `login-acct:${emailKey}`);
+    if (!r.success) {
+      redirect(
+        `/login?error=${encodeURIComponent("Demasiadas tentativas nesta conta. Tenta novamente daqui a instantes.")}`,
+      );
+    }
+  }
 
   const supabase = await createClient();
   const { error, data } = await supabase.auth.signInWithPassword({ email, password });

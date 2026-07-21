@@ -32,6 +32,10 @@ const RATE_LIMITED: RateRule[] = [
   { test: isPostOnly("/registar"), kind: "register" },
   { test: isPostOnly("/recuperar"), kind: "register" },
   { test: isPostOnly("/auth/reset"), kind: "register" },
+  // M4 (audit jul/2026): gestão de 2FA (unenroll valida um TOTP fresco). Sem
+  // isto, uma sessão AAL1 roubada podia fazer brute-force ao código para
+  // desligar o 2FA da vítima, dependendo só do rate-limit interno do GoTrue.
+  { test: isPostOnly("/app/perfil/seguranca"), kind: "auth" },
   // H-3 (audit jun/2026): coverage gaps. Endpoints autenticados que
   // permitem enumeração / DoS por chamadas em rajada. Bucket `generic`
   // (30 req/min) é generoso para uso normal e suficiente para travar
