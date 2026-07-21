@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient, getSessionUser, getAuthUser } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
 
@@ -43,7 +43,7 @@ async function verifyPasswordSudo(password: string): Promise<boolean> {
 }
 
 export async function startEnrollAction(formData: FormData) {
-  const user = await getSessionUser();
+  const user = await getAuthUser(); // M10: valida JWT (fluxo sensível de 2FA)
   if (!user) redirect("/login");
 
   // H-A: re-auth por password antes de criar o factor.
@@ -69,7 +69,7 @@ export async function startEnrollAction(formData: FormData) {
 }
 
 export async function confirmEnrollAction(formData: FormData) {
-  const user = await getSessionUser();
+  const user = await getAuthUser(); // M10: valida JWT (fluxo sensível de 2FA)
   if (!user) redirect("/login");
 
   const factorId = String(formData.get("factorId") ?? "");
@@ -98,7 +98,7 @@ export async function confirmEnrollAction(formData: FormData) {
 }
 
 export async function unenrollAction(formData: FormData) {
-  const user = await getSessionUser();
+  const user = await getAuthUser(); // M10: valida JWT (fluxo sensível de 2FA)
   if (!user) redirect("/login");
 
   const factorId = String(formData.get("factorId") ?? "");

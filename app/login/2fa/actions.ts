@@ -2,7 +2,7 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { createClient, getSessionUser, getCurrentProfile } from "@/lib/supabase/server";
+import { createClient, getAuthUser, getCurrentProfile } from "@/lib/supabase/server";
 import { listVerifiedFactors, trustThisDevice } from "@/lib/mfa";
 import { isSafePath } from "@/lib/utils";
 import { setFlash } from "@/lib/flash";
@@ -12,7 +12,9 @@ import { logError } from "@/lib/errors";
 // opcionalmente confia no device, e redireciona para `next` ou
 // para o dashboard apropriado.
 export async function verifyChallengeAction(formData: FormData) {
-  const user = await getSessionUser();
+  // M10 (audit jul/2026): fluxo sensível (eleva AAL) → valida o JWT contra o
+  // auth server em vez de confiar só no cookie (getSessionUser).
+  const user = await getAuthUser();
   if (!user) redirect("/login");
 
   const code = String(formData.get("code") ?? "").trim();
