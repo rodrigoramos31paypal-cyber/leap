@@ -113,6 +113,9 @@ export async function rejectAccountAction(formData: FormData): Promise<void> {
     return;
   }
 
+  // M2 (audit jul/2026): revoga trusted-devices ao rejeitar/bloquear a conta.
+  await (admin as any).from("trusted_devices").delete().eq("user_id", clientId);
+
   // Bloqueia o login (auth) — best-effort.
   try {
     const { error: banErr } = await admin.auth.admin.updateUserById(clientId, {

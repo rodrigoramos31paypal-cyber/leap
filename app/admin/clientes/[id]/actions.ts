@@ -322,6 +322,10 @@ export async function adminDeleteClientAction(
     return { ok: false, error: "Não foi possível anonimizar o perfil do cliente." };
   }
 
+  // M2 (audit jul/2026): revoga todos os trusted-devices — o "confiar neste
+  // dispositivo" (que salta o 2FA) não deve sobreviver ao bloqueio da conta.
+  await (admin as any).from("trusted_devices").delete().eq("user_id", clientId);
+
   // Bloqueia o login (auth) — best-effort, não falha o apagar se correr mal.
   try {
     const { error: banErr } = await admin.auth.admin.updateUserById(clientId, {
