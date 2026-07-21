@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/supabase/server";
+import { safePathOr } from "@/lib/utils";
 import { listVerifiedFactors, isMfaSatisfied } from "@/lib/mfa";
 import { verifyChallengeAction } from "./actions";
 
@@ -15,8 +16,10 @@ export default async function TwoFaChallengePage(
   if (!user) redirect("/login");
 
   // Se já está satisfeito (AAL2 ou trusted device), salta o desafio.
+  // 0141: usar safePathOr — `startsWith("/")` deixava passar "//evil.com"
+  // (protocol-relative → open redirect). safePathOr rejeita // e \.
   if (await isMfaSatisfied(user.id)) {
-    redirect(searchParams.next && searchParams.next.startsWith("/") ? searchParams.next : "/app/dashboard");
+    redirect(safePathOr(searchParams.next, "/app/dashboard"));
   }
 
   const factors = await listVerifiedFactors();
