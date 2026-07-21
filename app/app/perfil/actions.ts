@@ -152,6 +152,9 @@ export async function deleteAccountAction(
       .update({ access_blocked: true })
       .eq("id", uid);
     if (blockErr) logError("deleteAccountAction:block", blockErr);
+    // M2 (audit jul/2026): revoga trusted-devices — o 2FA "confiado" não
+    // deve sobreviver à eliminação da conta em nenhum browser.
+    await (admin as any).from("trusted_devices").delete().eq("user_id", uid);
   } catch (e) {
     logError("deleteAccountAction:ban", e);
   }

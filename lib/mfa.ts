@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { cache } from "react";
 import { createHash, randomBytes } from "crypto";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
@@ -19,6 +19,18 @@ export const TRUSTED_DEVICE_DAYS = 30;
 
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
+}
+
+/** Hash do User-Agent — usado para LIGAR o trusted-device ao browser que o
+ *  criou (M3). Um cookie `lf_td` exfiltrado deixa de ser reutilizável noutro
+ *  cliente com UA diferente. */
+function hashUa(ua: string | null | undefined): string {
+  return createHash("sha256").update(ua ?? "").digest("hex");
+}
+
+/** Lê o User-Agent do request actual (server-side). */
+async function currentUa(): Promise<string> {
+  return (await headers()).get("user-agent") ?? "";
 }
 
 /** Lê os factores TOTP do utilizador autenticado. Devolve apenas os já
@@ -62,13 +74,18 @@ export async function isDeviceTrusted(userId: string): Promise<boolean> {
   const supabase = createAdminClient();
   const { data } = await (supabase as any)
     .from("trusted_devices")
-    .select("id, expires_at")
+    .select("id, expires_at, ua_hash")
     .eq("user_id", userId)
     .eq("token_hash", hashToken(cookie))
     .gt("expires_at", new Date().toISOString())
     .limit(1)
     .maybeSingle();
-  return !!data;
+  if (!data) return false;
+  // M3: o token só vale no MESMO browser que o criou. Registos antigos sem
+  // ua_hash (pré-0141) continuam a validar por compatibilidade.
+  const storedUa = (data as any).ua_hash as string | null;
+  if (storedUa && storedUa !== hashUa(await currentUa())) return false;
+  return true;
 }
 
 /** Conclusão geral: o utilizador satisfaz 2FA neste request?
@@ -88,6 +105,8 @@ export async function trustThisDevice(userId: string, userAgent?: string, ip?: s
     user_id: userId,
     token_hash: hashToken(token),
     user_agent: userAgent ?? null,
+    // M3: guardamos o hash do UA para ligar o token a este browser.
+    ua_hash: hashUa(userAgent),
     ip: ip ?? null,
     expires_at: expiresAt.toISOString(),
   });
@@ -112,4 +131,12 @@ export async function clearTrustedDevice() {
       .eq("token_hash", hashToken(cookie));
   }
   (await cookies()).delete(TRUSTED_DEVICE_COOKIE);
+}
+
+/** M2/M3: apaga TODOS os trusted-devices de um utilizador. Usado ao banir
+ *  uma conta — o "confiar neste dispositivo" não deve sobreviver ao ban em
+ *  nenhum browser. */
+export async function revokeAllTrustedDevices(userId: string) {
+  const supabase = createAdminClient();
+  await (supabase as any).from("trusted_devices").delete().eq("user_id", userId);
 }

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { clearTrustedDevice } from "@/lib/mfa";
 import { publicBaseUrl } from "@/lib/utils";
 
 // ════════════════════════════════════════════════════════════════
@@ -20,11 +21,23 @@ import { publicBaseUrl } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  // M13: esta rota altera estado (termina a sessão). É GET porque os
+  // redirects dos layouts/middleware são navegações GET same-origin. Um
+  // `<img src=".../auth/force-logout">` externo tem sec-fetch-site=cross-site
+  // — recusamos esse vetor de logout-CSRF sem quebrar os redirects internos.
+  if (request.headers.get("sec-fetch-site") === "cross-site") {
+    return NextResponse.redirect(new URL("/", publicBaseUrl(request)), {
+      status: 303,
+    });
+  }
+
   const supabase = await createClient();
   // signOut local: invalida o refresh token desta sessão e limpa os
   // cookies sb-*. (O ban no GoTrue já impede troca de refresh tokens
   // noutros dispositivos; o gate por-request trata-os na próxima ação.)
   await supabase.auth.signOut().catch(() => {});
+  // M2: limpa também o trusted-device (cookie + registo na BD).
+  await clearTrustedDevice().catch(() => {});
 
   // Base = domínio público de confiança (NEXT_PUBLIC_APP_URL). NÃO usar o
   // origin do request.url: atrás do proxy resolve para localhost:3000 e o
