@@ -116,7 +116,7 @@ export function PushSubscribeCard() {
           .atua-bell-ring, .atua-pulse { animation: none; }
         }
       `}</style>
-      <div className="atua-pulse grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-gold-400/15 text-gold-600 dark:text-gold-400">
+      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-gold-400/15 text-gold-600 dark:text-gold-400">
         <Bell size={18} className="atua-bell-ring" />
       </div>
       <div className="flex-1">
