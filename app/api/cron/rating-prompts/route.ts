@@ -4,6 +4,7 @@ import { sendEmail, emailTemplates, emailEnabled } from "@/lib/email";
 import { emailAllowed } from "@/lib/notifications-config";
 import { formatDateTime } from "@/lib/utils";
 import { verifyBearer } from "@/lib/secrets";
+import { logError } from "@/lib/errors";
 
 // ════════════════════════════════════════════════════════════════
 // Cron · pedido de avaliação pós-sessão (1-5⭐).
@@ -44,7 +45,11 @@ export async function GET(request: NextRequest) {
     .gte("ends_at", since.toISOString())
     .lte("ends_at", until.toISOString());
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // B5 (audit jul/2026): erro genérico ao cliente; detalhe fica no log.
+  if (error) {
+    logError("cron/rating-prompts", error);
+    return NextResponse.json({ error: "internal" }, { status: 500 });
+  }
   if (!bookings || bookings.length === 0) {
     return NextResponse.json({ ok: true, processed: 0, sent: 0 });
   }

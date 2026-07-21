@@ -4,6 +4,7 @@ import { sendEmail, emailTemplates, emailEnabled } from "@/lib/email";
 import { emailAllowed } from "@/lib/notifications-config";
 import { formatDateTime } from "@/lib/utils";
 import { verifyBearer } from "@/lib/secrets";
+import { logError } from "@/lib/errors";
 
 // ════════════════════════════════════════════════════════════════
 // Cron · lembretes de sessão 24h antes — EMAIL + IN-APP/PUSH.
@@ -45,7 +46,12 @@ export async function GET(request: NextRequest) {
     .gt("starts_at", now.toISOString())
     .lte("starts_at", in24h.toISOString());
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // B5 (audit jul/2026): não devolver a mensagem crua do Postgres (nomes de
+  // colunas/constraints). Logamos server-side e devolvemos erro genérico.
+  if (error) {
+    logError("cron/reminders", error);
+    return NextResponse.json({ error: "internal" }, { status: 500 });
+  }
   if (!bookings || bookings.length === 0) {
     return NextResponse.json({ ok: true, processed: 0, emailSent: 0, inAppSent: 0 });
   }

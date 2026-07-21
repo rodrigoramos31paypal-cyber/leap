@@ -77,14 +77,20 @@ export async function POST(request: NextRequest) {
     id: record.id as string | undefined,
   };
 
-  let sent = 0;
-  for (const s of subs as any[]) {
-    const r = await sendPush(s, notif);
-    if (r.ok) sent++;
-    else if (r.gone) {
-      await (supabase as any).from("push_subscriptions").delete().eq("id", s.id);
-    }
-  }
+  // B4 (audit jul/2026): envia a todas as subscrições do utilizador EM
+  // PARALELO (um utilizador costuma ter 1-3 dispositivos). Antes era um loop
+  // sequencial com um await de rede por subscrição. Subscrições expiradas
+  // (410/404) são apagadas.
+  const results = await Promise.all(
+    (subs as any[]).map(async (s) => {
+      const r = await sendPush(s, notif);
+      if (r.gone) {
+        await (supabase as any).from("push_subscriptions").delete().eq("id", s.id);
+      }
+      return r.ok;
+    }),
+  );
+  const sent = results.filter(Boolean).length;
 
   return NextResponse.json({ ok: true, sent });
 }
