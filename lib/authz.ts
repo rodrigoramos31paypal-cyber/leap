@@ -40,6 +40,12 @@ export async function requireStaff() {
   if (!profile || (profile.role !== "trainer" && profile.role !== "owner")) {
     throw new Error("Acesso restrito.");
   }
+  // 0141 (audit jul/2026): um staff BANIDO (access_blocked) cujo access token
+  // ainda é válido podia invocar server actions até o TTL expirar — o gate de
+  // ban só existia nos layouts. Bloqueamos aqui, no boundary de dados.
+  if ((profile as any).access_blocked) {
+    throw new Error("Conta bloqueada.");
+  }
   await assertMfaSatisfied(profile.id);
   return profile;
 }
@@ -59,6 +65,10 @@ export async function requireOwner() {
   if (!profile || profile.role !== "owner") {
     throw new Error("Acesso restrito ao owner.");
   }
+  // 0141: bloqueia owner banido no boundary (ver requireStaff).
+  if ((profile as any).access_blocked) {
+    throw new Error("Conta bloqueada.");
+  }
   // Revalida a sessão contra o auth server (apanha revogação instantânea).
   const fresh = await getAuthUser();
   if (!fresh || fresh.id !== profile.id) {
@@ -75,6 +85,10 @@ export async function requireOwner() {
  *  um erro claro), ou null caso contrário (staff, cliente aprovado). */
 export async function pendingApprovalBlock(): Promise<string | null> {
   const profile = await getCurrentProfile();
+  // 0141: um cliente BANIDO não deve marcar/comprar, mesmo já aprovado.
+  if (profile?.role === "client" && (profile as any).access_blocked) {
+    return "A tua conta está bloqueada. Contacta o teu treinador.";
+  }
   if (profile?.role === "client" && (profile as any).approval_status === "pending") {
     return "A tua conta está a aguardar aprovação. Assim que for aprovada, poderás marcar e comprar.";
   }
