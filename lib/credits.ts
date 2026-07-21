@@ -27,7 +27,27 @@ export type CreditsByTrainer = Array<{
   dupla: number;
 }>;
 
-const fetchActiveCredits = cache(async (clientId: string) => {
+/** Relação `trainers` embebida na query de packs (nested select). */
+type CreditTrainerRel = {
+  slug: string | null;
+  avatar_url: string | null;
+  profiles: { full_name: string | null } | null;
+} | null;
+
+/** M15 (audit jul/2026): forma tipada de uma linha de pack activo. Antes os
+ *  loops de SOMA de sessões iteravam sobre `any[]` — um rename de coluna
+ *  (ex.: sessions_remaining) compilava e produzia saldos silenciosamente
+ *  errados. Com este tipo, o compilador apanha essas mudanças. */
+export type ActiveCreditRow = {
+  session_type: SessionType;
+  sessions_remaining: number;
+  sessions_total: number | null;
+  expires_at: string | null;
+  trainer_id: string;
+  trainers: CreditTrainerRel;
+};
+
+const fetchActiveCredits = cache(async (clientId: string): Promise<ActiveCreditRow[]> => {
   const supabase = await createClient();
   const { data } = await supabase
     .from("purchases")
@@ -38,8 +58,10 @@ const fetchActiveCredits = cache(async (clientId: string) => {
     .eq("status", "confirmed")
     .gt("sessions_remaining", 0);
   const now = Date.now();
-  return (data ?? []).filter(
-    (p: any) => !p.expires_at || new Date(p.expires_at).getTime() >= now,
+  // Cast único no boundary da query (o tipo inferido do nested select do
+  // supabase-js não é fiável); daqui para a frente o consumo é tipado.
+  return ((data ?? []) as unknown as ActiveCreditRow[]).filter(
+    (p) => !p.expires_at || new Date(p.expires_at).getTime() >= now,
   );
 });
 
@@ -65,7 +87,7 @@ export async function getClientCredits(
   let individual = 0,
     dupla = 0,
     totalAttributed = 0;
-  for (const p of rows as any[]) {
+  for (const p of rows) {
     if (trainerId && p.trainer_id !== trainerId) continue;
     if (p.session_type === "individual") individual += p.sessions_remaining;
     else dupla += p.sessions_remaining;
@@ -86,7 +108,7 @@ export async function getClientCreditsByTrainer(clientId: string): Promise<Credi
     fetchPartnerDuplaRows(clientId),
   ]);
   const byTrainer = new Map<string, CreditsByTrainer[number]>();
-  for (const p of rows as any[]) {
+  for (const p of rows) {
     const t = p.trainers;
     const key = p.trainer_id;
     if (!byTrainer.has(key)) {
@@ -94,7 +116,7 @@ export async function getClientCreditsByTrainer(clientId: string): Promise<Credi
         trainerId: key,
         trainerName: t?.profiles?.full_name ?? "—",
         slug: t?.slug ?? "",
-        avatarUrl: (t as any)?.avatar_url ?? null,
+        avatarUrl: t?.avatar_url ?? null,
         individual: 0,
         dupla: 0,
       });
