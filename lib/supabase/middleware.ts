@@ -168,10 +168,41 @@ export async function updateSession(
     return NextResponse.redirect(url);
   }
 
-  // PERF: role-based protection é enforced nos proprios layouts
-  // (app/admin/layout.tsx e app/app/layout.tsx). Manter aqui era uma
-  // query extra ao Supabase em cada navegacao e cada prefetch RSC.
-  // Layouts redirecionam de qualquer forma; aqui so validamos o cookie.
+  // M1 (0141): defesa em profundidade — enforce de role no BOUNDARY do
+  // middleware para a área /admin. Os layouts já validam o role, mas uma
+  // rota nova sob /admin que se esqueça do gate (ou um RSC payload obtido
+  // por prefetch) ficava exposta a qualquer utilizador autenticado. Só
+  // corre para paths /admin (tráfego baixo, exclusivamente staff), por
+  // isso o custo da query extra é aceitável e NÃO afeta o hot path /app.
+  if (user && path.startsWith("/admin")) {
+    const sub = (user as any).sub as string | undefined;
+    const { data: prof } = sub
+      ? await supabase
+          .from("profiles")
+          .select("role, access_blocked")
+          .eq("id", sub)
+          .single()
+      : { data: null };
+
+    // Conta bloqueada → força logout (rota same-origin, ver force-logout).
+    if (!prof || (prof as any).access_blocked) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/auth/force-logout";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    // Não-staff a tentar /admin → manda para a app de cliente.
+    if (prof.role !== "trainer" && prof.role !== "owner") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/app/dashboard";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+  }
+
+  // PERF: para /app, o role continua a ser enforced no layout
+  // (app/app/layout.tsx) para não pagar uma query por prefetch RSC no
+  // caminho mais quente da aplicação.
 
   return response;
 }
