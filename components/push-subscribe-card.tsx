@@ -91,14 +91,39 @@ export function PushSubscribeCard() {
 
   return (
     <div className="card flex items-center gap-3 p-4">
-      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-gold-400/15 text-gold-600 dark:text-gold-400">
-        <Bell size={18} />
+      {/* Sininho a "tocar" + pulsar para chamar a atenção — os clientes não
+          reparavam no cartão. Respeita quem tem "reduzir movimento" ligado. */}
+      <style>{`
+        @keyframes bellRing {
+          0%  { transform: rotate(0); }
+          6%  { transform: rotate(28deg); }
+          13% { transform: rotate(-26deg); }
+          20% { transform: rotate(22deg); }
+          27% { transform: rotate(-18deg); }
+          34% { transform: rotate(14deg); }
+          41% { transform: rotate(-10deg); }
+          48% { transform: rotate(6deg); }
+          55% { transform: rotate(0); }
+          100%{ transform: rotate(0); }
+        }
+        @keyframes bellPulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(202,161,74,0.0); transform: scale(1); }
+          50%      { box-shadow: 0 0 0 7px rgba(202,161,74,0.18); transform: scale(1.08); }
+        }
+        .atua-bell-ring { animation: bellRing 1.6s ease-in-out infinite; transform-origin: 50% 3px; }
+        .atua-pulse     { animation: bellPulse 1.6s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) {
+          .atua-bell-ring, .atua-pulse { animation: none; }
+        }
+      `}</style>
+      <div className="atua-pulse grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-gold-400/15 text-gold-600 dark:text-gold-400">
+        <Bell size={18} className="atua-bell-ring" />
       </div>
       <div className="flex-1">
         <div className="text-sm font-semibold">Ativar notificações</div>
         <div className="text-xs text-ink-500">Recebe lembretes e avisos mesmo com a app fechada.</div>
       </div>
-      <button onClick={enable} disabled={busy} className="btn-gold shrink-0 text-xs">
+      <button onClick={enable} disabled={busy} className="atua-pulse btn-gold shrink-0 text-xs">
         {busy ? "A ativar…" : "Ativar"}
       </button>
       <button
