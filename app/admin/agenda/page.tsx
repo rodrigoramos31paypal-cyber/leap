@@ -589,6 +589,8 @@ function DayView({
                 label={monthRangeLabel(day, day)}
                 anchorIso={isoDate(day)}
                 view="day"
+                prevHref={prevHref}
+                nextHref={nextHref}
               />
               <div
                 className="grid border-b border-ink-900/10 bg-bone-50"
@@ -1288,6 +1290,8 @@ function WeekView({
               label={monthLabel}
               anchorIso={isoDate(days[3])}
               view="week"
+              prevHref={prevHref}
+              nextHref={nextHref}
             />
             <div
               className="grid border-b border-ink-900/10 bg-bone-50"
