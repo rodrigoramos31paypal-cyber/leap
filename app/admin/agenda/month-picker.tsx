@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 
 // Nome do mês + ano em pt-PT (ex.: "julho de 2026").
 const MONTH_FMT = new Intl.DateTimeFormat("pt-PT", {
@@ -28,10 +29,15 @@ export function MonthPicker({
   label,
   anchorIso,
   view = "week",
+  prevHref,
+  nextHref,
 }: {
   label: string;
   anchorIso: string; // dia de referência da vista actual (YYYY-MM-DD)
   view?: string;
+  // Setas ‹ › ao lado do mês (recuar/avançar período), quando fornecidas.
+  prevHref?: string;
+  nextHref?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -72,19 +78,39 @@ export function MonthPicker({
 
   return (
     <div ref={wrapRef} className="relative border-b border-ink-900/10">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        className="flex w-full items-center justify-center gap-1 px-2 py-1 font-display text-sm font-semibold capitalize text-ink-700 hover:bg-ink-900/5"
-      >
-        {label}
-        <ChevronDown
-          size={14}
-          className={`transition-transform ${open ? "rotate-180" : ""}`}
-        />
-      </button>
+      <div className="flex items-center">
+        {prevHref && (
+          <Link
+            href={prevHref}
+            aria-label="Período anterior"
+            className="shrink-0 px-2 py-1 text-ink-500 hover:bg-ink-900/5 hover:text-ink-900 dark:hover:bg-white/5 dark:hover:text-bone-50"
+          >
+            <ChevronLeft size={16} />
+          </Link>
+        )}
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          className="flex flex-1 items-center justify-center gap-1 px-2 py-1 font-display text-sm font-semibold capitalize text-ink-700 hover:bg-ink-900/5"
+        >
+          {label}
+          <ChevronDown
+            size={14}
+            className={`transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </button>
+        {nextHref && (
+          <Link
+            href={nextHref}
+            aria-label="Período seguinte"
+            className="shrink-0 px-2 py-1 text-ink-500 hover:bg-ink-900/5 hover:text-ink-900 dark:hover:bg-white/5 dark:hover:text-bone-50"
+          >
+            <ChevronRight size={16} />
+          </Link>
+        )}
+      </div>
 
       {open && (
         <div
