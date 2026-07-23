@@ -87,8 +87,8 @@ export default function HomePage() {
 
 function FeatureCard({ icon, title, desc }: { icon: React.ReactNode; title: string; desc: string }) {
   return (
-    <div className="rounded-xl border border-ink-900/10 bg-white p-3.5 text-left dark:border-white/5 dark:bg-ink-800">
-      <div className="mb-2 grid h-7 w-7 place-items-center rounded-lg bg-gold-400/15 text-gold-600 dark:text-gold-400">
+    <div className="rounded-xl border border-ink-900/10 bg-white p-3.5 text-center dark:border-white/5 dark:bg-ink-800">
+      <div className="mx-auto mb-2 grid h-7 w-7 place-items-center rounded-lg bg-gold-400/15 text-gold-600 dark:text-gold-400">
         {icon}
       </div>
       <div className="text-sm font-semibold">{title}</div>
