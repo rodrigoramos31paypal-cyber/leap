@@ -59,7 +59,7 @@
 // v23 (jun/2026): barra inferior passa a `position: fixed` + scroll normal
 // do documento (sem app-shell de altura fixa). O navegador ancora a barra
 // ao fundo REAL do viewport, imune ao bug de altura do cold start iOS.
-const CACHE_NAME = "leap-v24";
+const CACHE_NAME = "leap-v25";
 
 // Cache dedicada (NÃO versionada) para a navegação pendente de um push
 // tocado com a app fechada. Mantida à parte de CACHE_NAME para não ser

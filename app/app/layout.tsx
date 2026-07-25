@@ -61,7 +61,7 @@ export default async function ClientLayout({ children }: { children: React.React
   const flash = await consumeFlash();
 
   return (
-    <div className="min-h-dvh bg-bone-50 dark:bg-ink-900">
+    <div className="flex h-[100lvh] flex-col overflow-hidden bg-bone-50 dark:bg-ink-900 md:block md:h-auto md:min-h-[100lvh] md:overflow-visible">
       <ViewportKeyboard />
       <SwNavigator />
       <AppUpdater />
@@ -70,9 +70,10 @@ export default async function ClientLayout({ children }: { children: React.React
       <ClientTopNav />
       <Toaster initial={flash} />
       <ReminderSync />
-      {/* pb-24 (mobile) liberta espaço para a barra inferior FIXA não tapar
-          o conteúdo; md:pb-6 no desktop, onde a barra fixa está escondida. */}
-      <main className="mx-auto max-w-6xl px-4 pt-1 pb-24 md:pb-6">{children}</main>
+      {/* Mobile: main é o contentor de SCROLL (flex-1 + min-h-0) numa coluna
+          de altura = viewport (100lvh). A barra fica em fluxo no fundo → não
+          pode flutuar. Desktop (md): scroll normal do documento. */}
+      <main className="mx-auto min-h-0 w-full max-w-6xl flex-1 overflow-y-auto overflow-x-hidden px-4 pt-1 pb-6 md:flex-none md:overflow-visible">{children}</main>
       <BottomNav variant="client" />
     </div>
   );

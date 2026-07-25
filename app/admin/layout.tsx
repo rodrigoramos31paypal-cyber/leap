@@ -67,7 +67,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const flash = await consumeFlash();
 
   return (
-    <div className="min-h-dvh bg-bone-50 dark:bg-ink-900">
+    <div className="flex h-[100lvh] flex-col overflow-hidden bg-bone-50 dark:bg-ink-900 md:block md:h-auto md:min-h-[100lvh] md:overflow-visible">
       <TopBar
         title="Admin"
         unread={0}
@@ -79,7 +79,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <Toaster initial={flash} />
       <AppUpdater />
       <PushAutoHeal />
-      <div className="mx-auto flex w-full max-w-7xl md:gap-6 md:px-4 md:py-6">
+      <div className="mx-auto flex w-full min-h-0 max-w-7xl flex-1 overflow-y-auto overflow-x-hidden md:flex-none md:overflow-visible md:gap-6 md:px-4 md:py-6">
         <aside className="hidden md:block md:w-56 md:shrink-0 md:sticky md:top-20 md:self-start md:max-h-[calc(100dvh-6rem)] md:overflow-y-auto">
           <nav className="space-y-1">
             <AdminNavItem href="/admin/dashboard" icon={<LayoutDashboard size={16} />} label="Dashboard" />
@@ -94,8 +94,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <AdminNavItem href="/admin/definicoes" icon={<Settings size={16} />} label="Definições" />
           </nav>
         </aside>
-        {/* pb-24 (mobile) liberta espaço para a barra inferior FIXA. */}
-        <main className="min-w-0 flex-1 px-4 py-5 pb-24 md:px-0 md:py-0 md:pb-6">{children}</main>
+        <main className="min-w-0 flex-1 px-4 py-5 pb-6 md:px-0 md:py-0 md:pb-6">{children}</main>
       </div>
       <BottomNav variant="admin" />
     </div>
