@@ -166,7 +166,7 @@ export function BookingBlock({
         l.style.whiteSpace = "nowrap";
         l.style.overflow = "hidden";
       });
-      let size = 10.5;
+      let size = 9.5;
       el.style.setProperty("font-size", `${size}px`, "important");
       let guard = 0;
       const overflows = () => lines.some((l) => l.scrollWidth > l.clientWidth + 0.5);
@@ -544,8 +544,8 @@ export function BookingBlock({
         <div className="font-semibold tabular-nums leading-none text-[9px]">{formatTime(b.starts_at)}</div>
         {/* Pill "Duo" por cima do nome (transposta do fitnessv2). */}
         {b.partner_profiles?.full_name && (
-          <span className="mt-0.5 inline-flex w-fit items-center gap-0.5 rounded-full bg-[#CECBF6] px-1 py-px text-[8px] font-semibold uppercase leading-none tracking-wide text-[#26215C] dark:bg-[#534AB7] dark:text-[#EEEDFE]">
-            <Users size={8} strokeWidth={2.5} /> Duo
+          <span className="mt-0.5 inline-flex w-fit items-center gap-px rounded-full bg-[#CECBF6] px-[3px] py-px text-[7px] font-semibold uppercase leading-none tracking-wide text-[#26215C] dark:bg-[#534AB7] dark:text-[#EEEDFE]">
+            <Users size={7} strokeWidth={2.5} /> Duo
           </span>
         )}
         <div
@@ -555,7 +555,7 @@ export function BookingBlock({
             // Base responsiva; o auto-fit (useEffect) reduz a fonte se um nome
             // longo não couber numa linha. Em duo, a pill "Duo" saiu para cima,
             // por isso 2 linhas (nome + parceiro) chegam.
-            fontSize: "clamp(6px, 1.95vw, 10px)",
+            fontSize: "clamp(6px, 1.85vw, 9.5px)",
             display: "-webkit-box",
             WebkitLineClamp: 2,
             WebkitBoxOrient: "vertical",
