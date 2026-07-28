@@ -12,6 +12,8 @@ export default async function RegisterPage(
 ) {
   const searchParams = await props.searchParams;
   const trainerId = searchParams.trainer?.trim() || null;
+  // Máximo do seletor de data = hoje (impede escolher datas no futuro).
+  const today = new Date().toISOString().slice(0, 10);
   return (
     // Padding-top fixo em vez de justify-center: assim o logo
     // aterra na mesma coordenada Y em /login, /recuperar e /registar
@@ -63,6 +65,11 @@ export default async function RegisterPage(
                 placeholder="9XXXXXXXX"
               />
               <p className="mt-1 text-xs text-ink-500">9 dígitos, sem espaços.</p>
+            </div>
+            <div>
+              <label className="label">Data de nascimento (opcional)</label>
+              <input name="date_of_birth" type="date" max={today} className="input" />
+              <p className="mt-1 text-xs text-ink-500">Podes deixar em branco.</p>
             </div>
             <div>
               <label className="label">Password</label>

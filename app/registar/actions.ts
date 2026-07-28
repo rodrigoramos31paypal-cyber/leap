@@ -26,6 +26,22 @@ export async function registerAction(formData: FormData) {
     );
   }
 
+  // Data de nascimento (OPCIONAL). Se preenchida, tem de ser uma data real
+  // (YYYY-MM-DD) e não no futuro; senão devolve erro. Em branco → ignorada.
+  const dobRaw = String(formData.get("date_of_birth") ?? "").trim();
+  let date_of_birth: string | null = null;
+  if (dobRaw) {
+    const d = new Date(dobRaw + "T00:00:00Z");
+    const valid =
+      /^\d{4}-\d{2}-\d{2}$/.test(dobRaw) &&
+      !Number.isNaN(d.getTime()) &&
+      d.getTime() <= Date.now();
+    if (!valid) {
+      redirect("/registar?error=" + encodeURIComponent("Data de nascimento inválida."));
+    }
+    date_of_birth = dobRaw;
+  }
+
   // SEC (H-C, audit jun/2026): defesa em profundidade no boundary.
   // O trainer_id vem do form (página pública /t/<slug> → /registar?
   // trainer=<id>) e acaba em user_metadata → handle_new_user. O trigger
@@ -48,14 +64,17 @@ export async function registerAction(formData: FormData) {
     if (data) trainer_id = trainerIdRaw;
   }
 
+  // Metadados do signUp → lidos pelo trigger handle_new_user ao criar o perfil.
+  const meta: Record<string, unknown> = { full_name, phone: phoneDigits };
+  if (trainer_id) meta.trainer_id = trainer_id;
+  if (date_of_birth) meta.date_of_birth = date_of_birth;
+
   const supabase = await createClient();
   const { error } = await supabase.auth.signUp({
     email,
     password,
     options: {
-      data: trainer_id
-        ? { full_name, phone: phoneDigits, trainer_id }
-        : { full_name, phone: phoneDigits },
+      data: meta,
       emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/auth/callback`,
     },
   });
