@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { NotebookPen, StickyNote, ExternalLink, Coins, Clock, Users } from "lucide-react";
+import { NotebookPen, StickyNote, ExternalLink, Coins, Clock, Users, Cake } from "lucide-react";
 import { formatTime, BOOKING_STATUS } from "@/lib/utils";
 import { NoteEditor } from "@/components/note-editor";
 import {
@@ -448,6 +448,21 @@ export function BookingBlock({
   // Cliente é DUO? A cor da bolha passa a AZUL para as sessões duo.
   const isDuo = !!b.partner_profiles?.full_name;
 
+  // Aniversário HOJE: o dia/mês da sessão coincide com o da data de
+  // nascimento do cliente (no fuso do estúdio). Mostra um bolo no canto.
+  const isBirthday = (() => {
+    const dob = b.profiles?.date_of_birth as string | null | undefined;
+    if (!dob || !/^\d{4}-\d{2}-\d{2}$/.test(dob)) return false;
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/Lisbon",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date(b.starts_at));
+    const mm = parts.find((p) => p.type === "month")?.value;
+    const dd = parts.find((p) => p.type === "day")?.value;
+    return !!mm && !!dd && dob.slice(5) === `${mm}-${dd}`;
+  })();
+
   // Paleta nova das sessões: verde = confirmada, vermelho = falta, vermelho
   // esbatido + riscado = cancelada, azul = duo. "Por aceitar" (booked) mantém
   // o dourado original (decisão do produto). Prioridade de cor:
@@ -514,16 +529,28 @@ export function BookingBlock({
         />
       )}
       {b.status !== "cancelled" &&
-        (clientNote?.body || note?.body || (teamNotes && teamNotes.length > 0)) && (
-          <span
-            title={
-              clientNote?.body
-                ? "O cliente deixou uma nota"
-                : "Esta sessão tem notas"
-            }
-            className="pointer-events-none absolute bottom-1 right-1 z-10 inline-flex h-[15px] w-[15px] items-center justify-center rounded bg-amber-300 text-amber-900"
-          >
-            <StickyNote size={10} strokeWidth={2.25} />
+        (isBirthday || clientNote?.body || note?.body || (teamNotes && teamNotes.length > 0)) && (
+          <span className="pointer-events-none absolute bottom-1 right-1 z-10 flex items-center gap-0.5">
+            {isBirthday && (
+              <span
+                title="O cliente faz anos hoje"
+                className="inline-flex h-[15px] w-[15px] items-center justify-center rounded bg-pink-200 text-pink-800"
+              >
+                <Cake size={10} strokeWidth={2.25} />
+              </span>
+            )}
+            {(clientNote?.body || note?.body || (teamNotes && teamNotes.length > 0)) && (
+              <span
+                title={
+                  clientNote?.body
+                    ? "O cliente deixou uma nota"
+                    : "Esta sessão tem notas"
+                }
+                className="inline-flex h-[15px] w-[15px] items-center justify-center rounded bg-amber-300 text-amber-900"
+              >
+                <StickyNote size={10} strokeWidth={2.25} />
+              </span>
+            )}
           </span>
         )}
       <button
