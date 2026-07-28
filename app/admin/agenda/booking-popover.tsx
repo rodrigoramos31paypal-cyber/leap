@@ -542,6 +542,12 @@ export function BookingBlock({
         className="flex h-full w-full flex-col [cursor:inherit] px-0.5 py-0.5 text-left"
       >
         <div className="font-semibold tabular-nums leading-none text-[9px]">{formatTime(b.starts_at)}</div>
+        {/* Pill "Duo" por cima do nome (transposta do fitnessv2). */}
+        {b.partner_profiles?.full_name && (
+          <span className="mt-0.5 inline-flex w-fit items-center gap-px rounded-full bg-[#CECBF6] px-[3px] py-px text-[7px] font-semibold uppercase leading-none tracking-wide text-[#26215C] dark:bg-[#534AB7] dark:text-[#EEEDFE]">
+            <Users size={7} strokeWidth={2.5} /> Duo
+          </span>
+        )}
         <div
           ref={nameRef}
           className={`${overlap ? "mt-0" : "mt-px"} break-words font-medium leading-[1.2] [overflow-wrap:anywhere]`}
