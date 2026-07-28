@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { NotebookPen, Plus, EyeOff, Eye } from "lucide-react";
+import { NotebookPen, Plus, EyeOff, Eye, Cake } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getClientCredits } from "@/lib/credits";
 import { getDuoPartner } from "@/lib/duo";
@@ -17,6 +17,20 @@ import { DeleteClientSection } from "./delete-client-section";
 import { LateCancelReview } from "./late-cancel-review";
 
 const SESSIONS_PAGE_SIZE = 10;
+
+// Data de nascimento: "YYYY-MM-DD" → "DD/MM/YYYY" + idade actual.
+function formatDob(dob: string): string {
+  const [y, m, d] = dob.split("-");
+  return `${d}/${m}/${y}`;
+}
+function ageFromDob(dob: string): number | null {
+  const [y, m, d] = dob.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  const now = new Date();
+  let age = now.getFullYear() - y;
+  if (now.getMonth() + 1 < m || (now.getMonth() + 1 === m && now.getDate() < d)) age -= 1;
+  return age >= 0 && age < 130 ? age : null;
+}
 
 export default async function ClientDetail(props: {
   params: Promise<{ id: string }>;
@@ -49,7 +63,7 @@ export default async function ClientDetail(props: {
     f === "futuras" || f === "passadas" ? f : reviewFilter ?? "todas";
   const { data: profile } = await (supabase as any)
     .from("profiles")
-    .select("id, full_name, email, phone, banned")
+    .select("id, full_name, email, phone, banned, date_of_birth")
     .eq("id", params.id)
     .single();
   if (!profile) {
@@ -154,6 +168,18 @@ export default async function ClientDetail(props: {
         <div>
           <h1 className="font-display text-2xl font-bold tracking-tight">{profile.full_name}</h1>
           <p className="text-sm text-ink-500">{profile.email}{profile.phone ? ` · ${profile.phone}` : ""}</p>
+          {profile.date_of_birth && (
+            <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-ink-900/10 bg-white px-3 py-1 text-[13px] text-ink-600 dark:border-white/10 dark:bg-white/5">
+              <Cake size={14} className="text-pink-600" />
+              Nascimento:{" "}
+              <strong className="font-semibold text-ink-900 dark:text-bone-50">
+                {formatDob(profile.date_of_birth)}
+              </strong>
+              {ageFromDob(profile.date_of_birth) != null && (
+                <span className="text-ink-400">({ageFromDob(profile.date_of_birth)} anos)</span>
+              )}
+            </div>
+          )}
         </div>
         <Link
           href={`/admin/notas?client=${profileId}`}

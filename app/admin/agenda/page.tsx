@@ -175,7 +175,7 @@ async function CalendarView({
       : Promise.resolve({ data: null }),
     // PERF: só as colunas usadas pela UI (antes era `*`). purchases:
     // purchase_id(...) → progresso do pack no popover.
-    supabase
+    (supabase as any)
       .from("bookings")
       .select(
         "id, starts_at, ends_at, session_type, status, client_id, trainer_id, series_id, purchase_id, partner_client_id, profiles:client_id(full_name, email, date_of_birth), partner_profiles:partner_client_id(full_name), purchases:purchase_id(sessions_total, sessions_remaining, pack_snapshot)",

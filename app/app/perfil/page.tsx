@@ -159,6 +159,7 @@ async function loadTabData(
 
 function PerfilTab({ profile, factors }: { profile: any; factors: any[] }) {
   const hasFactor = factors.length > 0;
+  const today = new Date().toISOString().slice(0, 10);
   return (
     <div className="space-y-4">
       <form action={updateProfileAction} className="card space-y-4 p-5">
@@ -173,6 +174,16 @@ function PerfilTab({ profile, factors }: { profile: any; factors: any[] }) {
         <div>
           <label className="label">Telemóvel</label>
           <input name="phone" defaultValue={profile?.phone ?? ""} className="input" />
+        </div>
+        <div>
+          <label className="label">Data de nascimento (opcional)</label>
+          <input
+            name="date_of_birth"
+            type="date"
+            defaultValue={profile?.date_of_birth ?? ""}
+            max={today}
+            className="input"
+          />
         </div>
         <button type="submit" className="btn-primary w-full">Guardar</button>
       </form>

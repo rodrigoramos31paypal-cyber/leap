@@ -80,9 +80,26 @@ export async function updateProfileAction(formData: FormData) {
   const full_name = String(formData.get("full_name") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
 
-  const { error } = await supabase
+  // Data de nascimento (OPCIONAL). Em branco → limpa (null). Se preenchida,
+  // tem de ser uma data real (YYYY-MM-DD) e não no futuro.
+  const dobRaw = String(formData.get("date_of_birth") ?? "").trim();
+  let date_of_birth: string | null = null;
+  if (dobRaw) {
+    const d = new Date(dobRaw + "T00:00:00Z");
+    const valid =
+      /^\d{4}-\d{2}-\d{2}$/.test(dobRaw) &&
+      !Number.isNaN(d.getTime()) &&
+      d.getTime() <= Date.now();
+    if (!valid) {
+      await setFlash("Data de nascimento inválida.", "error");
+      redirect("/app/perfil?tab=perfil");
+    }
+    date_of_birth = dobRaw;
+  }
+
+  const { error } = await (supabase as any)
     .from("profiles")
-    .update({ full_name, phone: phone || null })
+    .update({ full_name, phone: phone || null, date_of_birth })
     .eq("id", user.id);
 
   if (error) {
