@@ -413,14 +413,23 @@ export function BookingBlock({
     );
   }
 
+  // Cliente é DUO? A cor da bolha passa a AZUL para as sessões duo.
+  const isDuo = !!b.partner_profiles?.full_name;
+
+  // Paleta nova das sessões: verde = confirmada, vermelho = falta, vermelho
+  // esbatido + riscado = cancelada, azul = duo. "Por aceitar" (booked) mantém
+  // o dourado original (decisão do produto). Prioridade de cor:
+  //   cancelada > falta > por-aceitar > duo > confirmada.
   const tone =
-    b.status === "confirmed"
-      ? "bg-emerald-50 border-emerald-300 text-emerald-900 hover:bg-emerald-100"
+    b.status === "cancelled"
+      ? "bg-[#e98585]/50 border-[#c85045] text-[#3a0d0d] line-through hover:bg-[#e98585]/60"
       : b.status === "no_show"
-        ? "bg-red-50 border-red-300 text-red-900 hover:bg-red-100"
-        : b.status === "cancelled"
-          ? "bg-ink-900/5 border-ink-900/15 text-ink-500 line-through hover:bg-ink-900/10"
-          : "bg-gold-50 border-gold-300 text-ink-900 hover:bg-gold-100";
+        ? "bg-[#e98585] border-[#c85045] text-[#3a0d0d] hover:bg-[#e57a7a]"
+        : b.status === "booked"
+          ? "bg-gold-50 border-gold-300 text-ink-900 hover:bg-gold-100"
+          : isDuo
+            ? "bg-[#69abe6] border-[#3b84c9] text-[#0a2b48] hover:bg-[#5aa0e0]"
+            : "bg-[#57c093] border-[#34a373] text-[#06301e] hover:bg-[#4bb589]";
 
   // Marcador "último crédito": anel vermelho por cima da cor do estado
   // (mantém verde/dourado mas avisa que o cliente fica sem sessões).
