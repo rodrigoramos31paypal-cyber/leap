@@ -144,10 +144,42 @@ export function BookingBlock({
   const [refundCredit, setRefundCredit] = useState(true);
   const [preview, setPreview] = useState<Preview | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const nameRef = useRef<HTMLDivElement>(null);
 
   // Portal so no cliente (document indisponivel no SSR).
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+
+  // ── Auto-fit do nome no bloco (transposto do fitnessv2): mede cada linha
+  // (nome/apelido) e reduz a fonte só o suficiente para caber numa linha, com
+  // piso mínimo. Nomes normais ficam iguais; só um invulgarmente longo encolhe
+  // um pouco, sem quebrar para linha nova. Recorre em resize (a largura da
+  // coluna muda). Usa !important para vencer o clamp do estilo inline.
+  useEffect(() => {
+    const el = nameRef.current;
+    if (!el) return;
+    const fit = () => {
+      const lines = Array.from(el.children) as HTMLElement[];
+      if (lines.length === 0) return;
+      el.style.display = "block";
+      lines.forEach((l) => {
+        l.style.whiteSpace = "nowrap";
+        l.style.overflow = "hidden";
+      });
+      let size = 10.5;
+      el.style.setProperty("font-size", `${size}px`, "important");
+      let guard = 0;
+      const overflows = () => lines.some((l) => l.scrollWidth > l.clientWidth + 0.5);
+      while (overflows() && size > 7 && guard < 24) {
+        size -= 0.5;
+        el.style.setProperty("font-size", `${size}px`, "important");
+        guard++;
+      }
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [b.id]);
 
 
   // refs de drag (não provocam re-render)
@@ -489,9 +521,9 @@ export function BookingBlock({
                 ? "O cliente deixou uma nota"
                 : "Esta sessão tem notas"
             }
-            className="pointer-events-none absolute bottom-0.5 right-0.5 z-10 text-ink-900 dark:text-bone-50"
+            className="pointer-events-none absolute bottom-1 right-1 z-10 inline-flex h-[15px] w-[15px] items-center justify-center rounded bg-amber-300 text-amber-900"
           >
-            <StickyNote size={12} strokeWidth={2} />
+            <StickyNote size={10} strokeWidth={2.25} />
           </span>
         )}
       <button
@@ -510,28 +542,28 @@ export function BookingBlock({
         className="flex h-full w-full flex-col [cursor:inherit] px-0.5 py-0.5 text-left"
       >
         <div className="font-semibold tabular-nums leading-none text-[9px]">{formatTime(b.starts_at)}</div>
+        {/* Pill "Duo" por cima do nome (transposta do fitnessv2). */}
+        {b.partner_profiles?.full_name && (
+          <span className="mt-0.5 inline-flex w-fit items-center gap-0.5 rounded-full bg-[#CECBF6] px-1 py-px text-[8px] font-semibold uppercase leading-none tracking-wide text-[#26215C] dark:bg-[#534AB7] dark:text-[#EEEDFE]">
+            <Users size={8} strokeWidth={2.5} /> Duo
+          </span>
+        )}
         <div
+          ref={nameRef}
           className={`${overlap ? "mt-0" : "mt-px"} break-words font-medium leading-[1.2] [overflow-wrap:anywhere]`}
           style={{
-            // Font responsivo: 6 px mínimo (mobile estreito) → 10 px
-            // máximo (tablet+). Em 380 px mobile, 1.95vw ≈ 7.4 px
-            // (≈1 px mais pequeno do que antes), em desktop atinge
-            // o cap de 10 px (igual). Em sobreposição limitamos a
-            // 1 linha para reduzir altura e não tocar na borda do
-            // bloco da frente que vem por baixo.
+            // Base responsiva; o auto-fit (useEffect) reduz a fonte se um nome
+            // longo não couber numa linha. Em duo, a pill "Duo" saiu para cima,
+            // por isso 2 linhas (nome + parceiro) chegam.
             fontSize: "clamp(6px, 1.95vw, 10px)",
             display: "-webkit-box",
-            // Numa sessão individual mostramos nome + apelido em 2 linhas
-            // (mesmo em sobreposição). Em DUO mantemos o comportamento
-            // antigo: 1 linha quando há overlap, 2 caso contrário.
-            WebkitLineClamp: b.partner_profiles?.full_name ? (overlap ? 2 : 3) : 2,
+            WebkitLineClamp: 2,
             WebkitBoxOrient: "vertical",
             overflow: "hidden",
           }}
         >
           {b.partner_profiles?.full_name ? (
             <>
-              <span className="block font-bold">Duo</span>
               <span className="block">{firstNameLong(b.profiles?.full_name)}</span>
               <span className="block">{firstNameLong(b.partner_profiles?.full_name)}</span>
             </>
