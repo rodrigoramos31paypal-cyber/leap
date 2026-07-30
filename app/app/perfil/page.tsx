@@ -77,8 +77,16 @@ export default async function PerfilPage(
 }
 
 function TabNav({ active }: { active: TabId }) {
+  // Barra segmentada em pílulas (design fitnessv2): largura igual, ativa =
+  // pílula branca com sombra. Substitui os separadores com sublinhado.
+  const short: Record<TabId, string> = {
+    perfil: "Perfil",
+    calendario: "Calendário",
+    notas: "Notas",
+    notificacoes: "Notificações",
+  };
   return (
-    <div className="flex gap-1 overflow-x-auto border-b border-ink-900/10 pb-px">
+    <div className="flex gap-1 rounded-xl border border-ink-900/[0.07] bg-bone-100 p-1 dark:border-white/10 dark:bg-ink-900">
       {TABS.map((t) => {
         const isActive = t.id === active;
         return (
@@ -86,14 +94,12 @@ function TabNav({ active }: { active: TabId }) {
             key={t.id}
             href={`/app/perfil?tab=${t.id}`}
             className={
-              "inline-flex shrink-0 items-center gap-1.5 -mb-px border-b-2 px-3 py-2 text-sm font-medium transition " +
-              (isActive
-                ? "border-ink-900 text-ink-900 dark:border-bone-50 dark:text-bone-50"
-                : "border-transparent text-ink-500 hover:text-ink-700")
+              isActive
+                ? "flex-1 truncate rounded-lg bg-white px-0.5 py-1.5 text-center text-[10.5px] font-semibold text-ink-900 shadow-sm dark:bg-ink-800 dark:text-bone-50"
+                : "flex-1 truncate rounded-lg px-0.5 py-1.5 text-center text-[10.5px] font-medium text-ink-500 transition hover:text-ink-900 dark:hover:text-bone-50"
             }
           >
-            <span className="text-ink-500">{t.icon}</span>
-            {t.label}
+            {short[t.id] ?? t.label}
           </Link>
         );
       })}
