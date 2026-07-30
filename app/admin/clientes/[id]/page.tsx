@@ -121,7 +121,8 @@ export default async function ClientDetail(props: {
     { data: purchasesRaw },
     { data: bookingsRaw, count: bookingsCount },
   ] = await Promise.all([
-    tab === "resumo" ? getClientCredits(profileId) : Promise.resolve(null),
+    // Premium: o saldo aparece no cabeçalho em qualquer tab → busca sempre.
+    getClientCredits(profileId),
     tab === "compras"
       ? supabase
           .from("purchases")
@@ -164,10 +165,13 @@ export default async function ClientDetail(props: {
   return (
     <div className="space-y-5">
       <Link href="/admin/clientes" className="text-sm text-ink-500 hover:text-ink-900">← Clientes</Link>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight">{profile.full_name}</h1>
-          <p className="text-sm text-ink-500">{profile.email}{profile.phone ? ` · ${profile.phone}` : ""}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="font-display text-[1.6rem] font-bold leading-tight tracking-tight">{profile.full_name}</h1>
+          <p className="truncate text-[12.5px] text-ink-500">
+            {profile.email}
+            {profile.phone ? ` · ${profile.phone}` : ""}
+          </p>
           {profile.date_of_birth && (
             <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-ink-900/10 bg-white px-3 py-1 text-[13px] text-ink-600 dark:border-white/10 dark:bg-white/5">
               <Cake size={14} className="text-pink-600" />
@@ -181,18 +185,13 @@ export default async function ClientDetail(props: {
             </div>
           )}
         </div>
-        <Link
-          href={`/admin/notas?client=${profileId}`}
-          className="btn-outline inline-flex items-center gap-1.5 text-xs"
-        >
-          <NotebookPen size={12} /> Ver minhas notas deste cliente
-        </Link>
+        <BalanceChip total={credits?.total ?? 0} />
       </div>
 
-      <div className="flex gap-2 border-b border-ink-900/10">
-        <TabLink href={tabHref("resumo")} active={tab === "resumo"} label="Resumo" />
-        <TabLink href={tabHref("compras")} active={tab === "compras"} label="Compras" />
-        <TabLink href={tabHref("sessoes")} active={tab === "sessoes"} label="Sessões" />
+      <div className="flex gap-1 rounded-xl border border-ink-900/[0.07] bg-bone-100 p-1 dark:border-white/10 dark:bg-ink-900">
+        <SegTab href={tabHref("resumo")} active={tab === "resumo"} label="Resumo" />
+        <SegTab href={tabHref("compras")} active={tab === "compras"} label="Compras" />
+        <SegTab href={tabHref("sessoes")} active={tab === "sessoes"} label="Sessões" />
       </div>
 
       {tab === "resumo" && (
@@ -218,22 +217,26 @@ export default async function ClientDetail(props: {
             </div>
           )}
 
-          <div className="card p-4">
-            <div className="text-xs uppercase tracking-wide text-ink-500">Total sessões disponíveis</div>
-            <div className="mt-1 font-display text-2xl font-bold">{credits?.total ?? 0}</div>
+          <div className="rounded-2xl border border-[#EBD98F] bg-[#FBF4DE] p-4 dark:border-gold-400/30 dark:bg-gold-400/10">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-[#8A6D12] dark:text-gold-300">
+              Sessões disponíveis
+            </div>
+            <div className="mt-1 font-display text-[2.2rem] font-bold leading-none tabular-nums text-[#3d3100] dark:text-gold-100">
+              {credits?.total ?? 0}
+            </div>
             {/* DUO: divisão por tipo. Em par duo o saldo PT Dupla é
                 partilhado (migration 0113) — o sufixo "partilhado" deixa
                 claro que esse número espelha as duas contas. */}
-            <div className="mt-3 grid grid-cols-2 gap-3 border-t border-ink-900/5 pt-3 text-sm">
+            <div className="mt-3 grid grid-cols-2 gap-3 border-t border-[#EBD98F] pt-3 dark:border-gold-400/20">
               <div>
-                <div className="text-[11px] uppercase tracking-wide text-ink-500">PT Individual</div>
-                <div className="mt-0.5 font-display text-lg font-bold tabular-nums">{credits?.individual ?? 0}</div>
+                <div className="text-[10px] uppercase tracking-wide text-[#9a7d22] dark:text-gold-300/70">PT Individual</div>
+                <div className="mt-0.5 font-display text-lg font-bold tabular-nums text-[#3d3100] dark:text-gold-100">{credits?.individual ?? 0}</div>
               </div>
               <div>
-                <div className="text-[11px] uppercase tracking-wide text-ink-500">
+                <div className="text-[10px] uppercase tracking-wide text-[#9a7d22] dark:text-gold-300/70">
                   PT Dupla{duoPartner ? " · partilhado" : ""}
                 </div>
-                <div className="mt-0.5 font-display text-lg font-bold tabular-nums">{credits?.dupla ?? 0}</div>
+                <div className="mt-0.5 font-display text-lg font-bold tabular-nums text-[#3d3100] dark:text-gold-100">{credits?.dupla ?? 0}</div>
               </div>
             </div>
           </div>
@@ -256,6 +259,15 @@ export default async function ClientDetail(props: {
           )}
 
           {!isDeleted && <DuoLinkSection clientId={profileId} partner={duoPartner} />}
+
+          <div className="pt-1 text-center">
+            <Link
+              href={`/admin/notas?client=${profileId}`}
+              className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-gold-600 hover:text-gold-700 dark:text-gold-400"
+            >
+              <NotebookPen size={13} /> Ver as minhas notas deste cliente
+            </Link>
+          </div>
         </>
       )}
 
@@ -384,16 +396,35 @@ function purchaseStatusColor(s: string): "ok" | "danger" | "warn" {
   return "warn";
 }
 
-function TabLink({ href, active, label }: { href: string; active: boolean; label: string }) {
+function SegTab({ href, active, label }: { href: string; active: boolean; label: string }) {
   return (
     <Link
       href={href}
-      className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
-        active ? "border-ink-900 text-ink-900 dark:border-bone-50 dark:text-bone-50" : "border-transparent text-ink-500"
-      }`}
+      className={
+        active
+          ? "flex-1 rounded-lg bg-white px-2 py-1.5 text-center text-[12px] font-semibold text-ink-900 shadow-sm dark:bg-ink-800 dark:text-bone-50"
+          : "flex-1 rounded-lg px-2 py-1.5 text-center text-[12px] font-medium text-ink-500 transition hover:text-ink-900 dark:hover:text-bone-50"
+      }
     >
       {label}
     </Link>
+  );
+}
+
+function BalanceChip({ total }: { total: number }) {
+  if (total > 0) {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[10.5px] font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+        {total} {total === 1 ? "sessão" : "sessões"}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-1 text-[10.5px] font-semibold text-red-700 dark:bg-red-500/15 dark:text-red-300">
+      <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+      Sem sessões
+    </span>
   );
 }
 

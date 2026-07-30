@@ -1,13 +1,16 @@
 import Link from "next/link";
-import { Calendar } from "lucide-react";
+import { ChevronRight, EyeOff, Eye, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getAccessibleTrainerIds } from "@/lib/trainer";
-import { BOOKING_STATUS, formatDateTime } from "@/lib/utils";
+import { BOOKING_STATUS } from "@/lib/utils";
 
 // Lista de sessões do estúdio (âmbito do admin), acedida pela bolha
-// "Sessões marcadas" do dashboard. Dois separadores: Marcadas (todas,
-// mais recentes primeiro — default) e Futuras (só as próximas). Botão para
-// ocultar canceladas, igual às outras páginas.
+// "Sessões marcadas" do dashboard. Separadores: Marcadas (todas, mais
+// recentes primeiro — default), Futuras e Canceladas. Botão para ocultar
+// canceladas, igual às outras páginas.
+//
+// DESIGN PREMIUM (alinhado com o fitnessv2): tabs segmentadas, lista
+// agrupada por dia (hora + nome + pill Duo + chip de estado).
 export const metadata = { title: "Sessões", robots: { index: false, follow: false } };
 
 export const dynamic = "force-dynamic";
@@ -22,6 +25,36 @@ function localIso(startsAt: string): string {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date(startsAt));
+}
+
+function hhmm(startsAt: string): string {
+  return new Intl.DateTimeFormat("pt-PT", {
+    timeZone: "Europe/Lisbon",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(startsAt));
+}
+
+// Cabeçalho de grupo por dia: "Hoje · Qui, 24 jul" / "Amanhã · …" / "Seg, 20 jul".
+function dayLabel(startsAt: string): string {
+  const d = localIso(startsAt);
+  const now = new Date();
+  const today = localIso(now.toISOString());
+  const tmr = new Date(now);
+  tmr.setDate(tmr.getDate() + 1);
+  const tomorrow = localIso(tmr.toISOString());
+  const pretty = new Intl.DateTimeFormat("pt-PT", {
+    timeZone: "Europe/Lisbon",
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+  })
+    .format(new Date(startsAt))
+    .replace(/\./g, "");
+  const cap = pretty.charAt(0).toUpperCase() + pretty.slice(1);
+  if (d === today) return `Hoje · ${cap}`;
+  if (d === tomorrow) return `Amanhã · ${cap}`;
+  return cap;
 }
 
 function statusClass(status: string): string {
@@ -81,97 +114,126 @@ export default async function SessoesPage(props: {
     return `/admin/sessoes${qs ? `?${qs}` : ""}`;
   };
 
-  const tabCls = (active: boolean) =>
+  // Agrupar por dia preservando a ordem já vinda da query.
+  const groups: { key: string; label: string; items: any[] }[] = [];
+  for (const b of (rows ?? []) as any[]) {
+    const key = localIso(b.starts_at);
+    let g = groups[groups.length - 1];
+    if (!g || g.key !== key) {
+      g = { key, label: dayLabel(b.starts_at), items: [] };
+      groups.push(g);
+    }
+    g.items.push(b);
+  }
+
+  const segCls = (active: boolean) =>
     active
-      ? "rounded-lg bg-ink-900 px-3 py-1.5 text-sm font-semibold text-bone-50 dark:bg-bone-50 dark:text-ink-900"
-      : "rounded-lg border border-ink-900/10 px-3 py-1.5 text-sm text-ink-700 hover:bg-ink-900/5 dark:border-white/10 dark:text-bone-100 dark:hover:bg-white/5";
+      ? "flex-1 rounded-lg bg-white px-2 py-1.5 text-center text-[12px] font-semibold text-ink-900 shadow-sm dark:bg-ink-800 dark:text-bone-50"
+      : "flex-1 rounded-lg px-2 py-1.5 text-center text-[12px] font-medium text-ink-500 transition hover:text-ink-900 dark:hover:text-bone-50";
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <div className="flex items-center gap-2">
-        <Calendar size={18} />
-        <h1 className="font-display text-lg font-bold">Sessões</h1>
+      <div>
+        <h1 className="font-display text-[1.75rem] font-bold leading-tight tracking-tight">Sessões</h1>
+        <p className="text-sm text-ink-500">
+          {total} {total === 1 ? "sessão" : "sessões"} · todas as marcações do estúdio
+        </p>
       </div>
 
-      <div className="flex gap-2">
-        <Link href={hrefFor({ f: "marcadas", page: 1 })} className={tabCls(tab === "marcadas")}>
+      <div className="flex gap-1 rounded-xl border border-ink-900/[0.07] bg-bone-100 p-1 dark:border-white/10 dark:bg-ink-900">
+        <Link href={hrefFor({ f: "marcadas", page: 1 })} className={segCls(tab === "marcadas")}>
           Marcadas
         </Link>
-        <Link href={hrefFor({ f: "futuras", page: 1 })} className={tabCls(tab === "futuras")}>
+        <Link href={hrefFor({ f: "futuras", page: 1 })} className={segCls(tab === "futuras")}>
           Futuras
         </Link>
-        <Link href={hrefFor({ f: "canceladas", page: 1 })} className={tabCls(tab === "canceladas")}>
+        <Link href={hrefFor({ f: "canceladas", page: 1 })} className={segCls(tab === "canceladas")}>
           Canceladas
         </Link>
       </div>
 
       <div className="flex items-center justify-between">
-        <span className="text-xs text-ink-500">
-          {total} {total === 1 ? "sessão" : "sessões"}
+        <span className="text-[11.5px] text-ink-500">
+          A mostrar {(rows ?? []).length} de {total}
         </span>
         {tab !== "canceladas" && (
-          <Link href={hrefFor({ hc: !hideCancelled, page: 1 })} className="btn-outline text-xs">
+          <Link
+            href={hrefFor({ hc: !hideCancelled, page: 1 })}
+            className="inline-flex items-center gap-1.5 rounded-full border border-ink-900/10 bg-white px-3 py-1 text-[11px] font-medium text-ink-600 transition hover:border-gold-300 dark:border-white/10 dark:bg-ink-800 dark:text-bone-100"
+          >
+            {hideCancelled ? <Eye size={13} /> : <EyeOff size={13} />}
             {hideCancelled ? "Mostrar canceladas" : "Ocultar canceladas"}
           </Link>
         )}
       </div>
 
-      {!rows || rows.length === 0 ? (
+      {groups.length === 0 ? (
         <div className="card p-6 text-center text-sm text-ink-500">Sem sessões.</div>
       ) : (
-        <ul className="space-y-2">
-          {(rows as any[]).map((b) => {
-            const name = b.profiles?.full_name ?? "—";
-            const partner = b.partner_profiles?.full_name;
-            const cancelled = b.status === "cancelled";
-            return (
-              <li key={b.id}>
-                <Link
-                  href={`/admin/agenda?view=week&d=${localIso(b.starts_at)}&booking=${b.id}`}
-                  className="card flex items-center justify-between gap-3 p-3 transition-colors hover:bg-ink-900/[0.03] dark:hover:bg-white/[0.03]"
-                >
-                  <div className="min-w-0">
-                    <div
-                      className={`truncate text-sm font-semibold ${
-                        cancelled ? "text-ink-400 line-through" : ""
-                      }`}
-                    >
-                      {name}
-                      {partner ? ` & ${partner}` : ""}
-                    </div>
-                    <div className="text-xs tabular-nums text-ink-500">
-                      {formatDateTime(b.starts_at)}
-                      {b.session_type === "dupla" ? " · Dupla" : ""}
-                    </div>
-                  </div>
-                  <span
-                    className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusClass(
-                      b.status,
-                    )}`}
-                  >
-                    {(BOOKING_STATUS as any)[b.status] ?? b.status}
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="space-y-4">
+          {groups.map((g) => (
+            <div key={g.key}>
+              <div className="mb-1.5 px-1 text-[10.5px] font-semibold uppercase tracking-wide text-ink-400">
+                {g.label}
+              </div>
+              <div className="card overflow-hidden p-0">
+                <ul className="divide-y divide-ink-900/[0.06] dark:divide-white/[0.07]">
+                  {g.items.map((b) => {
+                    const name = b.profiles?.full_name ?? "—";
+                    const partner = b.partner_profiles?.full_name;
+                    const cancelled = b.status === "cancelled";
+                    const label = (BOOKING_STATUS as any)[b.status] ?? b.status;
+                    return (
+                      <li key={b.id}>
+                        <Link
+                          href={`/admin/agenda?view=week&d=${localIso(b.starts_at)}&booking=${b.id}`}
+                          className="flex items-center gap-3 px-3 py-3 transition hover:bg-ink-900/[0.02] dark:hover:bg-white/[0.03]"
+                        >
+                          <div className={`w-[46px] shrink-0 text-[13px] font-semibold tabular-nums ${cancelled ? "text-ink-400" : "text-ink-900 dark:text-bone-50"}`}>
+                            {hhmm(b.starts_at)}
+                          </div>
+                          <div className="flex min-w-0 flex-1 flex-col">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`truncate text-[13.5px] font-medium ${cancelled ? "text-ink-400 line-through" : "text-ink-900 dark:text-bone-50"}`}>
+                                {name}
+                                {partner ? ` & ${partner}` : ""}
+                              </span>
+                              {b.session_type === "dupla" && (
+                                <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-[#CECBF6] px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-[#26215C] dark:bg-[#534AB7] dark:text-[#EEEDFE]">
+                                  <Users size={9} /> Duo
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusClass(b.status)}`}>
+                            {label}
+                          </span>
+                          <ChevronRight size={15} className="shrink-0 text-ink-300 dark:text-white/25" />
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between pt-1">
           {pageNum > 1 ? (
-            <Link href={hrefFor({ page: pageNum - 1 })} className="btn-outline text-xs">
+            <Link href={hrefFor({ page: pageNum - 1 })} className="rounded-full border border-ink-900/10 bg-white px-3.5 py-1.5 text-[11.5px] font-medium text-ink-600 dark:border-white/10 dark:bg-ink-800 dark:text-bone-100">
               ← Anterior
             </Link>
           ) : (
             <span />
           )}
-          <span className="text-xs text-ink-500">
+          <span className="text-[11px] text-ink-500">
             Página {pageNum} / {totalPages}
           </span>
           {pageNum < totalPages ? (
-            <Link href={hrefFor({ page: pageNum + 1 })} className="btn-outline text-xs">
+            <Link href={hrefFor({ page: pageNum + 1 })} className="rounded-full border border-ink-900/10 bg-white px-3.5 py-1.5 text-[11.5px] font-semibold text-ink-900 dark:border-white/10 dark:bg-ink-800 dark:text-bone-50">
               Seguinte →
             </Link>
           ) : (

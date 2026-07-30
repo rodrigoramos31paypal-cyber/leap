@@ -5,7 +5,7 @@ import { getAccessibleTrainerIds, getClientIdsInScope } from "@/lib/trainer";
 import { getRecentSessionsForClient } from "@/lib/notes";
 import { createGeneralNoteAction, createBookingNoteAction } from "@/app/api/notes/actions";
 import { formatDateTime, BOOKING_STATUS } from "@/lib/utils";
-import { ArrowLeft, Search, NotebookPen, Sparkles } from "lucide-react";
+import { ArrowLeft, Search, NotebookPen, Sparkles, ChevronRight } from "lucide-react";
 
 export default async function NewAdminNotePage(
   props: {
@@ -190,22 +190,24 @@ export default async function NewAdminNotePage(
           {q ? "Nenhum cliente encontrado." : "Começa a escrever para procurar."}
         </div>
       ) : (
-        <ul className="mt-4 space-y-2">
-          {clientsList.map((c) => (
-            <li key={c.id}>
-              <Link
-                href={`/admin/notas/nova?client=${c.id}`}
-                className="card flex items-center justify-between p-4 hover:border-gold-400"
-              >
-                <div>
-                  <div className="text-sm font-semibold">{c.full_name}</div>
-                  <div className="text-xs text-ink-500">{c.email}{c.phone ? ` · ${c.phone}` : ""}</div>
-                </div>
-                <span className="text-xs font-medium text-gold-600">Escolher →</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <div className="mt-4 card overflow-hidden p-0">
+          <ul className="divide-y divide-ink-900/[0.06] dark:divide-white/[0.07]">
+            {clientsList.map((c) => (
+              <li key={c.id}>
+                <Link
+                  href={`/admin/notas/nova?client=${c.id}`}
+                  className="flex items-center gap-3 px-4 py-3 transition hover:bg-ink-900/[0.02] dark:hover:bg-white/[0.03]"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13.5px] font-medium text-ink-900 dark:text-bone-50">{c.full_name}</div>
+                    <div className="truncate text-[11.5px] text-ink-500">{c.email}{c.phone ? ` · ${c.phone}` : ""}</div>
+                  </div>
+                  <ChevronRight size={15} className="shrink-0 text-ink-300 dark:text-white/25" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </EditorShell>
   );
@@ -213,12 +215,12 @@ export default async function NewAdminNotePage(
 
 function EditorShell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-5">
-      <Link href="/admin/notas" className="inline-flex items-center gap-1 text-sm text-ink-500 hover:text-ink-900">
+    <div className="space-y-4">
+      <Link href="/admin/notas" className="inline-flex items-center gap-1 text-[13px] text-ink-500 hover:text-ink-900">
         <ArrowLeft size={14} /> Notas
       </Link>
       <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">{title}</h1>
+        <h1 className="font-display text-[1.6rem] font-bold leading-tight tracking-tight">{title}</h1>
       </div>
       <div>{children}</div>
     </div>
