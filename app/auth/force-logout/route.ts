@@ -32,6 +32,19 @@ export async function GET(request: NextRequest) {
   }
 
   const supabase = await createClient();
+
+  // ACH-1 (audit jul/2026): apaga as subscrições de push antes do signOut
+  // (RLS exige a sessão válida). Uma conta bloqueada não deve continuar a
+  // receber push num dispositivo partilhado. Best-effort.
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    await (supabase as any)
+      .from("push_subscriptions")
+      .delete()
+      .eq("user_id", user.id)
+      .then(() => {}, () => {});
+  }
+
   // signOut local: invalida o refresh token desta sessão e limpa os
   // cookies sb-*. (O ban no GoTrue já impede troca de refresh tokens
   // noutros dispositivos; o gate por-request trata-os na próxima ação.)

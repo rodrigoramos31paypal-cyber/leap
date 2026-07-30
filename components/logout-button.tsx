@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { LogOut } from "lucide-react";
+import { unsubscribePush } from "@/lib/push-client";
 
 // Logout fiável em PWA standalone (iOS). Antes era um <form method="post">
 // nativo para /auth/logout; em iOS instalado no ecrã principal a submissão
@@ -17,6 +18,10 @@ export function LogoutButton() {
   async function onLogout() {
     if (busy) return;
     setBusy(true);
+    // ACH-1: remove a subscrição de push do browser antes de sair (o
+    // servidor apaga a linha na BD). Evita subscrição órfã num dispositivo
+    // partilhado. Best-effort — não bloqueia o logout.
+    await unsubscribePush();
     try {
       // `redirect: "manual"` → não seguimos o 303 para "/"; só precisamos
       // que o POST corra (signOut + Set-Cookie a limpar a sessão). Os

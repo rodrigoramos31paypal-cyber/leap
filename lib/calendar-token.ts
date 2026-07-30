@@ -28,11 +28,18 @@
 import { createHmac, timingSafeEqual } from "crypto";
 
 function icsSecret(): string {
-  return (
-    process.env.CALENDAR_ICS_SECRET ||
-    process.env.CRON_SECRET ||
-    ""
-  );
+  const s = process.env.CALENDAR_ICS_SECRET || process.env.CRON_SECRET;
+  // ACH-5 (audit jul/2026): falhar FECHADO. Antes devolvíamos "" quando
+  // ambas as envs faltavam — o HMAC passava a usar chave vazia, tornando
+  // os tokens .ics FORJÁVEIS (qualquer pessoa leria o .ics de qualquer
+  // marcação sem sessão). Melhor rebentar de forma visível numa má
+  // configuração do que assinar/validar com chave vazia.
+  if (!s) {
+    throw new Error(
+      "CALENDAR_ICS_SECRET (ou CRON_SECRET) não definido — tokens .ics desativados.",
+    );
+  }
+  return s;
 }
 
 export function signBookingIcs(bookingId: string): string {
@@ -41,7 +48,13 @@ export function signBookingIcs(bookingId: string): string {
 
 export function verifyBookingIcs(bookingId: string, token: string | null | undefined): boolean {
   if (!token) return false;
-  const expected = signBookingIcs(bookingId);
+  // Sem segredo configurado, nenhum token pode ser válido → recusa (não 500).
+  let expected: string;
+  try {
+    expected = signBookingIcs(bookingId);
+  } catch {
+    return false;
+  }
   const a = Buffer.from(token);
   const b = Buffer.from(expected);
   if (a.length !== b.length) return false;

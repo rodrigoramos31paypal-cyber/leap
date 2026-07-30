@@ -12,6 +12,24 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = await createClient();
+
+  // ACH-1 (audit jul/2026): num dispositivo PARTILHADO (ex.: tablet da
+  // recepção) a subscrição de push sobrevivia ao logout — o push_dispatch
+  // continuava a entregar notificações do utilizador que saiu ao endpoint
+  // do browser, expondo nome/hora de sessão no ecrã de bloqueio ao próximo
+  // utilizador. Apagamos as subscrições ANTES do signOut (a RLS
+  // `push_subs_delete` exige user_id = auth.uid(), por isso tem de correr
+  // com a sessão ainda válida). O unsubscribe no browser é feito no cliente
+  // (components/logout-button.tsx). Best-effort: nunca bloqueia o logout.
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    await (supabase as any)
+      .from("push_subscriptions")
+      .delete()
+      .eq("user_id", user.id)
+      .then(() => {}, () => {});
+  }
+
   await supabase.auth.signOut();
   // M2: o "confiar neste dispositivo" não deve sobreviver ao logout num
   // computador partilhado — limpamos cookie + registo na BD.

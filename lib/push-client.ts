@@ -11,6 +11,22 @@ function urlBase64ToUint8Array(base64String: string) {
   return arr;
 }
 
+// ACH-1 (audit jul/2026): no logout, remove a subscrição de push do BROWSER
+// (o servidor já apaga a linha na BD em /auth/logout). Sem isto, o browser de
+// um dispositivo partilhado ficava com uma subscrição órfã pendurada. Best-
+// effort e nunca lança — o logout não pode ficar preso por causa do push.
+export async function unsubscribePush(): Promise<void> {
+  if (typeof window === "undefined") return;
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) await sub.unsubscribe();
+  } catch {
+    // ignora — a linha na BD já foi apagada server-side
+  }
+}
+
 // Chamado quando o utilizador LIGA o push nas preferências. Ao contrário do
 // auto-heal (que reutiliza a subscrição existente), aqui forçamos uma
 // subscrição FRESCA: uma subscrição antiga pode ter morrido em silêncio
