@@ -4,7 +4,7 @@ import Link from "next/link";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { eur, formatDateTime, BOOKING_STATUS, PURCHASE_STATUS } from "@/lib/utils";
 import { cancelBookingAction, rebookAction } from "./actions";
-import { CalendarPlus, RefreshCcw, NotebookPen, Users, EyeOff, Eye } from "lucide-react";
+import { CalendarPlus, RefreshCcw, NotebookPen, Users, EyeOff, Eye, ChevronDown } from "lucide-react";
 import { NoteEditor } from "@/components/note-editor";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { getMyNotesMapForBookings } from "@/lib/notes";
@@ -67,9 +67,27 @@ export default async function HistoricoPage(
         </div>
       ) : null}
 
-      <div className="flex gap-2 border-b border-ink-900/10">
-        <TabLink href="/app/historico" active={tab === "sessoes"} label="Sessões" />
-        <TabLink href="/app/historico?tab=compras" active={tab === "compras"} label="Compras" />
+      <div className="flex gap-1 rounded-xl border border-ink-900/[0.07] bg-bone-100 p-1 dark:border-white/10 dark:bg-ink-900">
+        <Link
+          href="/app/historico"
+          className={
+            tab === "sessoes"
+              ? "flex-1 rounded-lg bg-white px-2 py-1.5 text-center text-[12.5px] font-semibold text-ink-900 shadow-sm dark:bg-ink-800 dark:text-bone-50"
+              : "flex-1 rounded-lg px-2 py-1.5 text-center text-[12.5px] font-medium text-ink-500 transition hover:text-ink-900 dark:hover:text-bone-50"
+          }
+        >
+          Sessões
+        </Link>
+        <Link
+          href="/app/historico?tab=compras"
+          className={
+            tab === "compras"
+              ? "flex-1 rounded-lg bg-white px-2 py-1.5 text-center text-[12.5px] font-semibold text-ink-900 shadow-sm dark:bg-ink-800 dark:text-bone-50"
+              : "flex-1 rounded-lg px-2 py-1.5 text-center text-[12.5px] font-medium text-ink-500 transition hover:text-ink-900 dark:hover:text-bone-50"
+          }
+        >
+          Compras
+        </Link>
       </div>
 
       {tab === "sessoes" && (
@@ -165,54 +183,95 @@ async function SessoesTab({ userId, filter, hideCancelled }: { userId: string; f
       {bookings.map((b) => {
         const isFuture = new Date(b.starts_at).getTime() > Date.now();
         const canModify = isFuture && (b.status === "booked" || b.status === "confirmed");
-        return (
-          <li key={b.id} className="card p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-semibold">{formatDateTime(b.starts_at)}</div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-ink-500 capitalize">{b.session_type}</span>
-                  {b.partner_client_id && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-gold-100 px-2 py-0.5 text-[10px] font-semibold text-gold-700 dark:bg-gold-400/15">
-                      <Users size={10} /> Duo
-                    </span>
-                  )}
-                </div>
-              </div>
-              <StatusChip status={b.status} />
-            </div>
-            {canModify && (
-              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <a
-                  href={`/api/bookings/${b.id}/ics?t=${signBookingIcs(b.id)}`}
-                  className="btn-outline inline-flex items-center justify-center gap-1.5 text-xs"
-                >
-                  <CalendarPlus size={14} /> Adicionar ao calendário
-                </a>
-                <form action={rebookAction}>
-                  <input type="hidden" name="bookingId" value={b.id} />
-                  <button className="btn-outline inline-flex w-full items-center justify-center gap-1.5 text-xs">
-                    <RefreshCcw size={14} /> Reagendar
-                  </button>
-                </form>
-                <form action={cancelBookingAction}>
-                  <input type="hidden" name="bookingId" value={b.id} />
-                  <PendingSubmitButton
-                    className="btn-outline w-full text-xs text-red-700 hover:bg-red-50 border-red-200"
-                    pendingLabel="A cancelar…"
-                  >
-                    Cancelar
-                  </PendingSubmitButton>
-                </form>
-              </div>
-            )}
 
-            <details className="mt-3 border-t border-ink-900/5 pt-3">
-              <summary className="cursor-pointer inline-flex items-center gap-1.5 text-xs font-semibold text-ink-600 hover:text-ink-900">
-                <NotebookPen size={12} /> As minhas notas
+        const badge = (
+          <div
+            className={`flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl ${
+              b.status === "cancelled"
+                ? "bg-ink-900/[0.06] text-ink-400 dark:bg-white/10 dark:text-white/40"
+                : b.status === "no_show"
+                  ? "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300"
+                  : "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+            }`}
+          >
+            <span className="text-[15px] font-bold leading-none">
+              {new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", day: "2-digit" }).format(new Date(b.starts_at))}
+            </span>
+            <span className="text-[8px] font-semibold uppercase">
+              {new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", month: "short" }).format(new Date(b.starts_at)).replace(/\./g, "")}
+            </span>
+          </div>
+        );
+
+        const info = (
+          <div className="min-w-0">
+            <div className={`text-sm font-semibold ${b.status === "cancelled" ? "text-ink-400 line-through" : ""}`}>
+              {formatDateTime(b.starts_at)}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs capitalize text-ink-500">{b.session_type}</span>
+              {b.partner_client_id && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-gold-100 px-2 py-0.5 text-[10px] font-semibold text-gold-700 dark:bg-gold-400/15">
+                  <Users size={10} /> Duo
+                </span>
+              )}
+            </div>
+          </div>
+        );
+
+        const actionButtons = canModify ? (
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <a
+              href={`/api/bookings/${b.id}/ics?t=${signBookingIcs(b.id)}`}
+              className="btn-outline inline-flex items-center justify-center gap-1.5 text-xs"
+            >
+              <CalendarPlus size={14} /> Adicionar ao calendário
+            </a>
+            <form action={rebookAction}>
+              <input type="hidden" name="bookingId" value={b.id} />
+              <button className="btn-outline inline-flex w-full items-center justify-center gap-1.5 text-xs">
+                <RefreshCcw size={14} /> Reagendar
+              </button>
+            </form>
+            <form action={cancelBookingAction}>
+              <input type="hidden" name="bookingId" value={b.id} />
+              <PendingSubmitButton
+                className="btn-outline w-full text-xs text-red-700 hover:bg-red-50 border-red-200"
+                pendingLabel="A cancelar…"
+              >
+                Cancelar
+              </PendingSubmitButton>
+            </form>
+          </div>
+        ) : null;
+
+        const notesBlock = (
+          <details className="border-t border-ink-900/5 pt-3">
+            <summary className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-ink-600 hover:text-ink-900">
+              <NotebookPen size={12} /> As minhas notas
+            </summary>
+            <div className="mt-2">
+              <NoteEditor bookingId={b.id} initialBody={notesMap.get(b.id)?.body} compact sharedWithTrainer />
+            </div>
+          </details>
+        );
+
+        return (
+          <li key={b.id}>
+            <details className="card group overflow-hidden p-0">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  {badge}
+                  {info}
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <StatusChip status={b.status} />
+                  <ChevronDown size={16} className="text-ink-400 transition-transform group-open:rotate-180" />
+                </div>
               </summary>
-              <div className="mt-2">
-                <NoteEditor bookingId={b.id} initialBody={notesMap.get(b.id)?.body} compact sharedWithTrainer />
+              <div className="space-y-3 border-t border-ink-900/[0.06] p-3 dark:border-white/[0.07]">
+                {actionButtons}
+                {notesBlock}
               </div>
             </details>
           </li>
@@ -248,7 +307,7 @@ async function ComprasTab({ userId, filter }: { userId: string; filter: "todas" 
               <div className="text-xs text-ink-500">{formatDateTime(p.created_at)}</div>
             </div>
             <div className="text-right">
-              <div className="font-display font-bold">{eur(p.amount_cents)}</div>
+              <div className="font-display font-bold text-gold-600 dark:text-gold-400">{eur(p.amount_cents)}</div>
               <div className="text-xs text-ink-500">{p.sessions_remaining}/{p.sessions_total} restantes</div>
             </div>
           </div>

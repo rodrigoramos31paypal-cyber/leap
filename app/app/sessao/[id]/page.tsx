@@ -61,25 +61,37 @@ export default async function SessaoPage(props: { params: Promise<{ id: string }
     no_show: "chip-danger",
   };
 
+  // Badge de data premium (dia + mês, cor por estado).
+  const badgeCls: Record<string, string> = {
+    booked: "bg-gold-100 text-gold-700 dark:bg-gold-400/15 dark:text-gold-300",
+    confirmed: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
+    cancelled: "bg-ink-900/[0.06] text-ink-400 dark:bg-white/10 dark:text-white/40",
+    no_show: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
+  };
+  const badgeDay = new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", day: "2-digit" }).format(new Date(b.starts_at));
+  const badgeMon = new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", month: "short" }).format(new Date(b.starts_at)).replace(/\./g, "");
+
   return (
     <div className="space-y-5">
       <BackLink />
 
-      <div className="card p-5">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-base font-semibold">{formatDateTime(b.starts_at)}</div>
-            <div className="text-xs text-ink-500 capitalize">Sessão {b.session_type}</div>
-            {duoPartnerName && (
-              <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-gold-100 px-2 py-0.5 text-[11px] font-semibold text-gold-700 dark:bg-gold-400/15">
-                <Users size={11} /> Duo · com {duoPartnerName.split(" ")[0]}
-              </div>
-            )}
-          </div>
-          <span className={chipCls[b.status] ?? "chip-mute"}>
-            {(BOOKING_STATUS as any)[b.status] ?? b.status}
-          </span>
+      <div className="card flex items-center gap-4 p-4">
+        <div className={`flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-2xl ${badgeCls[b.status] ?? "bg-ink-900/[0.06] text-ink-500"}`}>
+          <span className="text-xl font-bold leading-none">{badgeDay}</span>
+          <span className="text-[9px] font-semibold uppercase tracking-wide">{badgeMon}</span>
         </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[16px] font-semibold text-ink-900 dark:text-bone-50">{formatDateTime(b.starts_at)}</div>
+          <div className="text-xs capitalize text-ink-500">Sessão {b.session_type}</div>
+          {duoPartnerName && (
+            <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-gold-100 px-2 py-0.5 text-[11px] font-semibold text-gold-700 dark:bg-gold-400/15">
+              <Users size={11} /> Duo · com {duoPartnerName.split(" ")[0]}
+            </div>
+          )}
+        </div>
+        <span className={chipCls[b.status] ?? "chip-mute"}>
+          {(BOOKING_STATUS as any)[b.status] ?? b.status}
+        </span>
       </div>
 
       {canModify ? (

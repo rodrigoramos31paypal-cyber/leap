@@ -28,11 +28,11 @@ export default async function AvaliarSessaoPage(props: { params: Promise<{ id: s
   const existing = await getMyRatingForBooking(b.id);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <BackLink />
 
       <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">
+        <h1 className="font-display text-[1.75rem] font-bold leading-tight tracking-tight">
           {existing ? "Editar avaliação" : "Avaliar sessão"}
         </h1>
         <p className="text-sm text-ink-500">
