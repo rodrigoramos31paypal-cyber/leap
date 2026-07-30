@@ -33,7 +33,7 @@ import { ForceUpdateButton } from "@/components/force-update-button";
 import { AuditControls } from "./audit-filter";
 import { AUDIT_ACTIONS } from "./audit-log-labels";
 import { AuditTable, type AuditRow } from "./audit-table";
-import { RegrasSubtabs } from "./regras-subtabs";
+import { RegrasSubtabs, AgendaSubtabs } from "./regras-subtabs";
 
 type TabId = "perfil" | "notificacoes" | "slideshow" | "regras" | "horarios" | "calendario" | "seguranca" | "registo" | "equipa";
 
@@ -677,27 +677,62 @@ function RegrasTab({
           {
             id: "agenda",
             label: "Agenda",
-            formContent: (
-              <div className="card space-y-4 p-5">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Agenda</h2>
-                <label className="flex items-start gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    name="show_cancelled_in_calendar"
-                    defaultChecked={(settings as any)?.show_cancelled_in_calendar ?? false}
-                    className="mt-0.5"
-                  />
-                  <span>
-                    <span className="font-semibold">Mostrar sessões canceladas na agenda</span>
-                    <span className="block text-xs text-ink-500">
-                      Desligado (default), as sessões canceladas não aparecem no calendário.
-                    </span>
-                  </span>
-                </label>
-              </div>
-            ),
             extraContent: (
-              <HorariosTab trainerId={trainerId} availability={availability} blocks={blocks} />
+              <AgendaSubtabs
+                showCancelledDefault={(settings as any)?.show_cancelled_in_calendar ?? false}
+                horarios={
+                  <div className="card p-5">
+                    <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">
+                      Horários disponíveis
+                    </h2>
+                    <p className="mt-1 text-xs text-ink-500">
+                      Define os intervalos em que aceitas marcações. Podes ter mais do que um
+                      intervalo por dia (ex.: manhã e tarde). As alterações são guardadas
+                      automaticamente.
+                    </p>
+                    <WeeklyScheduleEditor trainerId={trainerId} initial={availability} />
+                  </div>
+                }
+                bloqueios={
+                  <div className="card p-5">
+                    <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">
+                      Bloqueios / férias
+                    </h2>
+                    <p className="mt-1 text-xs text-ink-500">
+                      Para adicionar novos bloqueios, usa{" "}
+                      <a
+                        href="/admin/agenda"
+                        className="font-medium text-ink-900 underline hover:no-underline"
+                      >
+                        Agenda → Marcar-me indisponível
+                      </a>. Aqui só removes os existentes.
+                    </p>
+                    <ul className="mt-3 space-y-2">
+                      {blocks.length === 0 && <li className="text-sm text-ink-500">Sem bloqueios.</li>}
+                      {blocks.map((b: any) => (
+                        <li
+                          key={b.id}
+                          className="flex items-center justify-between gap-3 border-b border-ink-900/5 pb-2 text-sm last:border-0"
+                        >
+                          <div className="min-w-0">
+                            <div className="tabular-nums">
+                              {new Date(b.starts_at).toLocaleString("pt-PT", { hour12: false })} →{" "}
+                              {new Date(b.ends_at).toLocaleString("pt-PT", { hour12: false })}
+                            </div>
+                            {b.reason && <div className="text-xs text-ink-500">{b.reason}</div>}
+                          </div>
+                          <form action={deleteBlockAction}>
+                            <input type="hidden" name="id" value={b.id} />
+                            <button className="text-xs font-medium text-red-700 hover:underline">
+                              Apagar
+                            </button>
+                          </form>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                }
+              />
             ),
           },
         ]}
