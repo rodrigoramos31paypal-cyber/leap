@@ -1,17 +1,35 @@
 "use client";
 
 // ════════════════════════════════════════════════════════════════
-// Sub-abas das Regras. Barra segmentada no topo; só a secção ativa fica
-// visível. As restantes ficam MONTADAS (hidden) para que TODOS os campos
-// continuem a submeter com o mesmo formulário — guardar grava tudo de uma vez.
+// Sub-abas das Regras. Barra segmentada no topo; só a aba ativa fica visível.
+//
+// O FORMULÁRIO das definições (saveSettingsAction) vive AQUI e envolve os
+// campos de todas as abas (`formContent`) — que ficam sempre montados (hidden)
+// para submeterem juntos num só "Guardar".
+//
+// `extraContent` (por aba) é renderizado FORA do formulário — para conteúdo
+// que tem os SEUS PRÓPRIOS formulários (ex.: Horários/Bloqueios na aba Agenda),
+// que não pode ser aninhado dentro do formulário das definições.
 // ════════════════════════════════════════════════════════════════
 
 import { useState } from "react";
+import type { ReactNode, ComponentProps } from "react";
+
+type Section = {
+  id: string;
+  label: string;
+  formContent: ReactNode;
+  extraContent?: ReactNode;
+};
 
 export function RegrasSubtabs({
   sections,
+  settingsAction,
+  trainerId,
 }: {
-  sections: { id: string; label: string; content: React.ReactNode }[];
+  sections: Section[];
+  settingsAction: ComponentProps<"form">["action"];
+  trainerId: string;
 }) {
   const [active, setActive] = useState(sections[0]?.id);
 
@@ -38,11 +56,23 @@ export function RegrasSubtabs({
         })}
       </div>
 
-      {sections.map((s) => (
-        <div key={s.id} hidden={s.id !== active}>
-          {s.content}
-        </div>
-      ))}
+      <form action={settingsAction} className="space-y-4">
+        <input type="hidden" name="trainerId" value={trainerId} />
+        {sections.map((s) => (
+          <div key={s.id} hidden={s.id !== active}>
+            {s.formContent}
+          </div>
+        ))}
+        <button className="btn-primary w-full sm:w-auto">Guardar</button>
+      </form>
+
+      {sections.map((s) =>
+        s.extraContent ? (
+          <div key={s.id} hidden={s.id !== active} className="mt-5">
+            {s.extraContent}
+          </div>
+        ) : null,
+      )}
     </div>
   );
 }

@@ -142,16 +142,12 @@ export default async function DefinicoesPage(
         <NotificacoesTab prefs={tabData.notifPrefs ?? {}} />
       )}
       {section === "regras" && (
-        <div className="space-y-5">
-          <RegrasTab trainerId={trainer.id} settings={tabData.settings} />
-          {horData && (
-            <HorariosTab
-              trainerId={trainer.id}
-              availability={horData.availability}
-              blocks={horData.blocks}
-            />
-          )}
-        </div>
+        <RegrasTab
+          trainerId={trainer.id}
+          settings={tabData.settings}
+          availability={horData?.availability ?? []}
+          blocks={horData?.blocks ?? []}
+        />
       )}
       {section === "calendario" && (
         <CalendarioTab
@@ -536,19 +532,23 @@ function PerfilTab({
 function RegrasTab({
   trainerId,
   settings,
+  availability,
+  blocks,
 }: {
   trainerId: string;
   settings: any;
+  availability: any[];
+  blocks: any[];
 }) {
   return (
-    <form action={saveSettingsAction} className="space-y-4">
-      <input type="hidden" name="trainerId" value={trainerId} />
-      <RegrasSubtabs
-        sections={[
+    <RegrasSubtabs
+      settingsAction={saveSettingsAction}
+      trainerId={trainerId}
+      sections={[
           {
             id: "marcacoes",
             label: "Marcações",
-            content: (
+            formContent: (
               <div className="card space-y-4 p-5">
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Marcações</h2>
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -612,7 +612,7 @@ function RegrasTab({
           {
             id: "cancelamentos",
             label: "Cancelamentos",
-            content: (
+            formContent: (
               <div className="card space-y-4 p-5">
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Cancelamentos e faltas</h2>
                 <div className="sm:max-w-[50%]">
@@ -648,7 +648,7 @@ function RegrasTab({
           {
             id: "packs",
             label: "Packs",
-            content: (
+            formContent: (
               <div className="card space-y-4 p-5">
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Packs e créditos</h2>
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -677,7 +677,7 @@ function RegrasTab({
           {
             id: "agenda",
             label: "Agenda",
-            content: (
+            formContent: (
               <div className="card space-y-4 p-5">
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Agenda</h2>
                 <label className="flex items-start gap-2 text-sm">
@@ -696,11 +696,12 @@ function RegrasTab({
                 </label>
               </div>
             ),
+            extraContent: (
+              <HorariosTab trainerId={trainerId} availability={availability} blocks={blocks} />
+            ),
           },
         ]}
       />
-      <button className="btn-primary w-full sm:w-auto">Guardar</button>
-    </form>
   );
 }
 
