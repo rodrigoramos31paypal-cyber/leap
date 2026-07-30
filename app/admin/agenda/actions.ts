@@ -1170,3 +1170,41 @@ export async function getBookingClientHintsAction(
     return { hasPartner: false, individual: 0, dupla: 0 };
   }
 }
+
+// ────────────────────────────────────────────────────────────────
+// getPackPositionAction · posição CRONOLÓGICA desta sessão dentro do
+// pack que a paga. Ordena todas as marcações do mesmo `purchase_id`
+// por (starts_at, id) e devolve o índice 1-based desta.
+//
+// Ex.: pack de 8 → a 1.ª sessão do cliente lê "1", a 6.ª lê "6", a
+// última "8". Ao contrário do saldo `sessions_remaining` (que é vivo
+// e IGUAL em todos os bubbles do pack), este número é ESTÁVEL por
+// sessão — é o que o popover mostra como "X/Y" a contar para cima.
+//
+// Ignora as CANCELADAS (não consomem crédito), por isso a posição
+// nunca excede o total do pack. Se a própria sessão for cancelada,
+// não está no conjunto contado → devolve null (o popover cai no saldo).
+// ────────────────────────────────────────────────────────────────
+export async function getPackPositionAction(
+  purchaseId: string,
+  bookingId: string,
+): Promise<number | null> {
+  await requireStaff();
+  if (!purchaseId || !bookingId) return null;
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("bookings")
+      .select("id, starts_at")
+      .eq("purchase_id", purchaseId)
+      .neq("status", "cancelled")
+      .order("starts_at", { ascending: true })
+      .order("id", { ascending: true });
+    if (error || !data) return null;
+    const idx = data.findIndex((r: { id: string }) => r.id === bookingId);
+    return idx >= 0 ? idx + 1 : null;
+  } catch (e) {
+    logError("getPackPositionAction", e);
+    return null;
+  }
+}

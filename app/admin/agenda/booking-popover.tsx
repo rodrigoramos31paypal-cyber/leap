@@ -12,6 +12,7 @@ import {
   revertNoShowAction,
   cancelAdminAction,
   updateBookingDurationAction,
+  getPackPositionAction,
 } from "./actions";
 
 // ── helpers de drag ────────────────────────────────────────────────
@@ -143,6 +144,11 @@ export function BookingBlock({
   // Reverter falta: devolver crédito por defeito (escolha do trainer).
   const [refundCredit, setRefundCredit] = useState(true);
   const [preview, setPreview] = useState<Preview | null>(null);
+  // Posição desta sessão dentro do pack. `undefined` = ainda a carregar;
+  // `null` = sem posição (ex.: sessão cancelada) → cai no saldo; número =
+  // índice 1-based cronológico ("1/8", "6/8", "8/8"). Só é buscado quando o
+  // popover abre, para não pesar na grelha da agenda.
+  const [packPos, setPackPos] = useState<number | null | undefined>(undefined);
   const ref = useRef<HTMLDivElement>(null);
   const nameRef = useRef<HTMLDivElement>(null);
 
@@ -180,6 +186,21 @@ export function BookingBlock({
     window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
   }, [b.id]);
+
+  // ── Posição da sessão no pack. Só busca quando o popover abre e existe
+  // um pack com total. Dá um número ESTÁVEL por sessão (ao contrário do
+  // saldo `sessions_remaining`, vivo e igual em todos os bubbles do pack).
+  useEffect(() => {
+    if (!open) return;
+    if (!b.purchase_id || !b.purchases?.sessions_total) return;
+    let cancelled = false;
+    getPackPositionAction(b.purchase_id, b.id).then((pos) => {
+      if (!cancelled) setPackPos(pos);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, b.id, b.purchase_id, b.purchases?.sessions_total]);
 
 
   // refs de drag (não provocam re-render)
@@ -717,18 +738,22 @@ export function BookingBlock({
           )}
 
           {/* Progresso DO PACK que paga esta sessão (não do saldo geral
-              do cliente). Mostra "X/Y" onde X = sessões restantes neste
-              pack e Y = total do pack. Ex: cliente comprou um pack de 4
-              e fez 1 marcação → "3/4 sessões". Fallback para o saldo
-              agregado para sessões grátis (sem purchase) ou registos
-              antigos. */}
+              do cliente). Mostra "X/Y" com Y = total do pack e X = posição
+              CRONOLÓGICA desta sessão no pack (1.ª → "1/8", 6.ª → "6/8",
+              última → "8/8"). Número estável por sessão — buscado via
+              getPackPositionAction. Fallback para o saldo agregado quando
+              não há purchase (sessões grátis) ou registos antigos. */}
           <div className="mb-3 flex items-center justify-between gap-2 rounded-md border border-ink-900/10 bg-bone-50 px-3 py-2 text-xs">
             <div className="inline-flex items-center gap-1.5">
               <Coins size={14} className="text-gold-600" />
               {b.purchases?.sessions_total ? (
                 <span className="text-ink-700">
                   <span className="font-semibold tabular-nums">
-                    {b.purchases.sessions_remaining}/{b.purchases.sessions_total}
+                    {packPos === undefined
+                      ? `…/${b.purchases.sessions_total}`
+                      : packPos === null
+                        ? `${b.purchases.sessions_remaining}/${b.purchases.sessions_total}`
+                        : `${packPos}/${b.purchases.sessions_total}`}
                   </span>{" "}
                   sessões{b.purchases?.pack_snapshot?.name
                     ? ` · ${b.purchases.pack_snapshot.name}`
