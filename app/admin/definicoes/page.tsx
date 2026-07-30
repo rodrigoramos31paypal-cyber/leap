@@ -33,6 +33,7 @@ import { ForceUpdateButton } from "@/components/force-update-button";
 import { AuditControls } from "./audit-filter";
 import { AUDIT_ACTIONS } from "./audit-log-labels";
 import { AuditTable, type AuditRow } from "./audit-table";
+import { RegrasSubtabs } from "./regras-subtabs";
 
 type TabId = "perfil" | "notificacoes" | "slideshow" | "regras" | "horarios" | "calendario" | "seguranca" | "registo" | "equipa";
 
@@ -540,124 +541,165 @@ function RegrasTab({
   settings: any;
 }) {
   return (
-    <form action={saveSettingsAction} className="card space-y-4 p-5">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">
-        Regras de negócio
-      </h2>
+    <form action={saveSettingsAction} className="space-y-4">
       <input type="hidden" name="trainerId" value={trainerId} />
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label className="label">Durações permitidas (min, separadas por vírgula)</label>
-          <input
-            name="slot_durations"
-            defaultValue={(settings?.slot_durations_min ?? [45, 60, 90]).join(", ")}
-            className="input"
-          />
-        </div>
-        <div>
-          <label className="label">Duração default (min)</label>
-          <input
-            name="default_duration"
-            type="number"
-            defaultValue={settings?.default_slot_duration_min ?? 45}
-            className="input"
-          />
-        </div>
-        <div>
-          <label className="label">Janela cancelamento (horas)</label>
-          <input
-            name="cancellation_window"
-            type="number"
-            defaultValue={settings?.cancellation_window_hours ?? 12}
-            className="input"
-          />
-        </div>
-        <div>
-          <label className="label">Antecedência mínima de marcação (horas)</label>
-          <input
-            name="min_booking_notice"
-            type="number"
-            min={0}
-            defaultValue={settings?.min_booking_notice_hours ?? 12}
-            className="input"
-          />
-        </div>
-        <div>
-          <label className="label">Aviso a partir de (sessões)</label>
-          <input
-            name="low_threshold"
-            type="number"
-            defaultValue={settings?.low_credits_threshold ?? 2}
-            className="input"
-          />
-        </div>
-        <div>
-          <label className="label">Validade default packs (dias, vazio = sem validade)</label>
-          <input
-            name="validity_days"
-            type="number"
-            defaultValue={settings?.default_pack_validity_days ?? ""}
-            className="input"
-          />
-        </div>
-        <div>
-          <label className="label">Buffer entre sessões (min)</label>
-          <input
-            name="buffer"
-            type="number"
-            defaultValue={settings?.buffer_between_sessions_min ?? 0}
-            className="input"
-          />
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-4">
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            name="charge_late_cancel"
-            defaultChecked={settings?.charge_late_cancel ?? true}
-          />
-          Descontar em cancelamento tardio
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            name="charge_no_show"
-            defaultChecked={settings?.charge_no_show ?? true}
-          />
-          Descontar em falta
-        </label>
-        <label className="flex items-start gap-2 text-sm">
-          <input
-            type="checkbox"
-            name="auto_confirm_bookings"
-            defaultChecked={settings?.auto_confirm_bookings ?? true}
-            className="mt-0.5"
-          />
-          <span>
-            <span className="font-semibold">Confirmar marcações automaticamente</span>
-            <span className="block text-xs text-ink-500">
-              Quando ligado, qualquer marcação do cliente fica logo confirmada. Desligado, fica
-              pendente até carregares em &quot;Aceitar&quot;.
-            </span>
-          </span>
-        </label>
-        <label className="flex items-start gap-2 text-sm">
-          <input
-            type="checkbox"
-            name="show_cancelled_in_calendar"
-            defaultChecked={(settings as any)?.show_cancelled_in_calendar ?? false}
-            className="mt-0.5"
-          />
-          <span>
-            <span className="font-semibold">Mostrar sessões canceladas na agenda</span>
-            <span className="block text-xs text-ink-500">
-              Desligado (default), as sessões canceladas não aparecem no calendário.
-            </span>
-          </span>
-        </label>
-      </div>
-      <button className="btn-primary">Guardar</button>
+      <RegrasSubtabs
+        sections={[
+          {
+            id: "marcacoes",
+            label: "Marcações",
+            content: (
+              <div className="card space-y-4 p-5">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Marcações</h2>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="label">Durações permitidas (min, separadas por vírgula)</label>
+                    <input
+                      name="slot_durations"
+                      defaultValue={(settings?.slot_durations_min ?? [45, 60, 90]).join(", ")}
+                      className="input"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Duração default (min)</label>
+                    <input
+                      name="default_duration"
+                      type="number"
+                      defaultValue={settings?.default_slot_duration_min ?? 45}
+                      className="input"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Antecedência mínima de marcação (horas)</label>
+                    <input
+                      name="min_booking_notice"
+                      type="number"
+                      min={0}
+                      defaultValue={settings?.min_booking_notice_hours ?? 12}
+                      className="input"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Buffer entre sessões (min)</label>
+                    <input
+                      name="buffer"
+                      type="number"
+                      defaultValue={settings?.buffer_between_sessions_min ?? 0}
+                      className="input"
+                    />
+                  </div>
+                </div>
+                <div className="border-t border-ink-900/[0.06] pt-4 dark:border-white/[0.07]">
+                  <label className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      name="auto_confirm_bookings"
+                      defaultChecked={settings?.auto_confirm_bookings ?? true}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      <span className="font-semibold">Confirmar marcações automaticamente</span>
+                      <span className="block text-xs text-ink-500">
+                        Quando ligado, qualquer marcação do cliente fica logo confirmada. Desligado, fica
+                        pendente até carregares em &quot;Aceitar&quot;.
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              </div>
+            ),
+          },
+          {
+            id: "cancelamentos",
+            label: "Cancelamentos",
+            content: (
+              <div className="card space-y-4 p-5">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Cancelamentos e faltas</h2>
+                <div className="sm:max-w-[50%]">
+                  <label className="label">Janela cancelamento (horas)</label>
+                  <input
+                    name="cancellation_window"
+                    type="number"
+                    defaultValue={settings?.cancellation_window_hours ?? 12}
+                    className="input"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-4 border-t border-ink-900/[0.06] pt-4 dark:border-white/[0.07]">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      name="charge_late_cancel"
+                      defaultChecked={settings?.charge_late_cancel ?? true}
+                    />
+                    Descontar em cancelamento tardio
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      name="charge_no_show"
+                      defaultChecked={settings?.charge_no_show ?? true}
+                    />
+                    Descontar em falta
+                  </label>
+                </div>
+              </div>
+            ),
+          },
+          {
+            id: "packs",
+            label: "Packs",
+            content: (
+              <div className="card space-y-4 p-5">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Packs e créditos</h2>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="label">Validade default packs (dias, vazio = sem validade)</label>
+                    <input
+                      name="validity_days"
+                      type="number"
+                      defaultValue={settings?.default_pack_validity_days ?? ""}
+                      className="input"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Aviso a partir de (sessões)</label>
+                    <input
+                      name="low_threshold"
+                      type="number"
+                      defaultValue={settings?.low_credits_threshold ?? 2}
+                      className="input"
+                    />
+                  </div>
+                </div>
+              </div>
+            ),
+          },
+          {
+            id: "agenda",
+            label: "Agenda",
+            content: (
+              <div className="card space-y-4 p-5">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Agenda</h2>
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    name="show_cancelled_in_calendar"
+                    defaultChecked={(settings as any)?.show_cancelled_in_calendar ?? false}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    <span className="font-semibold">Mostrar sessões canceladas na agenda</span>
+                    <span className="block text-xs text-ink-500">
+                      Desligado (default), as sessões canceladas não aparecem no calendário.
+                    </span>
+                  </span>
+                </label>
+              </div>
+            ),
+          },
+        ]}
+      />
+      <button className="btn-primary w-full sm:w-auto">Guardar</button>
     </form>
   );
 }
