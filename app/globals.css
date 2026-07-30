@@ -104,6 +104,20 @@ input[type="date"]::-webkit-date-and-time-value {
   .input {
     @apply w-full rounded-lg border border-ink-900/15 bg-white px-3.5 py-2.5 text-sm text-ink-900 placeholder-ink-500/60 focus:border-gold-400 focus:outline-none focus:ring-2 focus:ring-gold-400/30 dark:border-white/15 dark:bg-ink-800 dark:text-bone-50 dark:placeholder-bone-100/40;
   }
+  /* iOS/WebKit: input[type=date] ignora parte do box-model (padding/altura)
+     e o campo fica mais baixo/estreito que os inputs de texto — foi o que se
+     via no Perfil. Forçamos appearance-none + min-height igual à altura de um
+     .input de texto (line-height 1.25rem + py-2.5 + borda = 2.625rem) e
+     alinhamos o valor à esquerda, para o campo de data ter a MESMA forma. */
+  input[type="date"].input {
+    -webkit-appearance: none;
+    appearance: none;
+    min-height: 2.625rem;
+  }
+  input[type="date"].input::-webkit-date-and-time-value {
+    text-align: left;
+    margin: 0;
+  }
   .label {
     @apply block text-xs font-medium uppercase tracking-wide text-ink-500 mb-1.5 dark:text-bone-100/70;
   }
