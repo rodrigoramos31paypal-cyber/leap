@@ -100,9 +100,9 @@ export default async function ClientDashboard() {
         <div className="mt-4 flex gap-2.5">
           <Link
             href="/app/agenda"
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-ink-900 px-3 py-3 text-sm font-semibold text-bone-50 transition hover:bg-ink-700 dark:bg-bone-50 dark:text-ink-900 dark:hover:bg-bone-100"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gold-400 px-3 py-3 text-sm font-semibold text-ink-900 transition hover:bg-gold-300 dark:text-bone-50"
           >
-            <Calendar size={16} className="text-gold-400 dark:text-gold-600" /> Marcar sessão
+            <Calendar size={16} /> Marcar sessão
           </Link>
           <Link
             href="/app/comprar"
