@@ -39,16 +39,14 @@ export default async function NotificationsPage() {
   );
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <BackLink />
       <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Notificações</h1>
-        <p className="text-xs text-ink-500">
-          A mostrar as 10 notificações mais recentes.
-        </p>
+        <h1 className="font-display text-[1.75rem] font-bold leading-tight tracking-tight">Notificações</h1>
+        <p className="text-[12.5px] text-ink-500">As 10 mais recentes</p>
       </div>
 
-      <NotificationsList initial={visible as any} scope="app" />
+      <NotificationsList initial={visible as any} scope="app" premium />
     </div>
   );
 }

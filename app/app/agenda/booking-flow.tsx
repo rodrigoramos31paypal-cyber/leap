@@ -486,10 +486,10 @@ export function BookingFlow({
                 type="button"
                 onClick={() => setPicked(s.startsAt)}
                 className={cn(
-                  "rounded-lg border py-2 text-sm font-medium tabular-nums",
+                  "border text-sm font-medium tabular-nums rounded-xl py-2.5",
                   picked === s.startsAt
-                    ? "border-gold-400 bg-gold-50 text-ink-900"
-                    : "border-ink-900/10 hover:bg-ink-900/5",
+                    ? "border-2 border-gold-400 bg-gold-50 text-[#3d3100] dark:bg-gold-400/10 dark:text-gold-200"
+                    : "border-ink-900/10 bg-white hover:bg-ink-900/5 dark:border-white/10 dark:bg-ink-800 dark:hover:bg-white/5",
                 )}
               >
                 {formatTime(s.startsAt)}

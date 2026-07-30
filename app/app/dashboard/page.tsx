@@ -69,6 +69,12 @@ export default async function ClientDashboard() {
   const noCredits = credits.total === 0;
 
   const nextSession = (upcoming ?? [])[0] as any | undefined;
+  const nextBadge = nextSession
+    ? {
+        day: new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", day: "2-digit" }).format(new Date(nextSession.starts_at)),
+        mon: new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", month: "short" }).format(new Date(nextSession.starts_at)).replace(/\./g, ""),
+      }
+    : null;
 
   return (
     <div className="space-y-2">
@@ -82,20 +88,26 @@ export default async function ClientDashboard() {
       <PushSubscribeCard />
 
       {/* Sessões disponíveis */}
-      <div className="card p-4">
+      <div className="rounded-[18px] border border-[#EBD98F] bg-[#FBF4DE] p-[18px] dark:border-gold-400/30 dark:bg-gold-400/10">
         <div className="flex items-center justify-between">
-          <span className="text-xs uppercase tracking-wide text-ink-500 dark:text-bone-100/60">Sessões disponíveis</span>
-          <Dumbbell size={16} className="text-gold-400" />
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-[#8A6D12] dark:text-gold-300">Sessões disponíveis</span>
+          <Dumbbell size={18} className="text-[#B08D2A] dark:text-gold-400" />
         </div>
-        <div className="mt-2 flex items-baseline gap-2">
-          <span className="font-display text-4xl font-black text-gold-500 dark:text-gold-400">{credits.total}</span>
-          <span className="text-sm text-ink-500 dark:text-bone-100/60">{pluralize(credits.total, "sessão", "sessões")}</span>
+        <div className="mt-1 flex items-baseline gap-2">
+          <span className="font-display text-[2.9rem] font-bold leading-none tabular-nums text-[#3d3100] dark:text-gold-100">{credits.total}</span>
+          <span className="text-sm text-[#9a7d22] dark:text-gold-300/70">{pluralize(credits.total, "sessão", "sessões")}</span>
         </div>
-        <div className="mt-4 flex gap-2">
-          <Link href="/app/agenda" className="btn-gold flex-1">
-            <Calendar size={16} /> Marcar sessão
+        <div className="mt-4 flex gap-2.5">
+          <Link
+            href="/app/agenda"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-ink-900 px-3 py-3 text-sm font-semibold text-bone-50 transition hover:bg-ink-700 dark:bg-bone-50 dark:text-ink-900 dark:hover:bg-bone-100"
+          >
+            <Calendar size={16} className="text-gold-400 dark:text-gold-600" /> Marcar sessão
           </Link>
-          <Link href="/app/comprar" className="btn-outline flex-1">
+          <Link
+            href="/app/comprar"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-[#EBD98F] bg-white px-3 py-3 text-sm font-medium text-[#3d3100] transition hover:bg-[#FBF4DE] dark:border-gold-400/30 dark:bg-transparent dark:text-gold-200 dark:hover:bg-white/5"
+          >
             <ShoppingBag size={16} /> Comprar pack
           </Link>
         </div>
@@ -138,16 +150,18 @@ export default async function ClientDashboard() {
           </div>
           <Link
             href={`/app/sessao/${nextSession.id}`}
-            className="card flex items-center justify-between gap-3 p-3 hover:border-gold-400"
+            className="card flex items-center gap-3 p-3.5 transition hover:border-gold-400"
           >
-            <div className="min-w-0">
-              <div className="font-display text-base font-bold">{formatDateTime(nextSession.starts_at)}</div>
-              <div className="text-xs text-ink-500 capitalize">{nextSession.session_type}</div>
+            <div className="flex h-[46px] w-[46px] shrink-0 flex-col items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+              <span className="text-base font-bold leading-none">{nextBadge?.day}</span>
+              <span className="text-[8px] font-semibold uppercase tracking-wide">{nextBadge?.mon}</span>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <span className="chip-ok">Confirmada</span>
-              <ChevronRight size={16} className="text-ink-500" />
+            <div className="min-w-0 flex-1">
+              <div className="font-display text-[15px] font-bold text-ink-900 dark:text-bone-50">{formatDateTime(nextSession.starts_at)}</div>
+              <div className="text-xs capitalize text-ink-500">{nextSession.session_type}</div>
             </div>
+            <span className="chip-ok shrink-0">Confirmada</span>
+            <ChevronRight size={16} className="shrink-0 text-ink-300 dark:text-white/25" />
           </Link>
         </section>
       )}
