@@ -16,10 +16,10 @@ export default async function SegurancaPage() {
   const isAdmin = profile?.role === "trainer" || profile?.role === "owner";
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <BackLink />
       <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Segurança</h1>
+        <h1 className="font-display text-[1.75rem] font-bold leading-tight tracking-tight">Segurança</h1>
         <p className="text-sm text-ink-500">
           Verificação em dois passos e dispositivos confiados.
         </p>

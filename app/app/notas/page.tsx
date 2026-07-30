@@ -17,15 +17,18 @@ export default async function ClientNotasPage() {
   const notes = await listMyNotes({ clientId: user.id, limit: 100 });
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <BackLink />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight">As minhas notas</h1>
+          <h1 className="font-display text-[1.75rem] font-bold leading-tight tracking-tight">As minhas notas</h1>
           <p className="text-sm text-ink-500">Diário das tuas sessões. Só tu lês.</p>
         </div>
-        <Link href="/app/notas/nova" className="btn-primary inline-flex items-center gap-1.5">
-          <Plus size={14} /> Adicionar nota
+        <Link
+          href="/app/notas/nova"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-ink-900 px-3.5 py-2 text-[12.5px] font-medium text-bone-50 dark:bg-bone-50 dark:text-ink-900"
+        >
+          <Plus size={15} className="text-gold-400 dark:text-gold-600" /> Nova nota
         </Link>
       </div>
 
