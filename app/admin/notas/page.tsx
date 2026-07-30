@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Plus, Sparkles, ArrowLeft, Search } from "lucide-react";
+import { Plus, Sparkles, ArrowLeft, Search, ChevronRight } from "lucide-react";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { NoteEditor } from "@/components/note-editor";
 import { GeneralNoteEditor } from "@/components/general-note-editor";
@@ -144,59 +144,60 @@ export default async function AdminNotasPage(
     .slice(0, 10);
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight">As minhas notas</h1>
-          <p className="text-sm text-ink-500">
-            Diário das tuas sessões, organizado por cliente. Só tu lês.
-          </p>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="font-display text-[1.75rem] font-bold leading-tight tracking-tight">Notas</h1>
+          <p className="text-[12.5px] text-ink-500">As tuas notas privadas, por cliente</p>
         </div>
-        <Link href="/admin/notas/nova" className="btn-primary inline-flex items-center gap-1.5">
-          <Plus size={14} /> Adicionar nota
+        <Link
+          href="/admin/notas/nova"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-ink-900 px-3.5 py-2 text-[12.5px] font-medium text-bone-50 dark:bg-bone-50 dark:text-ink-900"
+        >
+          <Plus size={15} className="text-gold-400 dark:text-gold-600" /> Nova nota
         </Link>
       </div>
 
       <form method="get" className="relative">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" />
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
         <input
           name="q"
           defaultValue={q}
-          placeholder="Procurar cliente por nome, email ou telefone…"
+          placeholder="Procurar cliente por nome, email…"
           className="input pl-9"
         />
       </form>
 
       {entries.length === 0 ? (
-        <div className="card p-5 text-center text-sm text-ink-500">
-          {q ? "Nenhum cliente encontrado." : "Sem notas ainda. Carrega em Adicionar nota para começar."}
+        <div className="card p-6 text-center text-sm text-ink-500">
+          {q ? "Nenhum cliente encontrado." : "Sem notas ainda. Carrega em Nova nota para começar."}
         </div>
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {entries.map(([cid, g]) => (
-            <li key={cid}>
-              <Link
-                href={`/admin/notas?client=${cid}`}
-                className="card flex h-full items-start gap-4 p-5 transition hover:border-gold-400 hover:shadow-glow"
-              >
-                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-ink-900 text-gold-400 font-display text-xl font-black">
-                  {g.name?.[0]?.toUpperCase() ?? "?"}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-bold tracking-tight">{g.name}</div>
-                  {g.email && <div className="truncate text-xs text-ink-500">{g.email}</div>}
-                  {g.phone && <div className="truncate text-xs text-ink-500">{g.phone}</div>}
-                  <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-bone-100 px-2.5 py-0.5 text-xs font-medium text-ink-700">
-                    {g.count} {g.count === 1 ? "nota" : "notas"}
+        <div className="card overflow-hidden p-0">
+          <ul className="divide-y divide-ink-900/[0.06] dark:divide-white/[0.07]">
+            {entries.map(([cid, g]) => (
+              <li key={cid}>
+                <Link
+                  href={`/admin/notas?client=${cid}`}
+                  className="flex items-center gap-3 px-4 py-3 transition hover:bg-ink-900/[0.02] dark:hover:bg-white/[0.03]"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[14px] font-medium text-ink-900 dark:text-bone-50">{g.name}</div>
+                    <div className="truncate text-[11.5px] text-ink-500">
+                      {g.email ?? g.phone ?? ""}
+                      {(g.email || g.phone) && " · "}
+                      última {formatDateTime(g.lastAt).split(",")[0]}
+                    </div>
                   </div>
-                  <div className="mt-1 text-[10px] uppercase tracking-wide text-ink-500/70">
-                    Última: {formatDateTime(g.lastAt).split(",")[0]}
-                  </div>
-                </div>
-              </Link>
-            </li>
-          ))}
-        </ul>
+                  <span className="shrink-0 rounded-full border border-[#EBD98F] bg-[#FBF4DE] px-2 py-0.5 text-[11px] font-semibold text-[#8A6D12] dark:border-gold-400/30 dark:bg-gold-400/10 dark:text-gold-300">
+                    {g.count}
+                  </span>
+                  <ChevronRight size={15} className="shrink-0 text-ink-300 dark:text-white/25" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );

@@ -8,10 +8,10 @@ export const metadata: Metadata = {
 
 export default function AnunciarPage() {
   return (
-    <div className="mx-auto max-w-lg space-y-5">
+    <div className="mx-auto max-w-lg space-y-4">
       <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Anunciar vaga</h1>
-        <p className="text-sm text-ink-500">Notifica os clientes de uma vaga de última hora.</p>
+        <h1 className="font-display text-[1.75rem] font-bold leading-tight tracking-tight">Anunciar vaga</h1>
+        <p className="text-sm text-ink-500">Avisa todos os clientes de uma vaga de última hora</p>
       </div>
       <AnunciarForm />
     </div>

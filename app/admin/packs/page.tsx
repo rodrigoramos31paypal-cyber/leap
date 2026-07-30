@@ -22,15 +22,15 @@ export default async function AdminPacksPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Packs</h1>
+        <h1 className="font-display text-[1.75rem] font-bold leading-tight tracking-tight">Packs</h1>
         <p className="text-sm text-ink-500">Define os packs e preços oferecidos.</p>
       </div>
 
-      <details className="card p-5">
-        <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
-          <Plus size={16} /> Criar novo pack
+      <details>
+        <summary className="inline-flex list-none cursor-pointer items-center gap-2 rounded-[11px] bg-ink-900 px-4 py-2.5 text-sm font-semibold text-bone-50 transition hover:bg-ink-700 [&::-webkit-details-marker]:hidden dark:bg-bone-50 dark:text-ink-900 dark:hover:bg-bone-100">
+          <Plus size={16} /> Novo pack
         </summary>
-        <form action={savePackAction} className="mt-4 grid gap-3 sm:grid-cols-2">
+        <form action={savePackAction} className="card mt-3 grid gap-3 p-4 sm:grid-cols-2">
           <input type="hidden" name="trainerId" value={trainerId ?? ""} />
           {/* session_type fixo a "individual" — a opção dupla está desactivada
               na UI até o cliente decidir reactivá-la. */}
