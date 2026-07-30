@@ -9,6 +9,7 @@ import { ListSkeleton } from "@/components/skeleton";
 import { NewClientButton } from "./new-client-button";
 import { RecentToggle } from "./recent-toggle";
 import { PendingAccounts } from "./pending-accounts";
+import { PremiumClientList } from "./client-card-premium";
 
 // "new" foi removido (decisão de produto). "todos" passou a "Todos clientes"
 // no label e a incluir clientes que se registaram com o trainer mas ainda
@@ -60,7 +61,7 @@ export default async function ClientesPage(
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight">Clientes</h1>
+          <h1 className="font-display text-[1.75rem] font-bold leading-tight tracking-tight">Clientes</h1>
           <p className="text-sm text-ink-500">{labelFor(tab, q) || "A carregar…"}</p>
         </div>
         <NewClientButton />
@@ -75,7 +76,7 @@ export default async function ClientesPage(
       )}
 
       {!q && (
-        <div className="flex flex-wrap gap-1 rounded-lg border border-ink-900/10 bg-white p-1 text-sm dark:border-white/10 dark:bg-ink-800">
+        <div className="v2-segment flex flex-wrap gap-1 text-sm">
           {/* "recent" é um sub-modo de "todos" → realça o separador "Todos". */}
           <TabLink current={tab === "recent" ? "todos" : tab} value="todos" label="Todos clientes" />
           <TabLink current={tab === "recent" ? "todos" : tab} value="upcoming" label="Próximas sessões" />
@@ -174,31 +175,7 @@ async function ClientList({ q, tab, page }: { q: string; tab: Tab; page: number 
           {q ? "Nenhum cliente encontrado." : "Sem clientes nesta vista."}
         </div>
       ) : (
-        <ul className="space-y-2">
-          {clients.map((c) => {
-            const sessions = sessionsMap.get(c.id) ?? 0;
-            return (
-              <li key={c.id} className="card">
-                <Link href={`/admin/clientes/${c.id}`} className="flex items-center justify-between p-4">
-                  <div>
-                    <div className="text-sm font-semibold">{c.full_name || "(sem nome)"}</div>
-                    {c.email && <div className="text-xs text-ink-500">{c.email}</div>}
-                    {c.phone && <div className="text-xs text-ink-500">{c.phone}</div>}
-                  </div>
-                  <div className="text-right">
-                    <span
-                      className={
-                        sessions === 0 ? "chip-danger" : sessions <= 2 ? "chip-warn" : "chip-ok"
-                      }
-                    >
-                      {sessions} {sessions === 1 ? "sessão" : "sessões"}
-                    </span>
-                  </div>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+        <PremiumClientList clients={clients} sessions={sessionsMap} />
       )}
 
       <Pagination
@@ -470,15 +447,18 @@ async function getScopedPageIdsFallback(
 
 function TabLink({ current, value, label }: { current: Tab; value: Tab; label: string }) {
   const active = current === value;
+  // Controlo segmentado premium: a pílula ativa ganha fundo branco + sombra
+  // (via .v2-seg-item[data-active] no globals.css).
   return (
     <Link
       href={`/admin/clientes?tab=${value}`}
       aria-current={active ? "page" : undefined}
+      data-active={active}
       className={cn(
-        "flex-1 rounded-md px-3 py-1.5 text-center font-medium transition",
+        "v2-seg-item flex flex-1 items-center justify-center px-3 py-2 text-center font-semibold",
         active
-          ? "bg-ink-900 text-white shadow-sm dark:bg-bone-50 dark:text-ink-900"
-          : "text-ink-600 hover:bg-ink-900/5 hover:text-ink-900 dark:text-bone-100 dark:hover:bg-white/10 dark:hover:text-bone-50",
+          ? "text-ink-900 dark:text-bone-50"
+          : "text-ink-500 hover:text-ink-900 dark:text-bone-100 dark:hover:text-bone-50",
       )}
     >
       {label}

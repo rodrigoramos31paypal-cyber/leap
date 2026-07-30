@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { eur, formatDateTime, PURCHASE_STATUS } from "@/lib/utils";
+import { eur, formatDateTime, PURCHASE_STATUS, cn } from "@/lib/utils";
 import { confirmPurchaseAction, rejectPurchaseAction, cancelConfirmedPurchaseAction } from "./actions";
 import { getAccessibleTrainerIds } from "@/lib/trainer";
 import { Pagination } from "@/components/pagination";
@@ -197,10 +197,10 @@ export default async function AdminPaymentsPage(
         resultHrefTemplate="/admin/pagamentos?client={id}"
       />
 
-      <div className="flex gap-2 border-b border-ink-900/10 dark:border-white/10">
+      <div className="v2-segment flex gap-1 text-sm">
         <Tab href="/admin/pagamentos?tab=confirmados" active={tab === "confirmados"} label="Confirmados" />
-        <Tab href="/admin/pagamentos?tab=rejeitados" active={tab === "rejeitados"} label="Rejeitados" />
         <Tab href="/admin/pagamentos?tab=pendentes" active={tab === "pendentes"} label="Pendentes" />
+        <Tab href="/admin/pagamentos?tab=rejeitados" active={tab === "rejeitados"} label="Rejeitados" />
       </div>
 
       {(!purchases || purchases.length === 0) ? (
@@ -220,58 +220,72 @@ export default async function AdminPaymentsPage(
   );
 }
 
+// DESIGN PREMIUM (alinhado com o fitnessv2): valor em destaque (font-display),
+// ponto de estado (verde confirmado · amarelo pendente · vermelho terminal),
+// meta discreta, ref em mono e ações limpas.
 function renderPurchase(p: any) {
   const pending =
     p.status === "awaiting_confirmation" || p.status === "pending_payment";
   const terminal = p.status === "rejected" || p.status === "cancelled";
+  const confirmed = p.status === "confirmed";
   const ref = `LEAP-${p.id.slice(0, 6).toUpperCase()}`;
-  const confirmCls =
-    "rounded-md bg-ink-900 px-2.5 py-1.5 text-xs font-semibold text-bone-50 hover:bg-ink-700 dark:bg-bone-50 dark:text-ink-900 dark:hover:bg-bone-100";
-  const dangerCls =
-    "rounded-md border border-red-200 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 dark:border-red-400/30 dark:text-red-300";
+  const dot = confirmed
+    ? "bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.15)]"
+    : terminal
+      ? "bg-rose-500 shadow-[0_0_0_3px_rgba(244,63,94,0.15)]"
+      : "bg-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.16)]";
 
   return (
-    <li key={p.id} className="card">
-      <div className="flex items-start justify-between gap-3 p-3">
-        <div className="min-w-0 flex-1">
+    <li key={p.id} className="card p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={cn("h-[7px] w-[7px] shrink-0 rounded-full", dot)} />
           <Link
             href={`/admin/pagamentos?client=${p.client_id}`}
-            className={`block truncate text-sm font-semibold hover:underline ${
-              terminal ? "text-ink-400" : ""
-            }`}
+            className={cn(
+              "font-display truncate text-[15px] font-semibold tracking-[-0.01em] hover:underline",
+              terminal ? "text-ink-500" : "text-ink-900 dark:text-bone-50",
+            )}
           >
             {p.profiles?.full_name ?? "—"}
           </Link>
-          <div className="mt-0.5 space-y-0.5 text-xs text-ink-500">
-            <div className="tabular-nums">{formatDateTime(p.created_at)}</div>
-            <div className="truncate">
-              {p.pack_snapshot?.name ?? "—"} · {paymentMethodLabel(p.payment_method)} ·{" "}
-              {eur(p.amount_cents)}
-            </div>
-            <div className="truncate">
-              Ref{" "}
-              <code className="rounded bg-bone-100 px-1 dark:bg-white/10">{ref}</code>
-            </div>
-          </div>
         </div>
+        <div className="font-display shrink-0 text-[17px] font-bold tracking-tight text-ink-900 dark:text-bone-50">
+          {eur(p.amount_cents)}
+        </div>
+      </div>
 
+      <div className="ml-[15px] mt-1.5 truncate text-xs text-[#9a9a92] dark:text-bone-100/45">
+        {p.pack_snapshot?.name ?? "—"} · {paymentMethodLabel(p.payment_method)} · {formatDateTime(p.created_at)}
+      </div>
+
+      <div className="ml-[15px] mt-2.5 flex items-center justify-between gap-2">
+        <code className="rounded-md bg-ink-900/[0.04] px-1.5 py-0.5 font-mono text-[11px] text-ink-500 dark:bg-white/10">
+          {ref}
+        </code>
         <div className="flex shrink-0 items-center gap-1.5">
           {pending && (
             <>
               <form action={confirmPurchaseAction}>
                 <input type="hidden" name="purchaseId" value={p.id} />
-                <button className={confirmCls}>Confirmar</button>
+                <button className="rounded-[10px] bg-ink-900 px-3.5 py-2 text-xs font-semibold text-bone-50 transition hover:bg-ink-700 dark:bg-bone-50 dark:text-ink-900 dark:hover:bg-bone-100">
+                  Confirmar
+                </button>
               </form>
               <form action={rejectPurchaseAction}>
                 <input type="hidden" name="purchaseId" value={p.id} />
-                <button className={dangerCls}>Rejeitar</button>
+                <button className="rounded-[10px] border border-ink-900/15 px-3 py-2 text-xs font-medium text-ink-600 transition hover:bg-ink-900/5 dark:border-white/15 dark:text-bone-100 dark:hover:bg-white/10">
+                  Rejeitar
+                </button>
               </form>
             </>
           )}
-          {p.status === "confirmed" && (
+          {confirmed && (
             <form action={cancelConfirmedPurchaseAction}>
               <input type="hidden" name="purchaseId" value={p.id} />
-              <button className={dangerCls}>Cancelar</button>
+              <button className="rounded-[10px] border border-red-300 px-3 py-2 text-xs font-medium text-red-700 transition hover:bg-red-50 dark:border-red-400/30 dark:text-red-300">
+                Cancelar
+              </button>
             </form>
           )}
           {terminal && (
@@ -289,14 +303,18 @@ function renderPurchase(p: any) {
 }
 
 function Tab({ href, active, label }: { href: string; active: boolean; label: string }) {
+  // Controlo segmentado premium (pílula ativa branca + sombra via .v2-seg-item).
   return (
     <Link
       href={href}
-      className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
+      aria-current={active ? "page" : undefined}
+      data-active={active}
+      className={cn(
+        "v2-seg-item flex flex-1 items-center justify-center px-3 py-2 text-center font-semibold",
         active
-          ? "border-ink-900 text-ink-900 dark:border-bone-50 dark:text-bone-50"
-          : "border-transparent text-ink-500"
-      }`}
+          ? "text-ink-900 dark:text-bone-50"
+          : "text-ink-500 hover:text-ink-900 dark:text-bone-100 dark:hover:text-bone-50",
+      )}
     >
       {label}
     </Link>

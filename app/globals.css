@@ -228,3 +228,27 @@ input[type="date"]::-webkit-date-and-time-value {
     padding-top: max(env(safe-area-inset-top), 0.5rem);
   }
 }
+
+/* Controlo segmentado (design premium, alinhado com o fitnessv2): a "pílula"
+   ativa ganha fundo branco + sombra suave. Usado na barra de separadores dos
+   Clientes/Pagamentos. */
+.v2-segment {
+  border-radius: 9999px;
+  background: rgba(10, 10, 10, 0.045);
+  padding: 0.25rem;
+}
+.dark .v2-segment {
+  background: rgba(255, 255, 255, 0.06);
+}
+.v2-seg-item {
+  border-radius: 9999px;
+  transition: all 0.18s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.v2-seg-item[data-active="true"] {
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(10, 10, 10, 0.06), 0 4px 12px -6px rgba(10, 10, 10, 0.18);
+}
+.dark .v2-seg-item[data-active="true"] {
+  background: #1f1f1f;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
