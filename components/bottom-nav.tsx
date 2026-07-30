@@ -19,6 +19,7 @@ import {
   BarChart3,
   MoreHorizontal,
   Megaphone,
+  Images,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -50,9 +51,9 @@ const adminOverflow: Item[] = [
   { href: "/admin/packs", label: "Packs", icon: Package },
   { href: "/admin/notas", label: "Notas", icon: NotebookPen },
   { href: "/admin/relatorios", label: "Relatórios", icon: BarChart3 },
-  // "Vaga" ocupa o lugar onde estava o "Slideshow" (que passou para Definições).
   { href: "/admin/anunciar", label: "Vaga", icon: Megaphone },
   { href: "/admin/loja", label: "Loja", icon: Store },
+  { href: "/admin/promocoes", label: "Slideshow", icon: Images },
 ];
 
 export function BottomNav({ variant }: { variant: "client" | "admin" }) {

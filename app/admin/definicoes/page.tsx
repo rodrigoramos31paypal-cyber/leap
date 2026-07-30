@@ -25,6 +25,8 @@ import {
   Bell,
   Images,
   ScrollText,
+  Star,
+  ChevronLeft,
 } from "lucide-react";
 import Link from "next/link";
 import { ForceUpdateButton } from "@/components/force-update-button";
@@ -76,55 +78,81 @@ export default async function DefinicoesPage(
     );
   }
 
-  // Tab activo (default perfil).
-  const activeTab: TabId = ((): TabId => {
-    const t = searchParams.tab;
+  // Secção ativa a partir de ?tab. HUB (novo layout): sem ?tab mostra o menu
+  // agrupado; com ?tab mostra a secção com botão de voltar. Legado:
+  //   seguranca → Perfil (2FA/palavra-passe vivem no fundo do Perfil)
+  //   horarios  → Regras (os horários vivem dentro das Regras)
+  //   slideshow → hub (passou para a navegação: sidebar + "Mais")
+  const section: SectionId | null = ((): SectionId | null => {
+    const raw = searchParams.tab;
+    const t = raw === "seguranca" ? "perfil" : raw === "horarios" ? "regras" : raw;
     if (
+      t === "perfil" ||
       t === "notificacoes" ||
-      t === "slideshow" ||
       t === "regras" ||
-      t === "horarios" ||
       t === "calendario" ||
-      t === "seguranca" ||
       t === "registo"
     )
       return t;
     if (t === "equipa" && isOwner) return "equipa";
-    return "perfil";
+    return null;
   })();
 
-  // PERF: só carrega os dados necessários para a aba activa. Antes carregava
-  // tudo independentemente do que estava visível — agora só pagamos o que
-  // mostramos.
-  const tabData = await loadTabData(activeTab, supabase, trainer, user?.id, searchParams);
+  // Sem secção → menu (hub agrupado).
+  if (!section) {
+    return (
+      <div className="space-y-5">
+        <div>
+          <h1 className="font-display text-2xl font-bold tracking-tight">Definições</h1>
+          <p className="text-sm text-ink-500">Perfil, regras de negócio, horários e mais.</p>
+        </div>
+        <SettingsMenu isOwner={isOwner} />
+      </div>
+    );
+  }
+
+  // PERF: só carrega os dados da secção ativa. A secção Regras inclui também
+  // os Horários, por isso carrega esses dados em separado.
+  const tabData = await loadTabData(section, supabase, trainer, user?.id, searchParams);
+  const horData =
+    section === "regras"
+      ? await loadTabData("horarios", supabase, trainer, user?.id, searchParams)
+      : null;
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Definições</h1>
-        <p className="text-sm text-ink-500">
-          Configura o teu perfil público, regras de negócio, horários e mais.
-        </p>
-      </div>
+      <Link
+        href="/admin/definicoes"
+        className="inline-flex items-center gap-1 text-sm font-medium text-gold-700 transition hover:text-gold-800 dark:text-gold-300"
+      >
+        <ChevronLeft size={16} /> Definições
+      </Link>
+      <h1 className="font-display text-[1.6rem] font-bold leading-tight tracking-tight">
+        {TABS.find((t) => t.id === section)?.label ?? "Definições"}
+      </h1>
 
-      <TabNav active={activeTab} isOwner={isOwner} />
-
-      {activeTab === "perfil" && <PerfilTab trainer={trainer} />}
-      {activeTab === "notificacoes" && (
+      {section === "perfil" && (
+        <div className="space-y-5">
+          <PerfilTab trainer={trainer} />
+          <SegurancaTab />
+        </div>
+      )}
+      {section === "notificacoes" && (
         <NotificacoesTab prefs={tabData.notifPrefs ?? {}} />
       )}
-      {activeTab === "slideshow" && <SlideshowTab />}
-      {activeTab === "regras" && (
-        <RegrasTab trainerId={trainer.id} settings={tabData.settings} />
+      {section === "regras" && (
+        <div className="space-y-5">
+          <RegrasTab trainerId={trainer.id} settings={tabData.settings} />
+          {horData && (
+            <HorariosTab
+              trainerId={trainer.id}
+              availability={horData.availability}
+              blocks={horData.blocks}
+            />
+          )}
+        </div>
       )}
-      {activeTab === "horarios" && (
-        <HorariosTab
-          trainerId={trainer.id}
-          availability={tabData.availability}
-          blocks={tabData.blocks}
-        />
-      )}
-      {activeTab === "calendario" && (
+      {section === "calendario" && (
         <CalendarioTab
           googleConnected={tabData.googleConnected}
           microsoftConnected={tabData.microsoftConnected}
@@ -133,8 +161,7 @@ export default async function DefinicoesPage(
           searchParams={searchParams}
         />
       )}
-      {activeTab === "seguranca" && <SegurancaTab />}
-      {activeTab === "registo" && (
+      {section === "registo" && (
         <RegistoTab
           rows={tabData.auditRows ?? []}
           total={tabData.auditTotal ?? 0}
@@ -146,7 +173,91 @@ export default async function DefinicoesPage(
           clientName={tabData.auditClientName ?? ""}
         />
       )}
-      {activeTab === "equipa" && isOwner && <EquipaSection />}
+      {section === "equipa" && isOwner && <EquipaSection />}
+    </div>
+  );
+}
+
+// Secções que aparecem no hub (subconjunto das antigas tabs — slideshow saiu
+// para a navegação; segurança/horários fundiram-se no Perfil/Regras).
+type SectionId = "perfil" | "notificacoes" | "regras" | "calendario" | "registo" | "equipa";
+
+// Subtítulos de cada entrada do menu.
+const MENU_SUB: Partial<Record<TabId, string>> = {
+  perfil: "Dados, palavra-passe e verificação em 2 passos",
+  notificacoes: "Como e quando recebes avisos",
+  regras: "Marcações, cancelamentos e horários",
+  equipa: "Treinadores e acessos",
+  calendario: "Sincronizar com Google / Apple",
+  registo: "Histórico de ações",
+};
+
+// ════════════════════════════════════════════════════════════════
+// Hub das Definições — cartões agrupados (Conta / Negócio / Avançado).
+// Cada linha abre a secção (?tab=…). Feedback vive no grupo Negócio como
+// link para /admin/feedback (não é uma secção das Definições).
+// ════════════════════════════════════════════════════════════════
+function SettingsMenu({ isOwner }: { isOwner: boolean }) {
+  const negocio: TabId[] = ["regras"];
+  if (isOwner) negocio.push("equipa");
+  const groups: { title: string; ids: TabId[] }[] = [
+    { title: "Conta", ids: ["perfil", "notificacoes"] },
+    { title: "Negócio", ids: negocio },
+    { title: "Avançado", ids: ["calendario", "registo"] },
+  ];
+  return (
+    <div className="space-y-5">
+      {groups.map((g) => {
+        const withFeedback = g.title === "Negócio";
+        return (
+          <div key={g.title}>
+            <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500/70">
+              {g.title}
+            </div>
+            <div className="card overflow-hidden">
+              {g.ids.map((id, i) => {
+                const t = TABS.find((x) => x.id === id)!;
+                return (
+                  <div key={id}>
+                    {i > 0 && <div className="ml-[52px] h-px bg-ink-900/[0.06] dark:bg-white/[0.07]" />}
+                    <Link
+                      href={`/admin/definicoes?tab=${id}`}
+                      className="flex items-center gap-3 px-3.5 py-3 transition-colors hover:bg-ink-900/[0.02] dark:hover:bg-white/[0.03]"
+                    >
+                      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-gold-400/15 text-gold-700 dark:text-gold-300">
+                        {t.icon}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-display text-sm font-semibold text-ink-900 dark:text-bone-50">{t.label}</div>
+                        <div className="truncate text-xs text-[#9a9a92] dark:text-bone-100/45">{MENU_SUB[id]}</div>
+                      </div>
+                      <ChevronRight size={17} className="shrink-0 text-[#cfcec6] dark:text-bone-100/25" />
+                    </Link>
+                  </div>
+                );
+              })}
+              {withFeedback && (
+                <>
+                  <div className="ml-[52px] h-px bg-ink-900/[0.06] dark:bg-white/[0.07]" />
+                  <Link
+                    href="/admin/feedback"
+                    className="flex items-center gap-3 px-3.5 py-3 transition-colors hover:bg-ink-900/[0.02] dark:hover:bg-white/[0.03]"
+                  >
+                    <div className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-gold-400/15 text-gold-700 dark:text-gold-300">
+                      <Star size={17} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-display text-sm font-semibold text-ink-900 dark:text-bone-50">Feedback</div>
+                      <div className="truncate text-xs text-[#9a9a92] dark:text-bone-100/45">Avaliações e comentários dos clientes</div>
+                    </div>
+                    <ChevronRight size={17} className="shrink-0 text-[#cfcec6] dark:text-bone-100/25" />
+                  </Link>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

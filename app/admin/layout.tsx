@@ -9,7 +9,7 @@ import { AppUpdater } from "@/components/app-updater";
 import { PushAutoHeal } from "@/components/push-auto-heal";
 import { consumeFlash } from "@/lib/flash";
 import { getAalInfo, isDeviceTrusted } from "@/lib/mfa";
-import { LayoutDashboard, Calendar, Users, CreditCard, BarChart3, Settings, Package, NotebookPen, Megaphone, Store } from "lucide-react";
+import { LayoutDashboard, Calendar, Users, CreditCard, BarChart3, Settings, Package, NotebookPen, Megaphone, Store, Images } from "lucide-react";
 
 import type { Metadata } from "next";
 export const metadata: Metadata = { robots: { index: false, follow: false } };
@@ -91,6 +91,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <AdminNavItem href="/admin/relatorios" icon={<BarChart3 size={16} />} label="Relatórios" />
             <AdminNavItem href="/admin/anunciar" icon={<Megaphone size={16} />} label="Anunciar vaga" />
             <AdminNavItem href="/admin/loja" icon={<Store size={16} />} label="Loja" />
+            <AdminNavItem href="/admin/promocoes" icon={<Images size={16} />} label="Slideshow" />
             <AdminNavItem href="/admin/definicoes" icon={<Settings size={16} />} label="Definições" />
           </nav>
         </aside>
