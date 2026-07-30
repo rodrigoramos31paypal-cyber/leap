@@ -185,10 +185,44 @@ export default async function AgendaPage(
           rescheduleBookingId={reschedule?.id}
           hasPartner={!!duoPartner}
           partnerName={duoPartner?.full_name}
+          bookedDays={await fetchMyBookingDays(supabase, user.id)}
         />
       )}
     </div>
   );
+}
+
+// ════════════════════════════════════════════════════════════════
+// Dias (YYYY-MM-DD, fuso de Lisboa) em que ESTE cliente já tem sessão
+// futura (próximos ~6 meses). Alimenta o azul-claro do calendário de
+// marcação, para o cliente ver quando já tem sessões e planear melhor.
+// Inclui as sessões DUO em que o utilizador é o parceiro (partner_client_id),
+// tal como o histórico/dashboard — senão o parceiro não via o dia a azul.
+// Só as marcações dele — a RLS garante o isolamento por cliente.
+// ════════════════════════════════════════════════════════════════
+async function fetchMyBookingDays(db: any, userId: string): Promise<string[]> {
+  const from = new Date();
+  from.setHours(0, 0, 0, 0);
+  const to = new Date(from);
+  to.setMonth(to.getMonth() + 6);
+  const { data } = await db
+    .from("bookings")
+    .select("starts_at")
+    .or(`client_id.eq.${userId},partner_client_id.eq.${userId}`)
+    .in("status", ["booked", "confirmed"])
+    .gte("starts_at", from.toISOString())
+    .lt("starts_at", to.toISOString());
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Lisbon",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const set = new Set<string>();
+  for (const b of (data ?? []) as { starts_at: string }[]) {
+    set.add(fmt.format(new Date(b.starts_at)));
+  }
+  return Array.from(set);
 }
 
 // ════════════════════════════════════════════════════════════════

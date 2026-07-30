@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { cn, formatTime, formatDateTime } from "@/lib/utils";
 import { Clock, Repeat, NotebookPen } from "lucide-react";
 import { bookAction, bookRecurringAction, rescheduleAction } from "./actions";
+import { MonthCalendar } from "@/components/month-calendar";
 import type { SessionType } from "@/types/database";
 
 const NOTE_MAX_LEN = 5000;
@@ -34,6 +35,7 @@ export function BookingFlow({
   rescheduleBookingId,
   hasPartner = false,
   partnerName,
+  bookedDays,
 }: {
   trainerId: string;
   slotDurations: number[];
@@ -45,6 +47,8 @@ export function BookingFlow({
   /** Cliente tem uma conta ligada (par duo)? Ajusta a copia da sessao dupla. */
   hasPartner?: boolean;
   partnerName?: string | null;
+  /** Dias (YYYY-MM-DD) em que o cliente já tem sessão → azul no calendário. */
+  bookedDays?: string[];
 }) {
   const router = useRouter();
   // Tipo de sessao = que creditos usar.
@@ -108,6 +112,9 @@ export function BookingFlow({
   // confirmação, para o cliente não ter de scrollar manualmente.
   const slotsRef = useRef<HTMLDivElement>(null);
   const confirmRef = useRef<HTMLDivElement>(null);
+  // Só descer aos horários quando é o UTILIZADOR a escolher um dia (não no
+  // salto automático para o 1.º dia disponível nem no arranque).
+  const wantSlotScrollRef = useRef(false);
 
   // Ao escolher a hora (picked passa a ter valor), traz o cartão de
   // confirmação à vista. Quando picked volta a null (ex.: trocou de dia),
@@ -116,6 +123,18 @@ export function BookingFlow({
     if (!picked) return;
     smoothScrollTo(confirmRef.current, "center");
   }, [picked]);
+
+  // Ao escolher um DIA, desce até aos horários — mas só DEPOIS de os horários
+  // desse dia estarem carregados e renderizados. Se descêssemos logo na
+  // mudança de `date`, a secção colapsava para "A carregar…" (fica pequena),
+  // a página encolhia e o scroll clampava para CIMA (aterrava no calendário).
+  // Ao esperar por `!loading` + `slots`, o layout já está na altura final.
+  useEffect(() => {
+    if (loading) return;
+    if (!wantSlotScrollRef.current) return;
+    wantSlotScrollRef.current = false;
+    smoothScrollTo(slotsRef.current, "start");
+  }, [loading, slots]);
 
   useEffect(() => {
     let cancelled = false;
@@ -216,6 +235,14 @@ export function BookingFlow({
 
   const currentYear = new Date().getFullYear();
 
+  // Janela de marcação (hoje … hoje+89) para o calendário mensal.
+  const minDate = useMemo(() => startOfDay(new Date()), []);
+  const maxDate = useMemo(() => {
+    const d = startOfDay(new Date());
+    d.setDate(d.getDate() + 89);
+    return d;
+  }, []);
+
   // Dias efectivamente mostráveis: se já sabemos a disponibilidade, filtra
   // os que têm >=1 horário livre; enquanto não sabemos (null), mostra todos
   // (fallback gracioso — nunca deixa o cliente sem opções por causa de rede).
@@ -251,9 +278,9 @@ export function BookingFlow({
   useEffect(() => {
     if (!availableDays || availableDaysList.length === 0) return;
     if (!availableDays.has(ymd(date))) {
-      const first = availableDaysList[0];
-      setDate(first);
-      setMonthKey(monthKeyOf(first));
+      // Salta para o 1.º dia disponível; o MonthCalendar segue o mês do dia
+      // selecionado (cursor sincronizado), por isso não é preciso mexer no mês.
+      setDate(availableDaysList[0]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availableDays]);
@@ -419,67 +446,27 @@ export function BookingFlow({
         </div>
       </div>
 
-      {months.length > 0 && (
-        <div>
-          <div className="label">Mês</div>
-          <div className="flex gap-1.5 overflow-x-auto pb-2">
-            {months.map((m) => {
-              const active = m.key === monthKey;
-              return (
-                <button
-                  key={m.key}
-                  type="button"
-                  onClick={() => pickMonth(m.key)}
-                  className={cn(
-                    "shrink-0 rounded-lg border px-3 py-1.5 text-sm capitalize",
-                    active ? "border-ink-900 bg-ink-900 text-bone-50" : "border-ink-900/10",
-                  )}
-                >
-                  {m.label}
-                  {m.year !== currentYear ? ` ${m.year}` : ""}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       <div>
         <div className="label">Dia</div>
-        {visibleDays.length === 0 ? (
+        {availableDays !== null && availableDaysList.length === 0 ? (
           <div className="card p-4 text-center text-sm text-ink-500">
-            {availableDays === null
-              ? "A carregar dias disponíveis…"
-              : "Sem dias disponíveis para marcação."}
+            Sem dias disponíveis para marcação.
           </div>
         ) : (
-        <div className="flex gap-1.5 overflow-x-auto pb-2">
-          {visibleDays.map((d) => {
-            const active = isSameDay(d, date);
-            return (
-              <button
-                key={d.toISOString()}
-                type="button"
-                onClick={() => {
-                  setDate(d);
-                  // Desce suavemente para a secção de horários. A secção já
-                  // está renderizada (mostra "A carregar…" enquanto busca),
-                  // por isso o rAF garante o scroll após o re-render.
-                  requestAnimationFrame(() => smoothScrollTo(slotsRef.current, "start"));
-                }}
-                className={cn(
-                  "flex flex-col items-center rounded-lg border px-3 py-2 text-xs shrink-0 w-14",
-                  active ? "border-ink-900 bg-ink-900 text-bone-50" : "border-ink-900/10",
-                )}
-              >
-                <span className="uppercase opacity-70">{weekday(d)}</span>
-                <span className="mt-0.5 font-display text-lg font-bold leading-none">
-                  {d.getDate()}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+          <MonthCalendar
+            selected={date}
+            onSelect={(d) => {
+              // Marca a intenção de descer aos horários; o scroll acontece no
+              // useEffect [loading, slots], depois de o layout assentar.
+              wantSlotScrollRef.current = true;
+              setDate(d);
+            }}
+            minDate={minDate}
+            maxDate={maxDate}
+            markToday
+            bookedDays={bookedDays}
+            availableDays={availableDays}
+          />
         )}
       </div>
 
