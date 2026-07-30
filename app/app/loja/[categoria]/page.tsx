@@ -43,7 +43,7 @@ export default async function LojaCategoriaPage(props: { params: Promise<{ categ
     <div className="space-y-4">
       <BackLink />
       <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">{meta.title}</h1>
+        <h1 className="font-display text-[1.75rem] font-bold leading-tight tracking-tight">{meta.title}</h1>
         <p className="text-sm text-ink-500">{meta.sub}</p>
       </div>
 

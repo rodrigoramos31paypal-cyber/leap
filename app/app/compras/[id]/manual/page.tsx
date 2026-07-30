@@ -74,6 +74,12 @@ export default async function ManualPaymentPage(props: { params: Promise<{ id: s
 
       {isPending && (
         <>
+          <div className="rounded-2xl border border-[#EBD98F] bg-[#FBF4DE] p-4 text-center dark:border-gold-400/30 dark:bg-gold-400/10">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-[#8A6D12] dark:text-gold-300">Montante a pagar</div>
+            <div className="mt-1 font-display text-[2rem] font-bold leading-none tabular-nums text-[#3d3100] dark:text-gold-100">
+              {eur(purchase.amount_cents)}
+            </div>
+          </div>
           <PaymentSteps
             amountCents={purchase.amount_cents}
             reference={reference}
