@@ -67,8 +67,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, sent: 0 });
   }
 
+  // Reescrita de títulos do PUSH (só o que aparece no ecrã de bloqueio; o
+  // título guardado in-app mantém-se). Mapa por título exato → fácil de crescer.
+  const TITLE_REWRITE_MAP: Record<string, string> = {
+    "Sessão marcada pelo treinador": "Treino marcado 💪",
+  };
+  const rawTitle = (record.title as string | undefined) || "LEAP Fitness Studio";
+
   const notif = {
-    title: record.title || "LEAP Fitness Studio",
+    title: TITLE_REWRITE_MAP[rawTitle] ?? rawTitle,
     body: record.body || "",
     url: record.link || "/",
     // id da notificação in-app → o service worker usa-o no clique para a
