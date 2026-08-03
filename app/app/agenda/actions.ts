@@ -308,7 +308,8 @@ export async function rescheduleAction({
       return { error: noticeErr };
     }
   }
-  // RPC atómica: devolve crédito da antiga, cancela-a e cria a nova.
+  // RPC atómica (0143): reagendamento IN-PLACE — muda só o horário e
+  // preserva a mesma marcação (incluindo o par duo). Devolve o MESMO id.
   const { data: newId, error } = await (supabase as any).rpc("reschedule_booking", {
     p_old_booking_id: oldBookingId,
     p_starts_at: new Date(startsAtIso).toISOString(),
@@ -326,13 +327,18 @@ export async function rescheduleAction({
     };
   }
 
-  // Best effort: emails + calendários (a antiga sai, a nova entra).
-  // PERF (C2): em PARALELO — antes eram 3 awaits sequenciais.
+  // Best effort: emails + calendários. Com o reagendamento IN-PLACE (0143)
+  // newId === oldBookingId, por isso a sincronização de calendário externo
+  // tem de ser SEQUENCIAL — remover o evento antigo e só depois recriar com
+  // o novo horário (o push cria sempre um evento novo). Corrê-los em
+  // paralelo no MESMO id era uma corrida (podia apagar o recém-criado).
   const sideEffects = Promise.allSettled([
     dispatchBookingCreated(newId as string),
-    pushBookingToCalendars(newId as string),
-    removeBookingFromCalendars(oldBookingId),
-    // Nota opcional do cliente — ligada à NOVA marcação.
+    (async () => {
+      await removeBookingFromCalendars(oldBookingId);
+      await pushBookingToCalendars(newId as string);
+    })(),
+    // Nota opcional do cliente — ligada à marcação reagendada.
     note ? persistClientBookingNote(newId as string, note) : Promise.resolve(),
   ]);
 
@@ -344,9 +350,9 @@ export async function rescheduleAction({
 
   await sideEffects;
 
-  // Auditoria: reagendamento feito pelo PRÓPRIO cliente. Guarda a NOVA
-  // marcação como target e a antiga no payload (a RPC cancela a antiga e
-  // cria a nova). actor = auth.uid() + IP.
+  // Auditoria: reagendamento feito pelo PRÓPRIO cliente. In-place (0143):
+  // o id não muda; guardamos o horário antigo no payload para o "de → para".
+  // actor = auth.uid() + IP.
   await logAudit("booking_reschedule_client", {
     targetTable: "bookings",
     targetId: newId as string,
