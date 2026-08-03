@@ -63,7 +63,17 @@ export async function verifyResetAction(formData: FormData) {
   // Já com sessão, define a nova password.
   const { error: pwError } = await supabase.auth.updateUser({ password });
   if (pwError) {
-    fail("Não foi possível atualizar a password. Tenta de novo.");
+    const m = (pwError.message ?? "").toLowerCase();
+    // Supabase rejeita reutilizar a password atual.
+    if (m.includes("different from the old") || m.includes("should be different")) {
+      fail("A nova password tem de ser diferente da password atual.");
+    }
+    // Password fraca / abaixo do mínimo / bloqueada (leaked passwords).
+    if (m.includes("weak") || m.includes("pwned") || m.includes("length") || m.includes("at least")) {
+      fail("Password demasiado fraca. Escolhe uma password mais forte.");
+    }
+    // Fallback: mostra a razão real (ajuda a diagnosticar casos raros).
+    fail(pwError.message || "Não foi possível atualizar a password. Tenta de novo.");
   }
 
   // M5 (audit jul/2026): uma redefinição de password deve EXPULSAR quaisquer
