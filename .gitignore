@@ -62,3 +62,16 @@ AUDIT-2026-06-28.md
 GO-LIVE-NOTIFICATIONS.md
 GUIA-DEPLOY-VPS-COOLIFY.md
 CLAUDE.md
+
+# nunca publicar
+supabase/migrations/
+supabase/scripts/
+AUDITORIA-*.md
+SECURITY-AUDIT*.md
+SECURITY_AUDIT*.md
+PERF*AUDIT*.md
+PERFORMANCE_AUDIT*.md
+GO-LIVE-*.md
+NOTES-*.md
+SETUP_INTEGRATIONS.md
+prompts/
