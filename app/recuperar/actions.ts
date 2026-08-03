@@ -42,7 +42,10 @@ export async function verifyResetAction(formData: FormData) {
       `/recuperar?step=code&email=${encodeURIComponent(email)}&error=${encodeURIComponent(msg)}`,
     );
 
-  if (!/^\d{6}$/.test(token)) fail("Introduz o código de 6 dígitos que enviámos por email.");
+  // O comprimento do OTP é configurável no Supabase (Auth → Email OTP Length,
+  // 6–10 dígitos). Não fixamos um número: aceitamos qualquer código numérico
+  // desse intervalo e deixamos o verifyOtp ser a validação real.
+  if (!/^\d{6,10}$/.test(token)) fail("Introduz o código que enviámos por email.");
   if (password.length < 8) fail("A password tem de ter no mínimo 8 caracteres.");
 
   const supabase = await createClient();

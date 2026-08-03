@@ -53,23 +53,23 @@ export default async function RecoverPage(
             <>
               <h1 className="text-xl font-bold">Nova password</h1>
               <p className="mt-1 text-sm text-ink-500">
-                Se o email existir, enviámos um código de 6 dígitos
+                Se o email existir, enviámos um código
                 {email ? ` para ${email}` : ""}. Introduz o código e escolhe a nova password.
               </p>
 
               <form action={verifyResetAction} className="mt-6 space-y-4">
                 <input type="hidden" name="email" value={email} />
                 <div>
-                  <label className="label">Código de 6 dígitos</label>
+                  <label className="label">Código do email</label>
                   <input
                     name="token"
                     inputMode="numeric"
-                    pattern="\d{6}"
-                    maxLength={6}
+                    pattern="\d{6,10}"
+                    maxLength={10}
                     required
                     autoComplete="one-time-code"
-                    placeholder="000000"
-                    className="input tracking-[0.4em]"
+                    placeholder="Código de acesso"
+                    className="input tracking-[0.3em]"
                   />
                 </div>
                 <div>
