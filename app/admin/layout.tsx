@@ -7,6 +7,7 @@ import { AdminNavItem } from "@/components/admin-nav-item";
 import { Toaster } from "@/components/toaster";
 import { AppUpdater } from "@/components/app-updater";
 import { PushAutoHeal } from "@/components/push-auto-heal";
+import { SwNavigator } from "@/components/sw-navigator";
 import { consumeFlash } from "@/lib/flash";
 import { getAalInfo, isDeviceTrusted } from "@/lib/mfa";
 import { LayoutDashboard, Calendar, Users, CreditCard, BarChart3, Settings, Package, NotebookPen, Megaphone, Store, Images } from "lucide-react";
@@ -77,6 +78,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         wide
       />
       <Toaster initial={flash} />
+      <SwNavigator />
       <AppUpdater />
       <PushAutoHeal />
       <div className="mx-auto flex w-full min-h-0 max-w-7xl flex-1 overflow-y-auto overflow-x-hidden md:flex-none md:overflow-visible md:gap-6 md:px-4 md:py-6">

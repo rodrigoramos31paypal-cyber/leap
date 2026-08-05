@@ -22,6 +22,8 @@ export function SwNavigator() {
   useEffect(() => {
     if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
 
+    let cancelled = false;
+
     const go = (url: string) => {
       try {
         const u = new URL(url, window.location.origin);
@@ -34,18 +36,42 @@ export function SwNavigator() {
       }
     };
 
-    // Le e CONSOME (apaga) a navegacao pendente da Cache. Consumir evita
-    // que um foreground posterior re-navegue para um destino ja tratado.
-    async function consumePendingNav() {
+    // Le e CONSOME (apaga) a navegacao pendente da Cache numa unica
+    // tentativa. Devolve true se navegou. Consumir evita que um foreground
+    // posterior re-navegue para um destino ja tratado.
+    async function readAndConsume(): Promise<boolean> {
       try {
-        if (typeof caches === "undefined") return;
+        if (typeof caches === "undefined") return false;
         const c = await caches.open(NAV_CACHE);
         const res = await c.match(PENDING_NAV_KEY);
-        if (!res) return;
+        if (!res) return false;
         await c.delete(PENDING_NAV_KEY);
         const url = (await res.text()).trim();
         if (url) go(url);
-      } catch {}
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    // iOS PWA (o bug): ao trazer a app CONGELADA (em segundo plano) para a
+    // frente via clique na notificacao, o evento de visibilidade da janela
+    // pode disparar ANTES de o service worker acabar de escrever o destino
+    // na cache (race). Uma leitura unica falhava e a app ficava na ultima
+    // pagina. Por isso re-verificamos a cache varias vezes durante ~2.4s
+    // ate o destino aparecer. Em arranque a frio acerta a primeira.
+    let polling = false;
+    async function consumeWithRetry() {
+      if (polling) return;
+      polling = true;
+      try {
+        for (let i = 0; i < 12 && !cancelled; i++) {
+          if (await readAndConsume()) return;
+          await new Promise((r) => setTimeout(r, 200));
+        }
+      } finally {
+        polling = false;
+      }
     }
 
     const onMsg = (e: MessageEvent) => {
@@ -53,20 +79,24 @@ export function SwNavigator() {
       if (d && d.type === "navigate" && typeof d.url === "string") {
         go(d.url);
         // Limpa a cache para nao re-navegar mais tarde no visibilitychange.
-        void consumePendingNav();
+        void readAndConsume();
       }
     };
 
-    const onVisible = () => {
-      if (document.visibilityState === "visible") void consumePendingNav();
+    // Qualquer sinal de "a app voltou a estar visivel" dispara a re-leitura
+    // com retry. visibilitychange cobre o caso normal; focus e pageshow
+    // cobrem casos do iOS em que o primeiro nao dispara de forma fiavel.
+    const onResume = () => {
+      if (document.visibilityState === "visible") void consumeWithRetry();
     };
 
     navigator.serviceWorker.addEventListener("message", onMsg);
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onResume);
+    window.addEventListener("focus", onResume);
+    window.addEventListener("pageshow", onResume);
 
-    // Cold start: le a cache imediatamente.
-    void consumePendingNav();
+    // Cold start: le a cache imediatamente (com retry, inofensivo).
+    void consumeWithRetry();
 
     // Fallback para SW antigo (v19/v20) que ainda controle a pagina logo
     // apos o deploy: pede a nav pendente por mensagem.
@@ -78,9 +108,11 @@ export function SwNavigator() {
       .catch(() => {});
 
     return () => {
+      cancelled = true;
       navigator.serviceWorker.removeEventListener("message", onMsg);
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onResume);
+      window.removeEventListener("focus", onResume);
+      window.removeEventListener("pageshow", onResume);
     };
   }, [router]);
 
