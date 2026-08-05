@@ -135,6 +135,17 @@ export async function GET(request: NextRequest) {
     inAppSent++;
   }
 
+  // Data-calendário LOCAL (Europe/Lisbon) para o `?d=` do deep-link do
+  // admin. Usar UTC partia o dia em sessões noturnas. Igual ao padrão das
+  // notas de cliente (app/app/agenda/actions.ts).
+  const lisbonDate = (iso: string) =>
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Lisbon",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(iso));
+
   for (const b of bookings as any[]) {
     const when = formatDateTime(b.starts_at);
     const client = clientMap.get(b.client_id);
@@ -173,7 +184,9 @@ export async function GET(request: NextRequest) {
         trainerProfileId,
         "Leap Fitness Studio",
         `Sessão com ${client?.full_name ?? "cliente"} a ${when}.`,
-        "/admin/agenda",
+        // Deep-link: abre a agenda na semana da sessão e auto-abre o
+        // popover dessa marcação (padrão lido em /admin/agenda/page.tsx).
+        `/admin/agenda?view=week&d=${lisbonDate(b.starts_at)}&booking=${b.id}`,
       );
 
       // EMAIL do lembrete à restante equipa (owner/admins sem trainer

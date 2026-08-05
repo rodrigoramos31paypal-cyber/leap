@@ -190,7 +190,9 @@ export async function GET(request: NextRequest) {
       body: `O pack ${packName} expira a ${when} e ainda tens ${remaining} ${
         remaining === 1 ? "sessão" : "sessões"
       } por usar.`,
-      link: "/app/agenda",
+      // Pack a expirar → levar o cliente diretamente à compra/renovação,
+      // não à agenda genérica.
+      link: "/app/comprar",
     });
 
     if (await emailAllowed(supabase as any, p.client_id, "packs")) {
