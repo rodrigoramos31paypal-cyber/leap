@@ -113,14 +113,23 @@ async function Kpis({ year, month }: { year: number; month: number }) {
   // vazio devolve zeros. FALLBACK: se a RPC falhar (ex.: codigo deployed
   // antes da migracao 0084 ser aplicada), corre o caminho antigo para o
   // dashboard nao partir.
-  const [kpiRes, totalClientsInScope] = await Promise.all([
+  const [kpiRes, totalClientsInScope, pendingApprovalRes] = await Promise.all([
     (supabase as any).rpc("get_dashboard_kpis", {
       p_trainer_ids: trainerIds,
       p_month_start: monthStart.toISOString(),
       p_month_end: monthEnd.toISOString(),
     }),
     getClientCountInScope(trainerIds),
+    // Contas por aprovar (auto-registo pendente). Espelha a aba "Contas
+    // pendentes" (que também não filtra por trainer — qualquer staff vê a
+    // fila). Só o count; head:true não transfere linhas.
+    (supabase as any)
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("role", "client")
+      .eq("approval_status", "pending"),
   ]);
+  const pendingApprovalCount = (pendingApprovalRes as any)?.count ?? 0;
 
   let revenue = 0;
   let packsSold = 0;
@@ -224,7 +233,15 @@ async function Kpis({ year, month }: { year: number; month: number }) {
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat icon={<Users size={16} />} label="Total de clientes" value={String(totalClientsInScope)} href="/admin/clientes?tab=todos" />
+        <Stat
+          icon={<Users size={16} />}
+          label="Total de clientes"
+          value={String(totalClientsInScope)}
+          // Highlight amarelo quando há contas por aprovar — mesmo padrão
+          // visual de "Pagamentos pendentes". Deep-link à fila de aprovação.
+          accent={pendingApprovalCount > 0 ? "gold" : undefined}
+          href={pendingApprovalCount > 0 ? "/admin/clientes?tab=pendentes" : "/admin/clientes?tab=todos"}
+        />
         <Stat icon={<Calendar size={16} />} label="Sessões marcadas no mês" value={String(sessionsBooked)} href="/admin/sessoes" />
         <Stat icon={<TrendingUp size={16} />} label="Receita média por cliente activo" value={eur(avgRevenuePerClient)} />
         <Stat
