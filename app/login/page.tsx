@@ -9,7 +9,7 @@ export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 export default async function LoginPage(
   props: {
-    searchParams: Promise<{ next?: string; error?: string }>;
+    searchParams: Promise<{ next?: string; error?: string; verificado?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -41,6 +41,13 @@ export default async function LoginPage(
         <div className="card p-6">
           <h1 className="text-xl font-bold">Entrar</h1>
           <p className="mt-1 text-sm text-ink-500">Bem-vindo de volta.</p>
+
+          {searchParams.verificado === "1" && (
+            <div className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-800 dark:bg-green-500/10 dark:text-green-300">
+              Email confirmado! A tua conta está a aguardar aprovação da equipa.
+              Assim que for aprovada, poderás entrar e marcar sessões.
+            </div>
+          )}
 
           <form action={loginAction} className="mt-6 space-y-4">
             <input type="hidden" name="next" value={searchParams.next ?? ""} />
