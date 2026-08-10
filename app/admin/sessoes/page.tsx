@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight, EyeOff, Eye, Users } from "lucide-react";
+import { ChevronRight, EyeOff, Eye, Users, ArrowDownUp } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getAccessibleTrainerIds } from "@/lib/trainer";
 import { BOOKING_STATUS } from "@/lib/utils";
@@ -57,6 +57,42 @@ function dayLabel(startsAt: string): string {
   return cap;
 }
 
+// Cabeçalho de grupo quando a lista está ordenada por data de CANCELAMENTO:
+// "Cancelada hoje" / "Cancelada ontem" / "Cancelada · Sex, 26 set".
+function cancelDayLabel(cancelledAt: string | null): string {
+  if (!cancelledAt) return "Cancelada · data desconhecida";
+  const d = localIso(cancelledAt);
+  const now = new Date();
+  const today = localIso(now.toISOString());
+  const y = new Date(now);
+  y.setDate(y.getDate() - 1);
+  const yesterday = localIso(y.toISOString());
+  if (d === today) return "Cancelada hoje";
+  if (d === yesterday) return "Cancelada ontem";
+  const pretty = new Intl.DateTimeFormat("pt-PT", {
+    timeZone: "Europe/Lisbon",
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+  })
+    .format(new Date(cancelledAt))
+    .replace(/\./g, "");
+  const cap = pretty.charAt(0).toUpperCase() + pretty.slice(1);
+  return `Cancelada · ${cap}`;
+}
+
+// Data+hora da SESSÃO ("04/10 · 09:30") — mostrada na linha quando a ordem
+// é por cancelamento (o cabeçalho passa a ser a data de cancelamento, por
+// isso a linha precisa da data da própria sessão).
+function sessionDateTime(startsAt: string): string {
+  const d = new Intl.DateTimeFormat("pt-PT", {
+    timeZone: "Europe/Lisbon",
+    day: "2-digit",
+    month: "2-digit",
+  }).format(new Date(startsAt));
+  return `${d} · ${hhmm(startsAt)}`;
+}
+
 function statusClass(status: string): string {
   if (status === "cancelled") return "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300";
   if (status === "no_show") return "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300";
@@ -64,12 +100,15 @@ function statusClass(status: string): string {
 }
 
 export default async function SessoesPage(props: {
-  searchParams: Promise<{ f?: string; hc?: string; page?: string }>;
+  searchParams: Promise<{ f?: string; hc?: string; page?: string; s?: string }>;
 }) {
   const sp = await props.searchParams;
   const tab: "marcadas" | "futuras" | "canceladas" =
     sp.f === "futuras" ? "futuras" : sp.f === "canceladas" ? "canceladas" : "marcadas";
   const hideCancelled = sp.hc === "1";
+  // Só no separador Canceladas: ordenar pela data em que a sessão foi
+  // cancelada (mais recente primeiro) em vez da data da sessão. Toggle.
+  const sortByCancel = tab === "canceladas" && sp.s === "cancelamento";
   const pageNum = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
   const nowIso = new Date().toISOString();
 
@@ -80,12 +119,16 @@ export default async function SessoesPage(props: {
   let q = (supabase as any)
     .from("bookings")
     .select(
-      "id, starts_at, ends_at, session_type, status, client_id, profiles:client_id(full_name), partner_profiles:partner_client_id(full_name)",
+      "id, starts_at, ends_at, session_type, status, client_id, cancelled_at, profiles:client_id(full_name), partner_profiles:partner_client_id(full_name)",
       { count: "exact" },
     )
     .in("trainer_id", scope);
   if (tab === "canceladas") {
-    q = q.eq("status", "cancelled").order("starts_at", { ascending: false });
+    q = q.eq("status", "cancelled");
+    // nullsFirst:false → cancelamentos sem data (dados antigos) vão para o fim.
+    q = sortByCancel
+      ? q.order("cancelled_at", { ascending: false, nullsFirst: false })
+      : q.order("starts_at", { ascending: false });
   } else {
     if (hideCancelled) q = q.neq("status", "cancelled");
     if (tab === "futuras") {
@@ -101,26 +144,33 @@ export default async function SessoesPage(props: {
   const total = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  const hrefFor = (opts: { f?: string; hc?: boolean; page?: number }) => {
+  const hrefFor = (opts: { f?: string; hc?: boolean; page?: number; s?: boolean }) => {
     const p = new URLSearchParams();
     const f = opts.f ?? tab;
     if (f === "futuras") p.set("f", "futuras");
     else if (f === "canceladas") p.set("f", "canceladas");
     const hc = opts.hc ?? hideCancelled;
     if (hc && f !== "canceladas") p.set("hc", "1");
+    // Sort por cancelamento só existe no separador Canceladas.
+    const s = opts.s ?? sortByCancel;
+    if (s && f === "canceladas") p.set("s", "cancelamento");
     const pg = opts.page ?? 1;
     if (pg > 1) p.set("page", String(pg));
     const qs = p.toString();
     return `/admin/sessoes${qs ? `?${qs}` : ""}`;
   };
 
-  // Agrupar por dia preservando a ordem já vinda da query.
+  // Agrupar preservando a ordem já vinda da query. Por defeito agrupa pelo
+  // dia da SESSÃO; com o sort por cancelamento ativo, agrupa pelo dia em que
+  // foi CANCELADA.
   const groups: { key: string; label: string; items: any[] }[] = [];
   for (const b of (rows ?? []) as any[]) {
-    const key = localIso(b.starts_at);
+    const source = sortByCancel ? (b.cancelled_at ?? null) : b.starts_at;
+    const key = source ? localIso(source) : "sem-data";
     let g = groups[groups.length - 1];
     if (!g || g.key !== key) {
-      g = { key, label: dayLabel(b.starts_at), items: [] };
+      const label = sortByCancel ? cancelDayLabel(b.cancelled_at) : dayLabel(b.starts_at);
+      g = { key, label, items: [] };
       groups.push(g);
     }
     g.items.push(b);
@@ -165,6 +215,21 @@ export default async function SessoesPage(props: {
             {hideCancelled ? "Mostrar canceladas" : "Ocultar canceladas"}
           </Link>
         )}
+        {tab === "canceladas" && (
+          <Link
+            href={hrefFor({ f: "canceladas", s: !sortByCancel, page: 1 })}
+            aria-pressed={sortByCancel}
+            title={sortByCancel ? "A ordenar pela data de cancelamento — clica para voltar à data da sessão" : "Ordenar pela data de cancelamento"}
+            className={
+              sortByCancel
+                ? "inline-flex items-center gap-1.5 rounded-full border border-gold-400 bg-gold-50 px-3 py-1 text-[11px] font-semibold text-gold-700 transition dark:border-gold-400/40 dark:bg-gold-400/10 dark:text-gold-300"
+                : "inline-flex items-center gap-1.5 rounded-full border border-ink-900/10 bg-white px-3 py-1 text-[11px] font-medium text-ink-600 transition hover:border-gold-300 dark:border-white/10 dark:bg-ink-800 dark:text-bone-100"
+            }
+          >
+            <ArrowDownUp size={13} />
+            Data cancelamento
+          </Link>
+        )}
       </div>
 
       {groups.length === 0 ? (
@@ -189,8 +254,8 @@ export default async function SessoesPage(props: {
                           href={`/admin/agenda?view=week&d=${localIso(b.starts_at)}&booking=${b.id}`}
                           className="flex items-center gap-3 px-3 py-3 transition hover:bg-ink-900/[0.02] dark:hover:bg-white/[0.03]"
                         >
-                          <div className={`w-[46px] shrink-0 text-[13px] font-semibold tabular-nums ${cancelled ? "text-ink-400" : "text-ink-900 dark:text-bone-50"}`}>
-                            {hhmm(b.starts_at)}
+                          <div className={`${sortByCancel ? "w-[68px] text-[11.5px]" : "w-[46px] text-[13px]"} shrink-0 font-semibold tabular-nums ${cancelled ? "text-ink-400" : "text-ink-900 dark:text-bone-50"}`}>
+                            {sortByCancel ? sessionDateTime(b.starts_at) : hhmm(b.starts_at)}
                           </div>
                           <div className="flex min-w-0 flex-1 flex-col">
                             <div className="flex items-center gap-1.5">
