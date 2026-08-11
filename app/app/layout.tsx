@@ -4,6 +4,7 @@ import { createClient, getSessionUser, getCurrentProfile } from "@/lib/supabase/
 import { TopBar } from "@/components/top-bar";
 import { BottomNav } from "@/components/bottom-nav";
 import { ViewportKeyboard } from "@/components/viewport-keyboard";
+import { AppHeight } from "@/components/app-height";
 import { SwNavigator } from "@/components/sw-navigator";
 import { AppUpdater } from "@/components/app-updater";
 import { PushAutoHeal } from "@/components/push-auto-heal";
@@ -61,7 +62,8 @@ export default async function ClientLayout({ children }: { children: React.React
   const flash = await consumeFlash();
 
   return (
-    <div className="flex h-[100lvh] flex-col overflow-hidden bg-bone-50 dark:bg-ink-900 md:block md:h-auto md:min-h-[100lvh] md:overflow-visible">
+    <div className="flex h-[var(--app-height,100dvh)] flex-col overflow-hidden bg-bone-50 dark:bg-ink-900 md:block md:h-auto md:min-h-[100dvh] md:overflow-visible">
+      <AppHeight />
       <ViewportKeyboard />
       <SwNavigator />
       <AppUpdater />
