@@ -5,12 +5,16 @@
 // Recebe a flash inicial (lida a partir do cookie no layout RSC)
 // e auto-dismiss em ~4s.
 // ════════════════════════════════════════════════════════════════
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, AlertCircle, Info, X } from "lucide-react";
 import type { Flash } from "@/lib/flash-types";
 
 export function Toaster({ initial }: { initial: Flash | null }) {
   const [items, setItems] = useState<Array<Flash & { id: string }>>([]);
+  // Dedup: a mesma mensagem pode chegar por duas vias quase em simultâneo
+  // (cookie-watcher + `initial` do servidor após router.refresh). Ignora
+  // repetições de conteúdo idêntico numa janela curta.
+  const recentRef = useRef<Map<string, number>>(new Map());
 
   // empurra a flash inicial recebida do servidor (uma vez por mount).
   useEffect(() => {
@@ -28,8 +32,51 @@ export function Toaster({ initial }: { initial: Flash | null }) {
     return () => window.removeEventListener("leap:toast", onToast as EventListener);
   }, []);
 
+  // Vigia o cookie de flash do LADO DO CLIENTE. Cobre o caso dos
+  // `<form action={serverAction}>` que terminam em revalidatePath (sem
+  // redirect): aí o layout RSC não relê o cookie na MESMA resposta, por
+  // isso o toast ficava silencioso (ex.: "Guardar" nas Definições/Regras).
+  // Aqui lemos o cookie no browser, mostramos o toast e apagamo-lo. Em
+  // navegações/redirects o servidor consome o cookie primeiro (consumeFlash
+  // apaga-o) → aqui não encontra nada, logo NÃO duplica.
+  useEffect(() => {
+    function readFlashCookie(): Flash | null {
+      try {
+        const m = document.cookie.match(/(?:^|;\s*)leap_flash=([^;]+)/);
+        if (!m) return null;
+        // Uso único: apaga já para não repetir no próximo tick.
+        document.cookie = "leap_flash=; max-age=0; path=/";
+        const parsed = JSON.parse(decodeURIComponent(m[1])) as Flash;
+        return parsed && parsed.title ? parsed : null;
+      } catch {
+        return null;
+      }
+    }
+    function check() {
+      const f = readFlashCookie();
+      if (f) push(f);
+    }
+    check();
+    const iv = window.setInterval(check, 700);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") check();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      window.clearInterval(iv);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, []);
+
   function push(t: Flash) {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const key = `${t.kind}|${t.title}|${t.body ?? ""}`;
+    const now = Date.now();
+    const last = recentRef.current.get(key);
+    if (last && now - last < 1500) return; // repetição imediata → ignora
+    recentRef.current.set(key, now);
+    const id = `${now}-${Math.random().toString(36).slice(2, 8)}`;
     setItems((arr) => [...arr, { ...t, id }]);
     window.setTimeout(() => {
       setItems((arr) => arr.filter((x) => x.id !== id));
