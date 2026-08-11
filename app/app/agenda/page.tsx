@@ -19,7 +19,7 @@ import {
 
 export default async function AgendaPage(
   props: {
-    searchParams: Promise<{ rebook?: string; trainer?: string; reschedule?: string }>;
+    searchParams: Promise<{ rebook?: string; trainer?: string; reschedule?: string; vaga?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -186,6 +186,7 @@ export default async function AgendaPage(
           hasPartner={!!duoPartner}
           partnerName={duoPartner?.full_name}
           bookedDays={await fetchMyBookingDays(supabase, user.id)}
+          preselectVaga={reschedule ? undefined : searchParams.vaga}
         />
       )}
     </div>

@@ -109,6 +109,22 @@ export async function anunciarVagaAction(
   }
   if (clientIds.length === 0) return { ok: true, count: 0 };
 
+  // Deep-link para a marcação (LEAP = 1 trainer). Se houver horário válido,
+  // o link abre o fluxo "Marcar sessão" já no dia certo e com o slot da vaga
+  // PRÉ-SELECIONADO, pronto a confirmar (o /app/agenda lê `vaga`). Sem
+  // horário, cai no /app/agenda normal.
+  let link = "/app/agenda";
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(when)) {
+    const { data: tr } = await admin
+      .from("trainers")
+      .select("id")
+      .eq("active", true)
+      .order("created_at", { ascending: true })
+      .limit(1);
+    const tid = (tr as any)?.[0]?.id as string | undefined;
+    if (tid) link = `/app/agenda?trainer=${tid}&vaga=${encodeURIComponent(when)}`;
+  }
+
   // Uma linha por cliente. O webhook de INSERT trata do push; o sininho
   // lê directamente desta tabela.
   const rows = clientIds.map((id: string) => ({
@@ -116,7 +132,7 @@ export async function anunciarVagaAction(
     type: "vaga_open",
     title: "Vaga disponível! 💪",
     body,
-    link: "/app/agenda",
+    link,
   }));
 
   const { error: insErr } = await (admin as any).from("notifications").insert(rows);

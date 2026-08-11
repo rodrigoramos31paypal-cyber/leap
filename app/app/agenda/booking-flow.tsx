@@ -36,6 +36,7 @@ export function BookingFlow({
   hasPartner = false,
   partnerName,
   bookedDays,
+  preselectVaga,
 }: {
   trainerId: string;
   slotDurations: number[];
@@ -49,8 +50,13 @@ export function BookingFlow({
   partnerName?: string | null;
   /** Dias (YYYY-MM-DD) em que o cliente já tem sessão → azul no calendário. */
   bookedDays?: string[];
+  /** Vaga anunciada (datetime-local "YYYY-MM-DDTHH:mm"): abre nesse dia e
+   *  pré-seleciona o slot exato, pronto a confirmar. */
+  preselectVaga?: string;
 }) {
   const router = useRouter();
+  // Vaga anunciada a pré-selecionar (dia + slot). Consumida uma vez.
+  const vaga = parseVaga(preselectVaga);
   // Tipo de sessao = que creditos usar.
   //  • so individuais  → individual (sem escolha)
   //  • so duplos       → dupla (sem escolha; mostra aviso)
@@ -72,9 +78,17 @@ export function BookingFlow({
   const duoBlocked =
     sessionType === "dupla" && (duoNotLinked || duoNoCredits);
   const [duration, setDuration] = useState<number>(defaultDuration);
-  const [date, setDate] = useState<Date>(() => startOfDay(new Date()));
-  // Mês seleccionado no filtro (chave "ano-mês"). Por defeito, o mês de hoje.
-  const [monthKey, setMonthKey] = useState<string>(() => monthKeyOf(startOfDay(new Date())));
+  const [date, setDate] = useState<Date>(() => startOfDay(vaga ? vaga.day : new Date()));
+  // Mês seleccionado no filtro (chave "ano-mês"). Por defeito, o mês de hoje
+  // (ou o mês da vaga, se veio de um anúncio).
+  const [monthKey, setMonthKey] = useState<string>(() => monthKeyOf(startOfDay(vaga ? vaga.day : new Date())));
+  // Vaga já não disponível (ocupada/fora de disponibilidade) → aviso.
+  const [vagaMissed, setVagaMissed] = useState(false);
+  // Garante que a pré-seleção da vaga é tentada só uma vez.
+  const vagaTriedRef = useRef(false);
+  // True após o 1.º fetch de horários terminar — só aí faz sentido tentar
+  // casar a vaga (senão o array vazio inicial marcava "indisponível" a torto).
+  const [didFetchSlots, setDidFetchSlots] = useState(false);
   const [slots, setSlots] = useState<{ startsAt: string; endsAt: string }[]>([]);
   // Dias com >=1 horário livre (para esconder dias cheios/sem horário).
   // null = ainda a carregar → fallback: mostra todos os dias.
@@ -124,6 +138,20 @@ export function BookingFlow({
     smoothScrollTo(confirmRef.current, "center");
   }, [picked]);
 
+  // Vaga anunciada: quando os horários do dia da vaga terminam de carregar,
+  // procura o slot com a mesma hora (parede, Europe/Lisbon) e pré-selecciona-o
+  // (o cartão de confirmação aparece e faz scroll, via o efeito de `picked`).
+  // Se não existir (ocupado ou fora da disponibilidade/duração), mostra aviso.
+  // One-shot: não repete nos refetches (ex.: voltar à app).
+  useEffect(() => {
+    if (!vaga || vagaTriedRef.current || !didFetchSlots || loading) return;
+    if (ymd(date) !== ymd(vaga.day)) return;
+    vagaTriedRef.current = true;
+    const match = slots.find((s) => lisbonHHMM(s.startsAt) === vaga.hhmm);
+    if (match) setPicked(match.startsAt);
+    else setVagaMissed(true);
+  }, [vaga, didFetchSlots, loading, slots, date]);
+
   // Ao escolher um DIA, desce até aos horários — mas só DEPOIS de os horários
   // desse dia estarem carregados e renderizados. Se descêssemos logo na
   // mudança de `date`, a secção colapsava para "A carregar…" (fica pequena),
@@ -144,6 +172,7 @@ export function BookingFlow({
       setSlots(cached.data);
       setPicked(null);
       setLoading(false);
+      setDidFetchSlots(true);
       return;
     }
     (async () => {
@@ -171,6 +200,7 @@ export function BookingFlow({
       setSlots(next);
       setPicked(null);
       setLoading(false);
+      setDidFetchSlots(true);
     })();
     return () => {
       cancelled = true;
@@ -368,6 +398,16 @@ export function BookingFlow({
 
   return (
     <div className="space-y-5">
+      {vaga && picked && !vagaMissed && (
+        <div className="rounded-xl border border-gold-300 bg-gold-50 p-4 text-sm text-ink-800 dark:border-gold-400/40 dark:bg-gold-400/10 dark:text-bone-100">
+          Vaga de <strong>{fullDate(vaga.day)} · {vaga.hhmm}</strong> pré-selecionada. Confirma em baixo para marcares.
+        </div>
+      )}
+      {vagaMissed && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+          Essa vaga já não está disponível — pode ter sido ocupada. Escolhe outro horário.
+        </div>
+      )}
       {!rescheduleBookingId && (canChooseType || onlyDupla) && (
         <div>
           <div className="label">Tipo de sessão</div>
@@ -870,6 +910,29 @@ function reasonLabel(reason: string) {
 function ymd(d: Date) {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+// Vaga anunciada: "YYYY-MM-DDTHH:mm" (hora local de Portugal, do datetime-local).
+// Devolve o dia (meia-noite local) + "HH:mm" para casar com o slot certo.
+function parseVaga(v?: string): { day: Date; hhmm: string } | null {
+  if (!v) return null;
+  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!m) return null;
+  const [, y, mo, d, hh, mm] = m;
+  const day = new Date(Number(y), Number(mo) - 1, Number(d));
+  if (isNaN(day.getTime())) return null;
+  return { day, hhmm: `${hh}:${mm}` };
+}
+
+// Hora-parede (Europe/Lisbon) "HH:mm" de um ISO timestamptz, para casar com
+// a hora da vaga independentemente do fuso do servidor. en-GB → sempre "17:45".
+function lisbonHHMM(iso: string): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Lisbon",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(iso));
 }
 function startOfDay(d: Date) {
   const x = new Date(d);
