@@ -13,10 +13,11 @@
 // ════════════════════════════════════════════════════════════════
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Ban, CalendarPlus, Package, Search, UserPlus, X } from "lucide-react";
+import { Ban, CalendarPlus, Megaphone, Package, Search, UserPlus, X } from "lucide-react";
 import { eur } from "@/lib/utils";
 import { searchClientsAction, type ClientHit } from "@/app/admin/clientes/search-action";
 import { createAgendaBookingAction, createBusyAction, getBookingClientHintsAction } from "./actions";
+import { anunciarVagaAction } from "@/app/admin/anunciar/actions";
 
 type PackLite = { id: string; name: string; sessions: number; price_cents: number };
 
@@ -46,6 +47,7 @@ export function BookingDialog({
   trainerId,
   durations,
   defaultDuration,
+  minNoticeHours = 12,
   viewedDate,
   packs,
   hideTrigger = false,
@@ -53,6 +55,8 @@ export function BookingDialog({
   trainerId: string;
   durations: number[];
   defaultDuration: number;
+  // Antecedência mínima de marcação (horas) — gating do "Anunciar vaga".
+  minNoticeHours?: number;
   viewedDate: string; // ISO yyyy-mm-dd
   packs: PackLite[];
   // Quando true, não renderiza o botão "Nova marcação" — o diálogo
@@ -63,6 +67,8 @@ export function BookingDialog({
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // Feedback do atalho "Anunciar vaga".
+  const [vagaMsg, setVagaMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   // Separador principal: marcar uma sessão vs marcar tempo ocupado.
   const [tab, setTab] = useState<"session" | "busy">("session");
@@ -143,6 +149,7 @@ export function BookingDialog({
     setGrantPrice("0");
     setGrantMethod("manual_mbway");
     setError(null);
+    setVagaMsg(null);
   }
 
   // Abrir a partir de clique num horário da grelha (SlotClickLayer)
@@ -357,6 +364,32 @@ export function BookingDialog({
       if (next.has(dow)) next.delete(dow);
       else next.add(dow);
       return next;
+    });
+  }
+
+  // "Anunciar vaga" a partir deste slot: só permitido se o horário respeitar
+  // a antecedência mínima de marcação (mesma regra do cliente/aba Anunciar).
+  const slotMs = new Date(`${date}T${time}`).getTime();
+  const canAnnounce =
+    Number.isFinite(slotMs) && slotMs >= Date.now() + minNoticeHours * 3_600_000;
+
+  function announceVaga() {
+    setVagaMsg(null);
+    const fd = new FormData();
+    fd.set("when", `${date}T${time}`); // "YYYY-MM-DDTHH:mm" (hora local PT)
+    startTransition(async () => {
+      const res = await anunciarVagaAction({}, fd);
+      if (res?.error) {
+        setVagaMsg({ ok: false, text: res.error });
+        return;
+      }
+      setVagaMsg({
+        ok: true,
+        text:
+          res?.count === 0
+            ? "Nenhum cliente elegível (todos desligaram o aviso de vagas)."
+            : `Vaga anunciada a ${res?.count ?? 0} cliente(s).`,
+      });
     });
   }
 
@@ -720,6 +753,38 @@ export function BookingDialog({
                 </span>
               </span>
             </label>
+
+            {/* Atalho: anunciar este horário como VAGA a todos os clientes.
+                Respeita a antecedência mínima — desativado dentro da janela. */}
+            <div className="mb-4">
+              <button
+                type="button"
+                onClick={announceVaga}
+                disabled={!canAnnounce || pending}
+                title={
+                  canAnnounce
+                    ? "Avisa todos os clientes desta vaga (abre a marcação já neste horário)."
+                    : `Dentro da antecedência mínima (${minNoticeHours}h) — não é possível anunciar esta vaga.`
+                }
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-ink-900/15 px-4 py-2.5 text-sm font-semibold text-ink-800 transition hover:bg-ink-900/5 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/15 dark:text-bone-100 dark:hover:bg-white/5"
+              >
+                <Megaphone size={16} /> Anunciar vaga
+              </button>
+              {!canAnnounce && (
+                <p className="mt-1 text-[11px] text-ink-500">
+                  Este horário está dentro da antecedência mínima de {minNoticeHours}h — não dá para anunciar como vaga.
+                </p>
+              )}
+              {vagaMsg && (
+                <p
+                  className={`mt-1 text-[11px] ${
+                    vagaMsg.ok ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+                  }`}
+                >
+                  {vagaMsg.text}
+                </p>
+              )}
+            </div>
             </>
             )}
 

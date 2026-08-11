@@ -54,13 +54,14 @@ export default async function AdminAgendaPage(props: {
   // Durações permitidas + default + packs activos para o BookingDialog.
   let durations: number[] = [45, 60, 90];
   let defaultDuration = 45;
+  let minNoticeHours = 12; // antecedência mínima de marcação (para gating do "Anunciar vaga")
   let packs: { id: string; name: string; sessions: number; price_cents: number }[] = [];
   if (trainerId) {
     const sb = await createClient();
     const [{ data: st }, { data: pk }] = await Promise.all([
       sb
         .from("trainer_settings")
-        .select("slot_durations_min, default_slot_duration_min")
+        .select("slot_durations_min, default_slot_duration_min, min_booking_notice_hours")
         .eq("trainer_id", trainerId)
         .maybeSingle(),
       sb
@@ -73,6 +74,8 @@ export default async function AdminAgendaPage(props: {
     if (st) {
       durations = ((st as any).slot_durations_min as number[] | null) ?? durations;
       defaultDuration = ((st as any).default_slot_duration_min as number | null) ?? defaultDuration;
+      const mn = Number((st as any).min_booking_notice_hours);
+      if (Number.isFinite(mn) && mn >= 0) minNoticeHours = mn;
     }
     packs = (pk ?? []) as typeof packs;
   }
@@ -127,6 +130,7 @@ export default async function AdminAgendaPage(props: {
           trainerId={trainerId}
           durations={adminDurations}
           defaultDuration={defaultDuration}
+          minNoticeHours={minNoticeHours}
           viewedDate={isoDate(day)}
           packs={packs}
         />

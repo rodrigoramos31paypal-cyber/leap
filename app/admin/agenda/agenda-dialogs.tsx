@@ -34,12 +34,14 @@ export function AgendaDialogs({
   trainerId,
   durations,
   defaultDuration,
+  minNoticeHours,
   viewedDate,
   packs,
 }: {
   trainerId: string;
   durations: number[];
   defaultDuration: number;
+  minNoticeHours: number;
   viewedDate: string;
   packs: PackLite[];
 }) {
@@ -49,6 +51,7 @@ export function AgendaDialogs({
         trainerId={trainerId}
         durations={durations}
         defaultDuration={defaultDuration}
+        minNoticeHours={minNoticeHours}
         viewedDate={viewedDate}
         packs={packs}
         hideTrigger
