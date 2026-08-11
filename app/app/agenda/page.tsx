@@ -68,7 +68,12 @@ export default async function AgendaPage(
     explicitTrainer ? Promise.resolve(null) : getTrainerForClient(user.id),
   ]);
   const preferred = explicitTrainer ?? fallbackTrainer;
-  const trainerId = preferred && actives.some((t) => t.id === preferred) ? preferred : null;
+  const preferredId = preferred && actives.some((t) => t.id === preferred) ? preferred : null;
+  // Fallback robusto: com EXACTAMENTE 1 trainer ativo, usa-o mesmo que o
+  // param `trainer` venha inválido ou ausente (ex.: deep-link de vaga colado
+  // à mão, ou cliente sem trainer atribuído). Com vários trainers mantém-se
+  // o picker abaixo.
+  const trainerId = preferredId ?? (actives.length === 1 ? actives[0].id : null);
 
   // mais que 1 trainer e sem escolha → mostra picker
   if (!trainerId && actives.length > 1) {
