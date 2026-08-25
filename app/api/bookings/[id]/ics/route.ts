@@ -141,7 +141,12 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
   return new NextResponse(ics, {
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",
-      "Content-Disposition": `attachment; filename="leap-session-${booking.id.slice(0, 8)}.ics"`,
+      // `inline` (não `attachment`): entrega pelo TIPO DE CONTEÚDO ao
+      // Calendário (iOS abre logo "Adicionar ao Calendário"; Android abre o
+      // Calendário/seletor), em vez de depender do subsistema de DOWNLOAD —
+      // que falha em silêncio dentro de uma PWA standalone no iOS. O filename
+      // mantém-se para quando o Android/desktop de facto descarrega.
+      "Content-Disposition": `inline; filename="leap-session-${booking.id.slice(0, 8)}.ics"`,
       "Cache-Control": cacheControl,
     },
   });

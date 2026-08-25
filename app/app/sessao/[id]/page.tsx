@@ -98,12 +98,6 @@ export default async function SessaoPage(props: { params: Promise<{ id: string }
         <div className="space-y-2">
           <a
             href={`/api/bookings/${b.id}/ics?t=${signBookingIcs(b.id)}`}
-            // iOS PWA instalada (standalone): um <a> normal para uma resposta
-            // `attachment` não faz nada (o WebView não descarrega/entrega o
-            // .ics). target="_blank" entrega ao Safari, que abre "Adicionar ao
-            // Calendário". Inofensivo no Safari/Android/desktop.
-            target="_blank"
-            rel="noopener"
             className="card flex items-center gap-3 p-4 hover:border-gold-400"
           >
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-bone-100 text-ink-700">
