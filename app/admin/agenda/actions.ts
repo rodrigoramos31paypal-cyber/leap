@@ -8,12 +8,13 @@ import {
   revertNoShow,
   cancelBooking,
   createBookingAdmin,
+  createRecurringBooking,
   rescheduleBookingAdmin,
   createPurchase,
   createCustomPurchase,
   confirmPurchase,
 } from "@/lib/credits";
-import { dispatchBookingCancelled, dispatchBookingCreated } from "@/lib/email-dispatch";
+import { dispatchBookingCancelled, dispatchBookingCreated, dispatchRecurringBookingCreated } from "@/lib/email-dispatch";
 import { removeBookingFromCalendars, pushBookingToCalendars } from "@/lib/calendar-sync";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getAccessibleTrainerIds } from "@/lib/trainer";
@@ -307,6 +308,9 @@ export async function createAgendaBookingAction(
     ? "dupla"
     : "individual") as SessionType;
   const deduct = formData.get("deduct") === "on" || formData.get("deduct") === "true";
+  // Marcação recorrente (só individual): N semanas no mesmo dia/hora.
+  const recurring = formData.get("recurring") === "on" || formData.get("recurring") === "true";
+  const recurringWeeks = Math.max(2, Math.min(12, Number(formData.get("recurring_weeks") ?? 0)));
 
   // Adicionar sessões/pack ao cliente no mesmo passo (opcional).
   const grant = formData.get("grant") === "on" || formData.get("grant") === "true";
@@ -421,6 +425,100 @@ export async function createAgendaBookingAction(
     } catch (e) {
       logError("createAgendaBookingAction:grant", e);
       return { error: "Não foi possível adicionar as sessões ao cliente." };
+    }
+  }
+
+  // ── Marcação RECORRENTE (opcional · só individual) ──────────────
+  if (recurring && sessionType === "individual" && recurringWeeks >= 2) {
+    // Mesma hora-parede em cada semana (preserva a hora ao atravessar DST).
+    const addDaysIso = (iso: string, days: number): string => {
+      const [y, m, d] = iso.split("-").map(Number);
+      const dt = new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1));
+      dt.setUTCDate(dt.getUTCDate() + days);
+      const p = (n: number) => String(n).padStart(2, "0");
+      return `${dt.getUTCFullYear()}-${p(dt.getUTCMonth() + 1)}-${p(dt.getUTCDate())}`;
+    };
+    try {
+      let bookingIds: string[] = [];
+      let bookedCount = 0;
+      let requested = recurringWeeks;
+      let noCredit = 0;
+      let occupied = 0;
+
+      if (deduct) {
+        // Usa o saldo do cliente. PARCIAL: marca as semanas com saldo/livres,
+        // devolve as restantes (no_credit / ocupado) em `conflicts`.
+        const res = await createRecurringBooking({
+          trainerId,
+          startsAt,
+          durationMin,
+          sessionsCount: recurringWeeks,
+          sessionType,
+          clientId,
+        });
+        bookingIds = res.booking_ids;
+        bookedCount = res.booked_count;
+        requested = res.requested_count;
+        for (const c of res.conflicts) {
+          if (c.reason === "no_credit") noCredit++;
+          else occupied++;
+        }
+      } else {
+        // GRÁTIS: marca cada semana sem descontar; salta as ocupadas.
+        for (let i = 0; i < recurringWeeks; i++) {
+          const wkStart = lisbonWallClockToUTC(addDaysIso(date, i * 7), time);
+          if (!wkStart || Number.isNaN(wkStart.getTime())) {
+            occupied++;
+            continue;
+          }
+          try {
+            const id = await createBookingAdmin({
+              trainerId,
+              startsAt: wkStart,
+              durationMin,
+              sessionType,
+              clientId,
+              deduct: false,
+            });
+            bookingIds.push(id);
+            bookedCount++;
+          } catch {
+            occupied++;
+          }
+        }
+      }
+
+      if (bookingIds.length > 0) {
+        await Promise.allSettled([
+          dispatchRecurringBookingCreated(bookingIds),
+          ...bookingIds.map((id) => pushBookingToCalendars(id)),
+        ]);
+        await logAudit("booking_create_admin", {
+          targetTable: "bookings",
+          targetId: bookingIds[0],
+          payload: { clientId, trainerId, sessionType, durationMin, deduct, series: true, count: bookingIds.length },
+        });
+      }
+      revalidateBookingViews(clientId);
+      if (grant) revalidateCreditsViews(clientId);
+
+      if (bookedCount === 0) {
+        await setFlash("Nenhuma semana disponível para a série", "error");
+        return { error: "Nenhuma semana disponível para a série" };
+      }
+      let msg =
+        bookedCount === requested
+          ? `Série marcada: ${bookedCount} semanas`
+          : `Marcadas ${bookedCount} de ${requested} semanas`;
+      const extra: string[] = [];
+      if (noCredit > 0) extra.push(`${noCredit} sem saldo`);
+      if (occupied > 0) extra.push(`${occupied} ocupada(s)`);
+      if (extra.length) msg += ` — ${extra.join(", ")}`;
+      await setFlash(msg);
+      return { ok: true };
+    } catch (e) {
+      logError("createAgendaBookingAction:recurring", e);
+      return { error: "Não foi possível marcar a série." };
     }
   }
 

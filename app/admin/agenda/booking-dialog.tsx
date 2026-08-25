@@ -13,13 +13,16 @@
 // ════════════════════════════════════════════════════════════════
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Ban, CalendarPlus, Megaphone, Package, Search, UserPlus, X } from "lucide-react";
+import { Ban, CalendarPlus, Megaphone, Package, Repeat, Search, UserPlus, X } from "lucide-react";
 import { eur } from "@/lib/utils";
 import { searchClientsAction, type ClientHit } from "@/app/admin/clientes/search-action";
 import { createAgendaBookingAction, createBusyAction, getBookingClientHintsAction } from "./actions";
 import { anunciarVagaAction } from "@/app/admin/anunciar/actions";
 
 type PackLite = { id: string; name: string; sessions: number; price_cents: number };
+
+// Máximo de semanas para uma marcação recorrente do admin.
+const MAX_RECURRING_WEEKS = 12;
 
 const TIME_OPTIONS = Array.from({ length: 59 }, (_, i) => {
   const total = 7 * 60 + i * 15; // 07:00 → 21:30, passos de 15 min
@@ -95,6 +98,10 @@ export function BookingDialog({
   const [duration, setDuration] = useState(String(defaultDuration));
   const [sessionType, setSessionType] = useState<"individual" | "dupla">("individual");
   const [deduct, setDeduct] = useState(true);
+  // Marcação recorrente (só individual) + saldo do cliente (para o aviso).
+  const [recurring, setRecurring] = useState(false);
+  const [recurringWeeks, setRecurringWeeks] = useState(4);
+  const [clientCredits, setClientCredits] = useState<{ individual: number; dupla: number } | null>(null);
 
   // Cliente existente (typeahead)
   const [picked, setPicked] = useState<ClientHit | null>(null);
@@ -135,6 +142,9 @@ export function BookingDialog({
     setDuration(String(defaultDuration));
     setSessionType("individual");
     setDeduct(true);
+    setRecurring(false);
+    setRecurringWeeks(4);
+    setClientCredits(null);
     setPicked(null);
     setQ("");
     setHits([]);
@@ -208,12 +218,16 @@ export function BookingDialog({
   // para o par. O admin pode mudar para "Individual" no dropdown se for
   // mesmo uma sessão individual (nesse caso desconta só ao próprio).
   useEffect(() => {
-    if (!picked) return;
+    if (!picked) {
+      setClientCredits(null);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
         const hints = await getBookingClientHintsAction(picked.id, trainerId);
         if (cancelled) return;
+        setClientCredits({ individual: hints.individual, dupla: hints.dupla });
         if (hints.hasPartner) {
           setSessionType("dupla");
         }
@@ -265,6 +279,10 @@ export function BookingDialog({
     fd.set("durationMin", duration);
     fd.set("sessionType", sessionType);
     fd.set("deduct", deduct ? "true" : "false");
+    // Recorrente só faz sentido para individual.
+    const isRecurring = recurring && sessionType === "individual";
+    fd.set("recurring", isRecurring ? "true" : "false");
+    if (isRecurring) fd.set("recurring_weeks", String(recurringWeeks));
     if (mode === "existing") {
       fd.set("clientId", picked!.id);
     } else {
@@ -372,6 +390,10 @@ export function BookingDialog({
   const slotMs = new Date(`${date}T${time}`).getTime();
   const canAnnounce =
     Number.isFinite(slotMs) && slotMs >= Date.now() + minNoticeHours * 3_600_000;
+
+  // Saldo disponível para o tipo escolhido (para o aviso do recorrente).
+  const availForType =
+    sessionType === "dupla" ? clientCredits?.dupla ?? 0 : clientCredits?.individual ?? 0;
 
   function announceVaga() {
     setVagaMsg(null);
@@ -614,7 +636,11 @@ export function BookingDialog({
                 <select
                   id="bk_type"
                   value={sessionType}
-                  onChange={(e) => setSessionType(e.target.value as "individual" | "dupla")}
+                  onChange={(e) => {
+                    const v = e.target.value as "individual" | "dupla";
+                    setSessionType(v);
+                    if (v === "dupla") setRecurring(false); // recorrente só individual
+                  }}
                   className="input"
                 >
                   <option value="individual">Individual</option>
@@ -753,6 +779,70 @@ export function BookingDialog({
                 </span>
               </span>
             </label>
+
+            {/* Marcar recorrente (só individual) + aviso de saldo */}
+            {sessionType === "individual" && (
+              <div className="mb-3 rounded-lg border border-ink-900/10 bg-bone-50 p-3 text-sm dark:border-white/10 dark:bg-ink-900">
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    checked={recurring}
+                    onChange={(e) => setRecurring(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-ink-900/30"
+                  />
+                  <span>
+                    <span className="inline-flex items-center gap-1.5 font-medium">
+                      <Repeat size={13} /> Marcar recorrente
+                    </span>
+                    <span className="block text-[11px] text-ink-500">
+                      Marca várias semanas no mesmo dia e hora.
+                    </span>
+                  </span>
+                </label>
+
+                {recurring && (
+                  <>
+                    <div className="mt-3 flex items-center justify-between gap-3 border-t border-ink-900/10 pt-3 dark:border-white/10">
+                      <span className="font-medium">Quantas semanas?</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          aria-label="Menos semanas"
+                          onClick={() => setRecurringWeeks((w) => Math.max(2, w - 1))}
+                          disabled={recurringWeeks <= 2}
+                          className="flex h-7 w-7 items-center justify-center rounded-md border border-ink-900/20 text-base font-semibold leading-none disabled:opacity-40 dark:border-white/20"
+                        >
+                          -
+                        </button>
+                        <span className="w-6 text-center font-semibold tabular-nums">{recurringWeeks}</span>
+                        <button
+                          type="button"
+                          aria-label="Mais semanas"
+                          onClick={() => setRecurringWeeks((w) => Math.min(MAX_RECURRING_WEEKS, w + 1))}
+                          disabled={recurringWeeks >= MAX_RECURRING_WEEKS}
+                          className="flex h-7 w-7 items-center justify-center rounded-md border border-ink-900/20 text-base font-semibold leading-none disabled:opacity-40 dark:border-white/20"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                    {!deduct ? (
+                      <p className="mt-2 text-[11px] text-ink-500">
+                        Marca {recurringWeeks} semanas como grátis (sem descontar saldo).
+                      </p>
+                    ) : clientCredits && recurringWeeks > availForType ? (
+                      <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+                        O cliente só tem {availForType} {availForType === 1 ? "sessão" : "sessões"} — serão marcadas {availForType} das {recurringWeeks} semanas; as restantes {recurringWeeks - availForType} ficam por marcar (sem saldo). Liga &quot;Adicionar sessões&quot; para dar mais.
+                      </p>
+                    ) : (
+                      <p className="mt-2 text-[11px] text-ink-500">
+                        Desconta {recurringWeeks}{clientCredits ? ` de ${availForType}` : ""} sessões.
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Atalho: anunciar este horário como VAGA a todos os clientes.
                 Respeita a antecedência mínima — desativado dentro da janela. */}
@@ -1061,7 +1151,11 @@ export function BookingDialog({
                   className="btn-primary inline-flex items-center gap-1.5"
                 >
                   <CalendarPlus size={16} />
-                  {pending ? "A marcar…" : "Marcar"}
+                  {pending
+                    ? "A marcar…"
+                    : recurring && sessionType === "individual"
+                      ? `Marcar série (${recurringWeeks})`
+                      : "Marcar"}
                 </button>
               )}
             </div>
