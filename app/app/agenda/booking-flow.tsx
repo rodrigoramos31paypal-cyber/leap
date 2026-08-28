@@ -73,10 +73,11 @@ export function BookingFlow({
   // (já vem somado em credits.dupla), por isso basta haver par ligado e
   // saldo > 0. O servidor recusa de qualquer forma; aqui avisamos e
   // bloqueamos o botão para não enviar um pedido que vai falhar.
-  const duoNotLinked = !hasPartner;
-  const duoNoCredits = hasPartner && credits.dupla === 0;
-  const duoBlocked =
-    sessionType === "dupla" && (duoNotLinked || duoNoCredits);
+  // PT Dupla PODE ser marcada mesmo sem par ligado — desconta do pack DUPLA
+  // da própria cliente (a parceira pode ligar-se mais tarde). Só bloqueia se
+  // não houver saldo dupla.
+  const duoNoCredits = credits.dupla === 0;
+  const duoBlocked = sessionType === "dupla" && duoNoCredits;
   const [duration, setDuration] = useState<number>(defaultDuration);
   const [date, setDate] = useState<Date>(() => startOfDay(vaga ? vaga.day : new Date()));
   // Mês seleccionado no filtro (chave "ano-mês"). Por defeito, o mês de hoje
@@ -327,13 +328,9 @@ export function BookingFlow({
 
   function confirm() {
     if (!picked) return;
-    // Guarda: marcação dupla exige contas ligadas + ambos com saldo.
+    // Guarda: dupla só precisa de saldo dupla (não exige par ligado).
     if (duoBlocked) {
-      setError(
-        duoNotLinked
-          ? "Para marcar PT Dupla, a tua conta tem de estar ligada à do teu par. Fala com o teu treinador."
-          : "O par não tem sessões PT Dupla disponíveis. Comprem um pack PT Dupla para marcar a dois.",
-      );
+      setError("Sem sessões PT Dupla disponíveis. Compra um pack PT Dupla para marcar.");
       return;
     }
     setError(null);
@@ -443,15 +440,9 @@ export function BookingFlow({
               </button>
             </div>
           )}
-          {sessionType === "dupla" && duoNotLinked ? (
+          {sessionType === "dupla" && duoNoCredits ? (
             <p className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
-              Para marcar sessões PT Dupla, a tua conta tem de estar ligada à do teu par.
-              Fala com o teu treinador para ligar as duas contas.
-            </p>
-          ) : sessionType === "dupla" && duoNoCredits ? (
-            <p className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
-              O par não tem sessões PT Dupla disponíveis. Comprem um pack PT Dupla
-              {partnerName ? ` (tu ou ${partnerName.split(" ")[0]})` : ""} para marcar a dois.
+              Sem sessões PT Dupla disponíveis. Compra um pack PT Dupla para marcar.
             </p>
           ) : (
             sessionType === "dupla" && (
@@ -721,9 +712,7 @@ export function BookingFlow({
             {pending
               ? "A marcar…"
               : duoBlocked
-                ? duoNotLinked
-                  ? "Conta não ligada a um par"
-                  : "Par sem sessões PT Dupla"
+                ? "Sem sessões PT Dupla"
                 : rescheduleBookingId
                   ? "Confirmar reagendamento"
                   : recurring && availableCredits > 1
