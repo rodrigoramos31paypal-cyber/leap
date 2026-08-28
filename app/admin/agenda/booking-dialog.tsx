@@ -102,6 +102,7 @@ export function BookingDialog({
   const [recurring, setRecurring] = useState(false);
   const [recurringWeeks, setRecurringWeeks] = useState(4);
   const [clientCredits, setClientCredits] = useState<{ individual: number; dupla: number } | null>(null);
+  const [clientHasPartner, setClientHasPartner] = useState<boolean | null>(null);
 
   // Cliente existente (typeahead)
   const [picked, setPicked] = useState<ClientHit | null>(null);
@@ -145,6 +146,7 @@ export function BookingDialog({
     setRecurring(false);
     setRecurringWeeks(4);
     setClientCredits(null);
+    setClientHasPartner(null);
     setPicked(null);
     setQ("");
     setHits([]);
@@ -220,6 +222,7 @@ export function BookingDialog({
   useEffect(() => {
     if (!picked) {
       setClientCredits(null);
+      setClientHasPartner(null);
       return;
     }
     let cancelled = false;
@@ -228,6 +231,7 @@ export function BookingDialog({
         const hints = await getBookingClientHintsAction(picked.id, trainerId);
         if (cancelled) return;
         setClientCredits({ individual: hints.individual, dupla: hints.dupla });
+        setClientHasPartner(hints.hasPartner);
         if (hints.hasPartner) {
           setSessionType("dupla");
         }
@@ -648,6 +652,13 @@ export function BookingDialog({
                 </select>
               </div>
             </div>
+
+            {/* Dupla sem par ligado: desconta do pack de dupla desta cliente. */}
+            {sessionType === "dupla" && clientHasPartner === false && (
+              <div className="mb-3 rounded-lg border border-gold-200 bg-gold-50 px-3 py-2 text-[11px] text-ink-700 dark:border-gold-400/30 dark:bg-gold-400/10 dark:text-bone-100">
+                Sem par ligado — a sessão desconta do pack de dupla desta cliente. Podes ligar a parceira mais tarde.
+              </div>
+            )}
 
             {/* Adicionar sessões / pack */}
             <div className="mb-3 rounded-lg border border-ink-900/10 bg-bone-50 p-3 dark:border-white/10 dark:bg-ink-900">
