@@ -28,9 +28,11 @@ import {
 // 0=Dom … 6=Sáb (convenção day_of_week / Postgres dow).
 const WEEKDAY_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
-const TIMES = Array.from({ length: 48 }, (_, i) => {
-  const h = Math.floor(i / 2);
-  const m = (i % 2) * 30;
+// Passos de 15 min (00:00 → 23:45), para permitir horas como 14:45.
+const TIMES = Array.from({ length: 96 }, (_, i) => {
+  const total = i * 15;
+  const h = Math.floor(total / 60);
+  const m = total % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 });
 
