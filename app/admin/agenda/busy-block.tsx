@@ -9,12 +9,14 @@
 //     semanas;
 //   • remover o bloqueio (este dia / a recorrência inteira).
 // ════════════════════════════════════════════════════════════════
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Ban, X } from "lucide-react";
 import {
   updateBlockAction,
   updateRecurringBlockAction,
+  updateRecurringWeekdaysAction,
+  recurringBlockWeekdaysAction,
   deleteBlockAction,
   deleteRecurringBlockAction,
   skipRecurringDateAction,
@@ -22,6 +24,9 @@ import {
   splitBlockAction,
   splitRecurringBlockAction,
 } from "./actions";
+
+// 0=Dom … 6=Sáb (convenção day_of_week / Postgres dow).
+const WEEKDAY_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
 const TIMES = Array.from({ length: 48 }, (_, i) => {
   const h = Math.floor(i / 2);
@@ -73,8 +78,39 @@ export function BusyBlock({
   const [freeFrom, setFreeFrom] = useState("12:30");
   const [freeTo, setFreeTo] = useState("14:00");
   const [reason, setReason] = useState<string>(b.reason ?? "");
-  // Para recorrentes: aplicar a alteração só a este dia ou a todas as semanas.
-  const [scope, setScope] = useState<"single" | "all">("all");
+  // Para recorrentes: só este dia · dias-da-semana específicos · todos os dias.
+  const [scope, setScope] = useState<"single" | "all" | "weekdays">("all");
+  // Dias-da-semana escolhidos no scope "weekdays" (0=Dom … 6=Sáb).
+  const [weekdaySel, setWeekdaySel] = useState<Set<number>>(new Set());
+
+  // Ao abrir um bloqueio recorrente, pré-marca os dias que o grupo já cobre.
+  useEffect(() => {
+    if (!open || !isRecurring) return;
+    let cancelled = false;
+    const fallback = new Date(date + "T00:00:00").getDay();
+    (async () => {
+      try {
+        const wd = await recurringBlockWeekdaysAction(b.trainer_id, origFrom, origTo);
+        if (cancelled) return;
+        setWeekdaySel(new Set(wd.length > 0 ? wd : [fallback]));
+      } catch {
+        if (!cancelled) setWeekdaySel(new Set([fallback]));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, isRecurring]);
+
+  function toggleWeekday(dow: number) {
+    setWeekdaySel((prev) => {
+      const next = new Set(prev);
+      if (next.has(dow)) next.delete(dow);
+      else next.add(dow);
+      return next;
+    });
+  }
 
   function close() {
     setOpen(false);
@@ -100,6 +136,10 @@ export function BusyBlock({
         setError("A pausa livre não pode cobrir todo o intervalo.");
         return;
       }
+    }
+    if (scope === "weekdays" && weekdaySel.size === 0) {
+      setError("Escolhe pelo menos um dia da semana.");
+      return;
     }
     startTransition(async () => {
       let res: { ok?: true; error?: string } | void;
@@ -136,6 +176,21 @@ export function BusyBlock({
         } else {
           res = await updateRecurringBlockAction(fd);
         }
+      } else if (scope === "weekdays") {
+        // aplica só aos dias-da-semana escolhidos (os outros ficam iguais).
+        const fd = new FormData();
+        fd.set("trainerId", b.trainer_id);
+        fd.set("oldFrom", origFrom);
+        fd.set("oldTo", origTo);
+        fd.set("from", from);
+        fd.set("to", to);
+        if (hasFree) {
+          fd.set("freeFrom", freeFrom);
+          fd.set("freeTo", freeTo);
+        }
+        fd.set("reason", reason.trim());
+        fd.set("weekdays", Array.from(weekdaySel).join(","));
+        res = await updateRecurringWeekdaysAction(fd);
       } else {
         // só este dia: limpa a recorrência nesta data e cria um bloqueio
         // pontual com as novas horas (createBusyAction já trata a pausa).
@@ -177,6 +232,14 @@ export function BusyBlock({
         fd.set("id", b.recurring_id);
         fd.set("oldFrom", origFrom);
         fd.set("oldTo", origTo);
+        await deleteRecurringBlockAction(fd);
+      } else if (scope === "weekdays") {
+        // remove o bloqueio só nos dias-da-semana escolhidos.
+        const fd = new FormData();
+        fd.set("id", b.recurring_id);
+        fd.set("oldFrom", origFrom);
+        fd.set("oldTo", origTo);
+        fd.set("weekdays", Array.from(weekdaySel).join(","));
         await deleteRecurringBlockAction(fd);
       } else {
         const fd = new FormData();
@@ -241,11 +304,11 @@ export function BusyBlock({
             </div>
 
             {isRecurring && (
-              <div className="mb-3 inline-flex w-full items-center gap-1 rounded-lg border border-ink-900/10 bg-bone-50 p-1 text-sm dark:border-white/10 dark:bg-ink-900">
+              <div className="mb-3 inline-flex w-full items-center gap-1 rounded-lg border border-ink-900/10 bg-bone-50 p-1 text-xs dark:border-white/10 dark:bg-ink-900">
                 <button
                   type="button"
                   onClick={() => setScope("single")}
-                  className={`flex-1 rounded-md px-3 py-1.5 font-medium transition ${
+                  className={`flex-1 rounded-md px-2 py-1.5 font-medium transition ${
                     scope === "single" ? "bg-ink-900 text-white dark:bg-bone-50 dark:text-ink-900" : "text-ink-600"
                   }`}
                 >
@@ -253,19 +316,77 @@ export function BusyBlock({
                 </button>
                 <button
                   type="button"
+                  onClick={() => setScope("weekdays")}
+                  className={`flex-1 rounded-md px-2 py-1.5 font-medium transition ${
+                    scope === "weekdays" ? "bg-ink-900 text-white dark:bg-bone-50 dark:text-ink-900" : "text-ink-600"
+                  }`}
+                >
+                  Dias específicos
+                </button>
+                <button
+                  type="button"
                   onClick={() => setScope("all")}
-                  className={`flex-1 rounded-md px-3 py-1.5 font-medium transition ${
+                  className={`flex-1 rounded-md px-2 py-1.5 font-medium transition ${
                     scope === "all" ? "bg-ink-900 text-white dark:bg-bone-50 dark:text-ink-900" : "text-ink-600"
                   }`}
                 >
-                  Todas as semanas
+                  Todos os dias
                 </button>
               </div>
             )}
 
-            <p className="mb-3 text-[12px] text-ink-500">
-              Dia: <span className="font-medium text-ink-700">{date}</span>
-            </p>
+            {isRecurring && scope === "weekdays" && (
+              <div className="mb-3">
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <div className="label mb-0">Aplicar a</div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setWeekdaySel(new Set([0, 1, 2, 3, 4, 5, 6]))}
+                      className="rounded-md border border-ink-900/15 px-2 py-1 text-[11px] font-medium text-ink-600 hover:bg-ink-900/5"
+                    >
+                      Todos
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setWeekdaySel(new Set())}
+                      className="rounded-md border border-ink-900/15 px-2 py-1 text-[11px] font-medium text-ink-600 hover:bg-ink-900/5"
+                    >
+                      Limpar
+                    </button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {[1, 2, 3, 4, 5, 6, 0].map((dow) => {
+                    const on = weekdaySel.has(dow);
+                    return (
+                      <button
+                        key={dow}
+                        type="button"
+                        onClick={() => toggleWeekday(dow)}
+                        aria-pressed={on}
+                        className={`rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${
+                          on
+                            ? "border-ink-900 bg-ink-900 text-white dark:border-bone-50 dark:bg-bone-50 dark:text-ink-900"
+                            : "border-ink-900/15 text-ink-600 hover:bg-ink-900/5"
+                        }`}
+                      >
+                        {WEEKDAY_LABELS[dow]}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1.5 text-[11px] text-ink-500">
+                  A alteração aplica-se só a estes dias; os restantes ficam iguais.
+                </p>
+              </div>
+            )}
+
+            {scope !== "weekdays" && (
+              <p className="mb-3 text-[12px] text-ink-500">
+                Dia: <span className="font-medium text-ink-700">{date}</span>
+              </p>
+            )}
 
             <div className="mb-3 grid grid-cols-2 gap-3">
               <div className="min-w-0">
@@ -372,7 +493,11 @@ export function BusyBlock({
                 disabled={pending}
                 className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100"
               >
-                {isRecurring && scope === "all" ? "Remover recorrência" : "Remover"}
+                {isRecurring && scope === "all"
+                  ? "Remover recorrência"
+                  : isRecurring && scope === "weekdays"
+                    ? "Remover nestes dias"
+                    : "Remover"}
               </button>
               <button
                 type="button"

@@ -952,14 +952,22 @@ export async function deleteRecurringBlockAction(formData: FormData) {
     await setFlash("Sem permissão para remover esta recorrência", "error");
     return;
   }
+  // Opcional: limitar a remoção a dias-da-semana específicos do grupo.
+  const weekdays = String(formData.get("weekdays") ?? "")
+    .split(",")
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6);
   const groupMode = /^\d{2}:\d{2}$/.test(oldFrom) && /^\d{2}:\d{2}$/.test(oldTo);
   let q = (supabase as any).from("trainer_recurring_blocks").delete();
-  q = groupMode
-    ? q
-        .eq("trainer_id", (rb as any).trainer_id)
-        .eq("start_time", oldFrom)
-        .eq("end_time", oldTo)
-    : q.eq("id", id);
+  if (groupMode) {
+    q = q
+      .eq("trainer_id", (rb as any).trainer_id)
+      .eq("start_time", oldFrom)
+      .eq("end_time", oldTo);
+    if (weekdays.length > 0) q = q.in("day_of_week", weekdays);
+  } else {
+    q = q.eq("id", id);
+  }
   await q;
   await setFlash("Recorrência removida");
   revalidateAvailabilityViews();
@@ -1207,6 +1215,107 @@ export async function splitRecurringBlockAction(
   const { error: insErr } = await (supabase as any).from("trainer_recurring_blocks").insert(rows);
   if (insErr) {
     logError("splitRecurringBlockAction:insert", insErr);
+    return { error: "Não foi possível atualizar." };
+  }
+  await setFlash("Recorrência atualizada");
+  revalidateAvailabilityViews();
+  return { ok: true };
+}
+
+// Dias-da-semana (0=Dom … 6=Sáb) que este grupo recorrente (mesmo intervalo
+// original) cobre. Usado para pré-marcar o seletor "Dias específicos".
+export async function recurringBlockWeekdaysAction(
+  trainerId: string,
+  oldFrom: string,
+  oldTo: string,
+): Promise<number[]> {
+  await requireStaff();
+  if (!trainerId || !/^\d{2}:\d{2}$/.test(oldFrom) || !/^\d{2}:\d{2}$/.test(oldTo)) return [];
+  const accessible = await getAccessibleTrainerIds();
+  if (!accessible.includes(trainerId)) return [];
+  const supabase = await createClient();
+  const { data } = await (supabase as any)
+    .from("trainer_recurring_blocks")
+    .select("day_of_week")
+    .eq("trainer_id", trainerId)
+    .eq("start_time", oldFrom)
+    .eq("end_time", oldTo);
+  return Array.from(
+    new Set(((data ?? []) as any[]).map((r) => Number(r.day_of_week))),
+  ).filter((n) => Number.isInteger(n) && n >= 0 && n <= 6);
+}
+
+// Aplica a edição de um bloqueio recorrente APENAS aos dias-da-semana
+// escolhidos (os restantes dias do grupo ficam INTACTOS). Também pode
+// ACRESCENTAR o bloqueio a dias que ainda não o tinham. Lida com a pausa
+// livre via resolveBusySegments (0/1/2 segmentos por dia).
+export async function updateRecurringWeekdaysAction(
+  formData: FormData,
+): Promise<{ ok?: true; error?: string }> {
+  await requireStaff(); // S-10
+  const trainerId = String(formData.get("trainerId") ?? "");
+  const oldFrom = String(formData.get("oldFrom") ?? "");
+  const oldTo = String(formData.get("oldTo") ?? "");
+  const from = String(formData.get("from") ?? "");
+  const to = String(formData.get("to") ?? "");
+  const freeFrom = String(formData.get("freeFrom") ?? "");
+  const freeTo = String(formData.get("freeTo") ?? "");
+  const reasonRaw = String(formData.get("reason") ?? "").trim().slice(0, 200);
+  const reason = reasonRaw.length > 0 ? reasonRaw : null;
+  const weekdays = Array.from(
+    new Set(
+      String(formData.get("weekdays") ?? "")
+        .split(",")
+        .map((s) => Number(s.trim()))
+        .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6),
+    ),
+  );
+
+  if (!trainerId || !/^\d{2}:\d{2}$/.test(from) || !/^\d{2}:\d{2}$/.test(to)) {
+    return { error: "Dados inválidos." };
+  }
+  if (to <= from) return { error: "A hora de fim tem de ser depois do início." };
+  if (!/^\d{2}:\d{2}$/.test(oldFrom) || !/^\d{2}:\d{2}$/.test(oldTo)) {
+    return { error: "Recorrência não identificada." };
+  }
+  if (weekdays.length === 0) return { error: "Escolhe pelo menos um dia da semana." };
+
+  const accessible = await getAccessibleTrainerIds();
+  if (!accessible.includes(trainerId)) return { error: "Sem permissão." };
+
+  const segResult = resolveBusySegments(from, to, freeFrom, freeTo);
+  if ("error" in segResult) return { error: segResult.error };
+
+  const supabase = await createClient();
+
+  // Remove só as linhas destes dias com o intervalo ORIGINAL (os outros dias
+  // do grupo mantêm-se). Depois insere os novos segmentos para estes dias.
+  const { error: delErr } = await (supabase as any)
+    .from("trainer_recurring_blocks")
+    .delete()
+    .eq("trainer_id", trainerId)
+    .eq("start_time", oldFrom)
+    .eq("end_time", oldTo)
+    .in("day_of_week", weekdays);
+  if (delErr) {
+    logError("updateRecurringWeekdaysAction:delete", delErr);
+    return { error: "Não foi possível atualizar." };
+  }
+
+  const rows = weekdays.flatMap((dow) =>
+    segResult.segments.map((seg) => ({
+      trainer_id: trainerId,
+      day_of_week: dow,
+      start_time: seg.from,
+      end_time: seg.to,
+      reason,
+    })),
+  );
+  const { error: insErr } = await (supabase as any)
+    .from("trainer_recurring_blocks")
+    .insert(rows);
+  if (insErr) {
+    logError("updateRecurringWeekdaysAction:insert", insErr);
     return { error: "Não foi possível atualizar." };
   }
   await setFlash("Recorrência atualizada");
