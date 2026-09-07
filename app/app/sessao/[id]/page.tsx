@@ -47,12 +47,18 @@ export default async function SessaoPage(props: { params: Promise<{ id: string }
 
   // Janela de cancelamento é por trainer (default 12h). Mostramos o
   // valor real no botão para não desalinhar com a regra do servidor.
-  const { data: trainerSettings } = await supabase
+  // `as any`: reschedule_cutoff_hours ainda não está nos tipos gerados (0148).
+  const { data: trainerSettings } = await (supabase as any)
     .from("trainer_settings")
-    .select("cancellation_window_hours")
+    .select("cancellation_window_hours, reschedule_cutoff_hours")
     .eq("trainer_id", b.trainer_id)
     .maybeSingle();
-  const cancelWindowHours = trainerSettings?.cancellation_window_hours ?? 12;
+  const cancelWindowHours = (trainerSettings as any)?.cancellation_window_hours ?? 12;
+  // 0148: janela de reagendamento. Se faltam menos de X horas para a sessão,
+  // o cliente não pode reagendar (o RPC também bloqueia; isto é o espelho na UI).
+  const rescheduleCutoffHours = (trainerSettings as any)?.reschedule_cutoff_hours ?? 0;
+  const hoursUntilStart = (new Date(b.starts_at).getTime() - Date.now()) / 3_600_000;
+  const canReschedule = rescheduleCutoffHours <= 0 || hoursUntilStart >= rescheduleCutoffHours;
 
   const chipCls: Record<string, string> = {
     booked: "chip-gold",
@@ -110,21 +116,39 @@ export default async function SessaoPage(props: { params: Promise<{ id: string }
             <ChevronRight size={16} className="shrink-0 text-ink-500" />
           </a>
 
-          <form action={rebookAction}>
-            <input type="hidden" name="bookingId" value={b.id} />
-            <button className="card flex w-full items-center gap-3 p-4 text-left hover:border-gold-400">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-bone-100 text-ink-700">
+          {canReschedule ? (
+            <form action={rebookAction}>
+              <input type="hidden" name="bookingId" value={b.id} />
+              <button className="card flex w-full items-center gap-3 p-4 text-left hover:border-gold-400">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-bone-100 text-ink-700">
+                  <RefreshCcw size={18} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold">Reagendar</div>
+                  <div className="text-xs text-ink-500">
+                    Escolhe um novo horário — só confirmas no fim, sem perderes esta sessão.
+                  </div>
+                </div>
+                <ChevronRight size={16} className="shrink-0 text-ink-500" />
+              </button>
+            </form>
+          ) : (
+            <div
+              aria-disabled="true"
+              className="card flex w-full cursor-not-allowed items-center gap-3 p-4 text-left opacity-50"
+            >
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-bone-100 text-ink-400">
                 <RefreshCcw size={18} />
               </span>
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold">Reagendar</div>
+                <div className="text-sm font-semibold text-ink-500">Reagendar</div>
                 <div className="text-xs text-ink-500">
-                  Escolhe um novo horário — só confirmas no fim, sem perderes esta sessão.
+                  Já não é possível reagendar com menos de {rescheduleCutoffHours}h de antecedência.
+                  Fala com o teu treinador.
                 </div>
               </div>
-              <ChevronRight size={16} className="shrink-0 text-ink-500" />
-            </button>
-          </form>
+            </div>
+          )}
 
           <form action={cancelBookingAction}>
             <input type="hidden" name="bookingId" value={b.id} />

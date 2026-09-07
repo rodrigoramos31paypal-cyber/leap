@@ -624,6 +624,19 @@ function RegrasTab({
                     className="input"
                   />
                 </div>
+                <div className="sm:max-w-[50%]">
+                  <label className="label">Antecedência mínima para reagendar (horas)</label>
+                  <input
+                    name="reschedule_cutoff"
+                    type="number"
+                    min={0}
+                    defaultValue={settings?.reschedule_cutoff_hours ?? 0}
+                    className="input"
+                  />
+                  <p className="mt-1 text-xs text-ink-500">
+                    O cliente não pode reagendar com menos de X horas de antecedência. 0 = sem restrição.
+                  </p>
+                </div>
                 <div className="flex flex-wrap gap-4 border-t border-ink-900/[0.06] pt-4 dark:border-white/[0.07]">
                   <label className="flex items-center gap-2 text-sm">
                     <input
