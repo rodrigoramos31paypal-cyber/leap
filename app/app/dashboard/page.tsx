@@ -6,7 +6,8 @@ import { createClient, getSessionUser, getCurrentProfile } from "@/lib/supabase/
 import { CardSkeleton } from "@/components/skeleton";
 import { getClientCredits, getClientCreditsByTrainer } from "@/lib/credits";
 import { formatDateTime, pluralize, BOOKING_STATUS } from "@/lib/utils";
-import { Calendar, ShoppingBag, Dumbbell, AlertCircle, ChevronRight } from "lucide-react";
+import { Calendar, ShoppingBag, Dumbbell, AlertCircle, ChevronRight, Flame } from "lucide-react";
+import { levelForStreak, LEVEL_LABEL } from "@/lib/streak";
 import { PushSubscribeCard } from "@/components/push-subscribe-card";
 import { PromoSlot } from "@/components/promo-slot";
 
@@ -256,7 +257,7 @@ async function BelowFold({
 
   // PERF (audit #3): uma única vaga paralela — histórico + presença.
   // Toda a secção é streamed, fora do caminho crítico.
-  const [{ data: recentPast }, presencaRes] = await Promise.all([
+  const [{ data: recentPast }, presencaRes, streakRes] = await Promise.all([
     supabase
       .from("bookings")
       .select("id, starts_at, session_type, status")
@@ -275,7 +276,13 @@ async function BelowFold({
           .lt("starts_at", nowIso)
           .in("status", ["confirmed", "no_show"])
       : Promise.resolve({ data: null }),
+    // Sequência LEAP (0149): sequência atual + estado da semana em curso.
+    (supabase as any).rpc("get_client_streak", { p_client: userId }),
   ]);
+
+  const streakRow = ((streakRes as any)?.data as any[] | null)?.[0];
+  const streakWeeks = Number(streakRow?.current_streak ?? 0);
+  const weekStatus = String(streakRow?.current_week_status ?? "none");
 
   // Taxa de presença (apenas do pack activo mais recente).
   let presenca: number | null = null;
@@ -321,11 +328,20 @@ async function BelowFold({
                 {presenca === null ? "Sem dados" : faltas === 0 ? "Excelente" : `${faltas} ${pluralize(faltas, "falta", "faltas")}`}
               </div>
             </div>
-            <div className="rounded-lg bg-bone-50 p-2.5 dark:bg-white/[0.03]">
+            <Link
+              href="/app/leaderboard"
+              className="block rounded-lg bg-bone-50 p-2.5 transition hover:bg-bone-100 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
+            >
               <div className="text-[11px] font-semibold text-ink-600 dark:text-bone-100">Ranking</div>
-              <div className="mt-1 truncate text-sm font-bold">Em breve</div>
-              <div className="text-[11px] text-ink-500">Pontos · loja</div>
-            </div>
+              <div className="mt-1 flex items-center gap-1">
+                <Flame size={15} className="shrink-0 text-gold-500" />
+                <span className="font-display text-lg font-bold tabular-nums">{streakWeeks}</span>
+              </div>
+              <div className="truncate text-[11px] font-medium text-gold-700 dark:text-gold-300">
+                {LEVEL_LABEL[levelForStreak(streakWeeks)]}
+                {weekStatus === "on_track" ? " · a contar ✓" : " · ver ›"}
+              </div>
+            </Link>
           </div>
           {packTotal > 0 && (
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-ink-900/10 dark:bg-white/10">
