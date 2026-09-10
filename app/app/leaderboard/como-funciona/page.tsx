@@ -14,11 +14,11 @@ export default function ComoFuncionaPage() {
   return (
     <div className="space-y-5">
       <div>
-        <Link href="/app/leaderboard" className="inline-flex items-center gap-1.5 text-xs font-medium text-gold-600 hover:text-gold-700 dark:text-gold-400">
+        <Link href="/app/leaderboard" className="inline-flex w-fit items-center gap-1.5 text-xs font-medium text-gold-600 hover:text-gold-700 dark:text-gold-400">
           <ArrowLeft size={14} /> Voltar ao ranking
         </Link>
-        <h1 className="mt-2 inline-flex items-center gap-2 font-display text-2xl font-bold tracking-tight">
-          <Flame size={22} className="text-gold-500" /> Sequência LEAP
+        <h1 className="mt-2 flex items-center gap-2 font-display text-2xl font-bold tracking-tight">
+          <Flame size={22} className="shrink-0 text-gold-500" /> Sequência LEAP
         </h1>
         <p className="text-sm text-ink-500">O número de semanas seguidas em que treinas sem faltas.</p>
       </div>
