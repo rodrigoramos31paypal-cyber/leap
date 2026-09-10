@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { changePasswordAction, updateProfileAction } from "./actions";
 import { NotificationCategoryPrefs, type CategoryPrefs } from "@/components/notification-category-prefs";
+import { LeaderboardToggle } from "@/components/leaderboard-toggle";
 import { CLIENT_CATEGORIES } from "@/lib/notifications-config";
 import { DeleteAccountSection } from "@/components/delete-account-section";
 import { ShieldCheck, User, Bell, NotebookPen, Plus, Sparkles, KeyRound, CalendarDays } from "lucide-react";
@@ -193,6 +194,8 @@ function PerfilTab({ profile, factors }: { profile: any; factors: any[] }) {
         </div>
         <button type="submit" className="btn-primary w-full">Guardar</button>
       </form>
+
+      <LeaderboardToggle initialVisible={!profile?.leaderboard_opt_out} />
 
       <section>
         <h2 className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-ink-500">

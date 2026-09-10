@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { NotebookPen, Plus, EyeOff, Eye, Cake } from "lucide-react";
+import { NotebookPen, Plus, EyeOff, Eye, Cake, Flame } from "lucide-react";
+import { levelForStreak, LEVEL_LABEL } from "@/lib/streak";
 import { createClient } from "@/lib/supabase/server";
 import { getClientCredits } from "@/lib/credits";
 import { getDuoPartner } from "@/lib/duo";
@@ -162,6 +163,12 @@ export default async function ClientDetail(props: {
   ]);
   const packs = (packsRaw ?? []) as any[];
 
+  // Sistema LEAP (0149): sequência do cliente, para o badge no perfil.
+  const { data: streakData } = await (supabase as any).rpc("get_client_streak", {
+    p_client: params.id,
+  });
+  const streakWeeks = Number((streakData as any[] | null)?.[0]?.current_streak ?? 0);
+
   return (
     <div className="space-y-5">
       <Link href="/admin/clientes" className="text-sm text-ink-500 hover:text-ink-900">← Clientes</Link>
@@ -184,6 +191,14 @@ export default async function ClientDetail(props: {
               )}
             </div>
           )}
+          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-gold-300 bg-gold-50 px-3 py-1 text-[13px] text-ink-700 dark:border-gold-400/40 dark:bg-gold-400/10 dark:text-bone-100">
+            <Flame size={14} className="text-gold-500" />
+            Sequência:{" "}
+            <strong className="font-semibold text-ink-900 dark:text-bone-50">
+              {streakWeeks} {streakWeeks === 1 ? "semana" : "semanas"}
+            </strong>
+            <span className="text-ink-400">· {LEVEL_LABEL[levelForStreak(streakWeeks)]}</span>
+          </div>
         </div>
         <BalanceChip total={credits?.total ?? 0} />
       </div>

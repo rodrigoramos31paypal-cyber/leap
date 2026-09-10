@@ -7,6 +7,26 @@ import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
 import { logAudit } from "@/lib/audit";
 import { revalidateProfileViews } from "@/lib/revalidate";
+import { revalidatePath } from "next/cache";
+
+// Sistema LEAP (0149): entrar/sair do ranking. visible=true → aparece.
+export async function setLeaderboardVisibilityAction(visible: boolean) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+  const { error } = await (supabase as any)
+    .from("profiles")
+    .update({ leaderboard_opt_out: !visible })
+    .eq("id", user.id);
+  if (error) {
+    logError("setLeaderboardVisibilityAction", error);
+    return;
+  }
+  revalidatePath("/app/leaderboard");
+  revalidatePath("/app/perfil");
+}
 
 // Mudar palavra-passe do utilizador autenticado.
 //
