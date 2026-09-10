@@ -106,7 +106,7 @@ export default async function LeaderboardPage(props: {
                     {r.rank === 1 ? <Trophy size={13} /> : r.rank}
                   </span>
                 ) : (
-                  <span className="w-6 shrink-0 text-center text-[13px] font-medium text-ink-400">
+                  <span className="grid h-6 w-6 shrink-0 place-items-center text-[13px] font-medium text-ink-400">
                     {r.rank}
                   </span>
                 )}
