@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Flame, Trophy, ChevronLeft, ChevronRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { getAccessibleTrainerIds } from "@/lib/trainer";
+import { getAccessibleTrainerIds, getActiveTrainersPublic } from "@/lib/trainer";
 import { levelForStreak, LEVEL_LABEL, LEVEL_CHIP, attendanceRate } from "@/lib/streak";
 
 export const metadata = { title: "Ranking LEAP", robots: { index: false, follow: false } };
@@ -27,8 +27,13 @@ export default async function AdminLeaderboardPage(props: {
 }) {
   const sp = await props.searchParams;
   const supabase = await createClient();
-  const trainerIds = await getAccessibleTrainerIds();
-  const trainerId = trainerIds[0] ?? null;
+  // Mesma resolução do leaderboard do cliente: o trainer ATIVO do estúdio
+  // (o que tem as marcações), com fallback ao scope acessível do admin.
+  const [actives, accessible] = await Promise.all([
+    getActiveTrainersPublic(),
+    getAccessibleTrainerIds(),
+  ]);
+  const trainerId = actives[0]?.id ?? accessible[0] ?? null;
 
   let rows: Row[] = [];
   if (trainerId) {

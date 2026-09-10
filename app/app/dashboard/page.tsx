@@ -306,9 +306,8 @@ async function BelowFold({
     <>
       {/* O teu progresso */}
       <section>
-        <div className="mb-0.5 flex items-center justify-between">
+        <div className="mb-0.5">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">O teu progresso</h2>
-          <Link href="/app/historico" className="text-xs font-medium text-gold-600 hover:text-gold-700">Ver mais</Link>
         </div>
         <div className="card p-4">
           <div className="grid grid-cols-3 gap-2">
