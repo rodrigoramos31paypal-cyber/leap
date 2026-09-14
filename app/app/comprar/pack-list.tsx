@@ -12,7 +12,7 @@ const METHODS: { id: PaymentMethod; label: string; helper: string }[] = [
   { id: "manual_revolut", label: "Revolut", helper: "Pagas por Revolut — confirmação manual em minutos" },
 ];
 
-type Tab = "individual" | "dupla";
+type Tab = "individual" | "dupla" | "tripla";
 
 // Cada pack EXPANDE para baixo ao ser clicado (mostra método de pagamento +
 // Cancelar + Comprar), em vez de uma barra fixa no fundo (que "saltava" no
@@ -27,9 +27,14 @@ export function PackList({ packs }: { packs: Pack[] }) {
 
   const individuals = packs.filter((p) => p.session_type === "individual");
   const duplas = packs.filter((p) => p.session_type === "dupla");
+  const triplas = packs.filter((p) => p.session_type === "tripla");
   const hasDupla = duplas.length > 0;
-  const effectiveTab: Tab = hasDupla ? tab : "individual";
-  const shown = effectiveTab === "individual" ? individuals : duplas;
+  const hasTripla = triplas.length > 0;
+  const hasGroups = hasDupla || hasTripla;
+  const effectiveTab: Tab =
+    (tab === "dupla" && hasDupla) || (tab === "tripla" && hasTripla) ? tab : "individual";
+  const shown =
+    effectiveTab === "individual" ? individuals : effectiveTab === "tripla" ? triplas : duplas;
 
   function toggle(id: string) {
     setError(null);
@@ -56,7 +61,7 @@ export function PackList({ packs }: { packs: Pack[] }) {
 
   return (
     <div className="space-y-6">
-      {hasDupla && (
+      {hasGroups && (
         <div className="inline-flex w-full items-center gap-1 rounded-xl border border-ink-900/10 bg-bone-100 p-1 text-sm sm:w-auto dark:border-white/10 dark:bg-ink-900">
           <button
             type="button"
@@ -68,16 +73,30 @@ export function PackList({ packs }: { packs: Pack[] }) {
           >
             <User size={16} /> PT Individual
           </button>
-          <button
-            type="button"
-            onClick={() => switchTab("dupla")}
-            className={cn(
-              "inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 font-semibold transition sm:flex-none",
-              effectiveTab === "dupla" ? "bg-white text-ink-900 shadow-sm dark:bg-ink-800 dark:text-bone-50" : "text-ink-500 hover:text-ink-900 dark:hover:text-bone-50",
-            )}
-          >
-            <Users size={16} /> PT Dupla
-          </button>
+          {hasDupla && (
+            <button
+              type="button"
+              onClick={() => switchTab("dupla")}
+              className={cn(
+                "inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 font-semibold transition sm:flex-none",
+                effectiveTab === "dupla" ? "bg-white text-ink-900 shadow-sm dark:bg-ink-800 dark:text-bone-50" : "text-ink-500 hover:text-ink-900 dark:hover:text-bone-50",
+              )}
+            >
+              <Users size={16} /> PT Dupla
+            </button>
+          )}
+          {hasTripla && (
+            <button
+              type="button"
+              onClick={() => switchTab("tripla")}
+              className={cn(
+                "inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 font-semibold transition sm:flex-none",
+                effectiveTab === "tripla" ? "bg-white text-ink-900 shadow-sm dark:bg-ink-800 dark:text-bone-50" : "text-ink-500 hover:text-ink-900 dark:hover:text-bone-50",
+              )}
+            >
+              <Users size={16} /> PT Trio
+            </button>
+          )}
         </div>
       )}
 
@@ -87,12 +106,20 @@ export function PackList({ packs }: { packs: Pack[] }) {
           gasta 1 sessão a cada um.
         </p>
       )}
+      {effectiveTab === "tripla" && (
+        <p className="rounded-lg border border-ink-900/10 bg-bone-50 px-3 py-2 text-xs text-ink-600 dark:border-white/10 dark:bg-white/5 dark:text-bone-100/70">
+          Sessões para treinar a três. Basta uma das três contas ter o pack — depois de
+          ligadas, partilham o saldo e cada sessão gasta 1 do pool do grupo.
+        </p>
+      )}
 
       {shown.length === 0 ? (
         <div className="card p-5 text-center text-sm text-ink-500">
           {effectiveTab === "dupla"
             ? "Este treinador ainda não tem packs PT Dupla."
-            : "Sem packs nesta categoria."}
+            : effectiveTab === "tripla"
+              ? "Este treinador ainda não tem packs PT Trio."
+              : "Sem packs nesta categoria."}
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">

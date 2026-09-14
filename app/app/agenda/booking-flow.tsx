@@ -18,7 +18,7 @@ const NOTE_MAX_LEN = 5000;
 // "clicar de um dia para o outro e voltar" sem refetch a cada toque.
 const SLOTS_TTL_MS = 15_000;
 
-type CreditSummary = { individual: number; dupla: number; total: number };
+type CreditSummary = { individual: number; dupla: number; tripla: number; total: number };
 
 type Conflict = {
   week: number;
@@ -35,6 +35,8 @@ export function BookingFlow({
   rescheduleBookingId,
   hasPartner = false,
   partnerName,
+  hasTrio = false,
+  trioPartnerName,
   bookedDays,
   preselectVaga,
 }: {
@@ -48,6 +50,9 @@ export function BookingFlow({
   /** Cliente tem uma conta ligada (par duo)? Ajusta a copia da sessao dupla. */
   hasPartner?: boolean;
   partnerName?: string | null;
+  /** Cliente está num trio? Ajusta a cópia da sessão tripla. */
+  hasTrio?: boolean;
+  trioPartnerName?: string | null;
   /** Dias (YYYY-MM-DD) em que o cliente já tem sessão → azul no calendário. */
   bookedDays?: string[];
   /** Vaga anunciada (datetime-local "YYYY-MM-DDTHH:mm"): abre nesse dia e
@@ -63,21 +68,31 @@ export function BookingFlow({
   //  • ambos           → o cliente escolhe; por defeito individual
   // Ao reagendar, o tipo e herdado da sessao antiga no servidor, por isso
   // escondemos a escolha nesse modo.
-  const onlyDupla = credits.individual === 0 && credits.dupla > 0;
-  const canChooseType =
-    credits.individual > 0 && credits.dupla > 0 && !rescheduleBookingId;
-  const [sessionType, setSessionType] = useState<SessionType>(
-    onlyDupla ? "dupla" : "individual",
+  // Tipos disponíveis = os que têm saldo. O cliente escolhe quando há mais
+  // do que um; ao reagendar, o tipo é herdado no servidor (sem escolha).
+  const availTypes = (["individual", "dupla", "tripla"] as SessionType[]).filter(
+    (t) =>
+      (t === "individual" && credits.individual > 0) ||
+      (t === "dupla" && credits.dupla > 0) ||
+      (t === "tripla" && credits.tripla > 0),
   );
-  // Marcação PT Dupla exige contas ligadas. O saldo é PARTILHADO pelo par
-  // (já vem somado em credits.dupla), por isso basta haver par ligado e
-  // saldo > 0. O servidor recusa de qualquer forma; aqui avisamos e
-  // bloqueamos o botão para não enviar um pedido que vai falhar.
-  // PT Dupla PODE ser marcada mesmo sem par ligado — desconta do pack DUPLA
-  // da própria cliente (a parceira pode ligar-se mais tarde). Só bloqueia se
-  // não houver saldo dupla.
-  const duoNoCredits = credits.dupla === 0;
-  const duoBlocked = sessionType === "dupla" && duoNoCredits;
+  const defaultType: SessionType =
+    credits.individual > 0
+      ? "individual"
+      : credits.dupla > 0
+        ? "dupla"
+        : credits.tripla > 0
+          ? "tripla"
+          : "individual";
+  const canChooseType = availTypes.length > 1 && !rescheduleBookingId;
+  const [sessionType, setSessionType] = useState<SessionType>(defaultType);
+  const creditsFor = (t: SessionType) =>
+    t === "individual" ? credits.individual : t === "tripla" ? credits.tripla : credits.dupla;
+  // Sessão de grupo (dupla/tripla) usa o saldo do respectivo pool partilhado
+  // (já vem somado). Bloqueia o botão se não houver saldo — o servidor
+  // recusaria de qualquer forma.
+  const groupBlocked =
+    (sessionType === "dupla" || sessionType === "tripla") && creditsFor(sessionType) === 0;
   const [duration, setDuration] = useState<number>(defaultDuration);
   const [date, setDate] = useState<Date>(() => startOfDay(vaga ? vaga.day : new Date()));
   // Mês seleccionado no filtro (chave "ano-mês"). Por defeito, o mês de hoje
@@ -324,13 +339,17 @@ export function BookingFlow({
     if (first) setDate(first);
   }
 
-  const availableCredits = sessionType === "individual" ? credits.individual : credits.dupla;
+  const availableCredits = creditsFor(sessionType);
 
   function confirm() {
     if (!picked) return;
     // Guarda: dupla só precisa de saldo dupla (não exige par ligado).
-    if (duoBlocked) {
-      setError("Sem sessões PT Dupla disponíveis. Compra um pack PT Dupla para marcar.");
+    if (groupBlocked) {
+      setError(
+        sessionType === "tripla"
+          ? "Sem sessões PT Trio disponíveis. Compra um pack PT Trio para marcar."
+          : "Sem sessões PT Dupla disponíveis. Compra um pack PT Dupla para marcar.",
+      );
       return;
     }
     setError(null);
@@ -405,47 +424,38 @@ export function BookingFlow({
           Essa vaga já não está disponível — pode ter sido ocupada. Escolhe outro horário.
         </div>
       )}
-      {!rescheduleBookingId && (canChooseType || onlyDupla) && (
+      {!rescheduleBookingId && (canChooseType || sessionType !== "individual") && (
         <div>
           <div className="label">Tipo de sessão</div>
           {canChooseType && (
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setSessionType("individual")}
-                className={cn(
-                  "flex-1 rounded-lg border px-3 py-2 text-sm font-medium",
-                  sessionType === "individual"
-                    ? "border-gold-400 bg-gold-50 text-ink-900"
-                    : "border-ink-900/10 hover:bg-ink-900/5",
-                )}
-              >
-                Individual{" "}
-                <span className="text-xs text-ink-500">({credits.individual})</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSessionType("dupla");
-                  setRecurring(false);
-                }}
-                className={cn(
-                  "flex-1 rounded-lg border px-3 py-2 text-sm font-medium",
-                  sessionType === "dupla"
-                    ? "border-gold-400 bg-gold-50 text-ink-900"
-                    : "border-ink-900/10 hover:bg-ink-900/5",
-                )}
-              >
-                Dupla <span className="text-xs text-ink-500">({credits.dupla})</span>
-              </button>
+            <div className="flex flex-wrap gap-2">
+              {availTypes.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => {
+                    setSessionType(t);
+                    if (t !== "individual") setRecurring(false);
+                  }}
+                  className={cn(
+                    "flex-1 rounded-lg border px-3 py-2 text-sm font-medium",
+                    sessionType === t
+                      ? "border-gold-400 bg-gold-50 text-ink-900"
+                      : "border-ink-900/10 hover:bg-ink-900/5",
+                  )}
+                >
+                  {t === "individual" ? "Individual" : t === "dupla" ? "Dupla" : "Trio"}{" "}
+                  <span className="text-xs text-ink-500">({creditsFor(t)})</span>
+                </button>
+              ))}
             </div>
           )}
-          {sessionType === "dupla" && duoNoCredits ? (
-            <p className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
-              Sem sessões PT Dupla disponíveis. Compra um pack PT Dupla para marcar.
-            </p>
-          ) : (
-            sessionType === "dupla" && (
+          {sessionType === "dupla" &&
+            (credits.dupla === 0 ? (
+              <p className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                Sem sessões PT Dupla disponíveis. Compra um pack PT Dupla para marcar.
+              </p>
+            ) : (
               <p className="mt-2 rounded-md border border-gold-200 bg-gold-50 px-3 py-2 text-xs text-ink-700 dark:border-gold-400/30 dark:bg-gold-400/10">
                 {hasPartner
                   ? `Sessão dupla — conta para ti${
@@ -453,8 +463,21 @@ export function BookingFlow({
                     }. Saldo PT Dupla partilhado: gasta 1 sessão (${credits.dupla} disponíveis).`
                   : "Sessão dupla (treino a dois). Gasta 1 sessão dupla do teu saldo."}
               </p>
-            )
-          )}
+            ))}
+          {sessionType === "tripla" &&
+            (credits.tripla === 0 ? (
+              <p className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                Sem sessões PT Trio disponíveis. Compra um pack PT Trio para marcar.
+              </p>
+            ) : (
+              <p className="mt-2 rounded-md border border-gold-200 bg-gold-50 px-3 py-2 text-xs text-ink-700 dark:border-gold-400/30 dark:bg-gold-400/10">
+                {hasTrio
+                  ? `Sessão de trio — conta para ti${
+                      trioPartnerName ? ` e ${trioPartnerName}` : " e as tuas contas ligadas"
+                    }. Saldo PT Trio partilhado: gasta 1 sessão (${credits.tripla} disponíveis).`
+                  : "Sessão de trio (treino a três). Gasta 1 sessão trio do teu saldo."}
+              </p>
+            ))}
         </div>
       )}
 
@@ -706,13 +729,13 @@ export function BookingFlow({
 
           <button
             onClick={confirm}
-            disabled={pending || duoBlocked}
+            disabled={pending || groupBlocked}
             className="btn-gold mt-3 w-full disabled:opacity-50"
           >
             {pending
               ? "A marcar…"
-              : duoBlocked
-                ? "Sem sessões PT Dupla"
+              : groupBlocked
+                ? (sessionType === "tripla" ? "Sem sessões PT Trio" : "Sem sessões PT Dupla")
                 : rescheduleBookingId
                   ? "Confirmar reagendamento"
                   : recurring && availableCredits > 1

@@ -1144,7 +1144,7 @@ export type Database = {
         | "confirmed"
         | "rejected"
         | "cancelled"
-      session_type: "individual" | "dupla"
+      session_type: "individual" | "dupla" | "tripla"
       user_role: "client" | "trainer" | "owner"
     }
     CompositeTypes: {
@@ -1302,7 +1302,7 @@ export const Constants = {
         "rejected",
         "cancelled",
       ],
-      session_type: ["individual", "dupla"],
+      session_type: ["individual", "dupla", "tripla"],
       user_role: ["client", "trainer", "owner"],
     },
   },

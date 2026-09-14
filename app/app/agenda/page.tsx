@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { getClientCredits } from "@/lib/credits";
 import { getDuoPartner } from "@/lib/duo";
+import { getTrioPartners } from "@/lib/trio";
 import { BookingFlow } from "./booking-flow";
 import { getActiveTrainersPublic, getTrainerForClient } from "@/lib/trainer";
 import { formatDateTime } from "@/lib/utils";
@@ -142,7 +143,12 @@ export default async function AgendaPage(
   // Par duo activo (se houver). Usado para a cópia da opção "Dupla". O
   // saldo PT Dupla é PARTILHADO pelo par e já vem somado em `credits.dupla`
   // (ver getClientCredits), por isso basta saber se há par ligado.
-  const duoPartner = await getDuoPartner(user.id);
+  // Trio activo (se houver). Como o saldo tripla já vem somado em
+  // `credits.tripla`, basta saber se há grupo e os nomes para a cópia.
+  const [duoPartner, trioPartners] = await Promise.all([
+    getDuoPartner(user.id),
+    getTrioPartners(user.id),
+  ]);
 
   const currentTrainer = actives.find((t) => t.id === trainerId);
   const trainerName = currentTrainer?.full_name?.trim();
@@ -190,6 +196,12 @@ export default async function AgendaPage(
           rescheduleBookingId={reschedule?.id}
           hasPartner={!!duoPartner}
           partnerName={duoPartner?.full_name}
+          hasTrio={trioPartners.length >= 2}
+          trioPartnerName={
+            trioPartners.length > 0
+              ? trioPartners.map((p) => p.full_name.split(" ")[0]).join(" e ")
+              : null
+          }
           bookedDays={await fetchMyBookingDays(supabase, user.id)}
           preselectVaga={reschedule ? undefined : searchParams.vaga}
         />

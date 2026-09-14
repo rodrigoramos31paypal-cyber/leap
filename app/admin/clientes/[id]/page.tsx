@@ -5,6 +5,7 @@ import { levelForStreak, LEVEL_LABEL } from "@/lib/streak";
 import { createClient } from "@/lib/supabase/server";
 import { getClientCredits } from "@/lib/credits";
 import { getDuoPartner } from "@/lib/duo";
+import { getTrioPartners } from "@/lib/trio";
 import { eur, formatDateTime, BOOKING_STATUS, PURCHASE_STATUS } from "@/lib/utils";
 import { NoteEditor } from "@/components/note-editor";
 import { getMyNotesMapForBookings, getClientNotesMapForBookings } from "@/lib/notes";
@@ -12,6 +13,7 @@ import { getAccessibleTrainerIds } from "@/lib/trainer";
 import { Pagination } from "@/components/pagination";
 import { GrantPackForm } from "./grant-pack-form";
 import { DuoLinkSection } from "./duo-link-section";
+import { TrioLinkSection } from "./trio-link-section";
 import { setClientBannedAction } from "./actions";
 import { BlockPurchasesButton } from "./block-purchases-button";
 import { DeleteClientSection } from "./delete-client-section";
@@ -103,7 +105,7 @@ export default async function ClientDetail(props: {
   let bookingsQuery = supabase
     .from("bookings")
     .select("id, starts_at, session_type, status, late_cancel_review", { count: "exact" })
-    .or(`client_id.eq.${profileId},partner_client_id.eq.${profileId}`);
+    .or(`client_id.eq.${profileId},partner_client_id.eq.${profileId},partner2_client_id.eq.${profileId}`);
   if (hideCancelled) bookingsQuery = bookingsQuery.neq("status", "cancelled");
   if (sessFilter === "futuras") {
     bookingsQuery = bookingsQuery.gte("starts_at", nowIso).order("starts_at", { ascending: true });
@@ -140,9 +142,10 @@ export default async function ClientDetail(props: {
 
   // Dados extra do Resumo (packs/duo) e das notas das sessões — só quando a
   // respectiva tab está activa.
-  const [trainerIds, duoPartner] = await Promise.all([
+  const [trainerIds, duoPartner, trioPartners] = await Promise.all([
     tab === "resumo" ? getAccessibleTrainerIds() : Promise.resolve([] as string[]),
     tab === "resumo" && !isDeleted ? getDuoPartner(profileId) : Promise.resolve(null),
+    tab === "resumo" && !isDeleted ? getTrioPartners(profileId) : Promise.resolve([] as { id: string; full_name: string; email: string }[]),
   ]);
   const [{ data: packsRaw }, clientNotesMap, notesMap] = await Promise.all([
     tab === "resumo"
@@ -242,7 +245,7 @@ export default async function ClientDetail(props: {
             {/* DUO: divisão por tipo. Em par duo o saldo PT Dupla é
                 partilhado (migration 0113) — o sufixo "partilhado" deixa
                 claro que esse número espelha as duas contas. */}
-            <div className="mt-3 grid grid-cols-2 gap-3 border-t border-[#EBD98F] pt-3 dark:border-gold-400/20">
+            <div className={`mt-3 grid ${(trioPartners.length > 0 || (credits?.tripla ?? 0) > 0) ? "grid-cols-3" : "grid-cols-2"} gap-3 border-t border-[#EBD98F] pt-3 dark:border-gold-400/20`}>
               <div>
                 <div className="text-[10px] uppercase tracking-wide text-[#9a7d22] dark:text-gold-300/70">PT Individual</div>
                 <div className="mt-0.5 font-display text-lg font-bold tabular-nums text-[#3d3100] dark:text-gold-100">{credits?.individual ?? 0}</div>
@@ -253,6 +256,14 @@ export default async function ClientDetail(props: {
                 </div>
                 <div className="mt-0.5 font-display text-lg font-bold tabular-nums text-[#3d3100] dark:text-gold-100">{credits?.dupla ?? 0}</div>
               </div>
+              {(trioPartners.length > 0 || (credits?.tripla ?? 0) > 0) && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-wide text-[#9a7d22] dark:text-gold-300/70">
+                    PT Trio{trioPartners.length > 0 ? " · partilhado" : ""}
+                  </div>
+                  <div className="mt-0.5 font-display text-lg font-bold tabular-nums text-[#3d3100] dark:text-gold-100">{credits?.tripla ?? 0}</div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -274,6 +285,8 @@ export default async function ClientDetail(props: {
           )}
 
           {!isDeleted && <DuoLinkSection clientId={profileId} partner={duoPartner} />}
+
+          {!isDeleted && <TrioLinkSection clientId={profileId} partners={trioPartners} />}
 
           <div className="pt-1 text-center">
             <Link

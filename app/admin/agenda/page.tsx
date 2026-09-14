@@ -182,7 +182,7 @@ async function CalendarView({
     (supabase as any)
       .from("bookings")
       .select(
-        "id, starts_at, ends_at, session_type, status, client_id, trainer_id, series_id, purchase_id, partner_client_id, profiles:client_id(full_name, email, date_of_birth), partner_profiles:partner_client_id(full_name), purchases:purchase_id(sessions_total, sessions_remaining, pack_snapshot)",
+        "id, starts_at, ends_at, session_type, status, client_id, trainer_id, series_id, purchase_id, partner_client_id, partner2_client_id, profiles:client_id(full_name, email, date_of_birth), partner_profiles:partner_client_id(full_name), partner2_profiles:partner2_client_id(full_name), purchases:purchase_id(sessions_total, sessions_remaining, pack_snapshot)",
       )
       .in("trainer_id", scope)
       .gte("starts_at", rangeStart.toISOString())
@@ -244,7 +244,11 @@ async function CalendarView({
   // para não sinalizar "último crédito" a quem tem 0 packs próprios mas cujo
   // par tem o pack (saldo partilhado > 0).
   const partnerIds = Array.from(
-    new Set(bookings.map((b: any) => b.partner_client_id).filter(Boolean)),
+    new Set(
+      bookings
+        .flatMap((b: any) => [b.partner_client_id, b.partner2_client_id])
+        .filter(Boolean),
+    ),
   );
   const balanceIds = Array.from(new Set([...clientIds, ...partnerIds]));
   // Notas do CLIENTE por booking — visíveis ao trainer (RLS 0078).
@@ -291,16 +295,24 @@ async function CalendarView({
   // DUO: saldo só dos packs `dupla`, por cliente. Usado para somar o saldo
   // PARTILHADO do par (own total + dupla do parceiro).
   const duplaLeftMap = new Map<string, number>();
+  // TRIO: saldo só dos packs `tripla`, por cliente (pool partilhado pelos 3).
+  const triplaLeftMap = new Map<string, number>();
   // "Último crédito": IDs das marcações a sinalizar a vermelho. Um cliente
   // cujo saldo de packs chegou a 0 (gastou o último crédito) tem a sua
   // ÚLTIMA marcação ativa marcada aqui, para alertar o trainer.
   const lastCreditIds = new Set<string>();
-  // DUO: parceiro de cada cliente, inferido das marcações duplas visíveis.
-  const partnerOf = new Map<string, string>();
+  // DUO/TRIO: outros membros do grupo de cada cliente, inferidos das
+  // marcações de grupo visíveis (2 no duo, 3 no trio).
+  const groupOf = new Map<string, Set<string>>();
   for (const b of bookings as any[]) {
-    if (b.partner_client_id && b.client_id) {
-      partnerOf.set(b.client_id, b.partner_client_id);
-      partnerOf.set(b.partner_client_id, b.client_id);
+    const members = [b.client_id, b.partner_client_id, b.partner2_client_id].filter(
+      Boolean,
+    ) as string[];
+    if (members.length < 2) continue;
+    for (const m of members) {
+      const others = groupOf.get(m) ?? new Set<string>();
+      for (const o of members) if (o !== m) others.add(o);
+      groupOf.set(m, others);
     }
   }
   if (clientIds.length > 0) {
@@ -311,6 +323,8 @@ async function CalendarView({
       sessionsLeftMap.set(row.client_id, (sessionsLeftMap.get(row.client_id) ?? 0) + rem);
       if (row.session_type === "dupla") {
         duplaLeftMap.set(row.client_id, (duplaLeftMap.get(row.client_id) ?? 0) + rem);
+      } else if (row.session_type === "tripla") {
+        triplaLeftMap.set(row.client_id, (triplaLeftMap.get(row.client_id) ?? 0) + rem);
       }
     }
 
@@ -322,10 +336,13 @@ async function CalendarView({
     // sinalizado apesar de o par ter sessões.
     const zeroClients = clientIds.filter((id: string) => {
       if (!sessionsLeftMap.has(id)) return false;
-      const partner = partnerOf.get(id);
-      const shared =
-        (sessionsLeftMap.get(id) ?? 0) +
-        (partner ? (duplaLeftMap.get(partner) ?? 0) : 0);
+      let shared = sessionsLeftMap.get(id) ?? 0;
+      // Pools partilhados (dupla/tripla) que podem viver na conta de outro
+      // membro do grupo — sem isto, um membro com 0 packs próprios era
+      // falsamente sinalizado como "último crédito".
+      for (const m of groupOf.get(id) ?? []) {
+        shared += (duplaLeftMap.get(m) ?? 0) + (triplaLeftMap.get(m) ?? 0);
+      }
       return shared === 0;
     });
     if (zeroClients.length > 0) {
@@ -456,6 +473,7 @@ function BookingItem({ b, note, isLastCredit = false }: { b: any; note?: { body:
       <div className="mt-0.5">
         {b.profiles?.full_name ?? "—"}
         {b.partner_profiles?.full_name ? ` & ${b.partner_profiles.full_name}` : ""}
+        {(b as any).partner2_profiles?.full_name ? ` & ${(b as any).partner2_profiles.full_name}` : ""}
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-1">
         <span
@@ -1643,11 +1661,14 @@ function MonthView({ gridStart, anchor, bookings, blocks, reserved, lastCreditId
                       {" "}
                       {b.partner_profiles?.full_name ? (
                         <>
-                          <strong>Duo</strong>
+                          <strong>{(b as any).partner2_profiles?.full_name || b.session_type === "tripla" ? "Trio" : "Duo"}</strong>
                           {" "}
                           {shortName(b.profiles?.full_name)}
                           {" "}
                           {shortName(b.partner_profiles.full_name)}
+                          {(b as any).partner2_profiles?.full_name
+                            ? ` ${shortName((b as any).partner2_profiles.full_name)}`
+                            : ""}
                         </>
                       ) : (
                         shortName(b.profiles?.full_name)

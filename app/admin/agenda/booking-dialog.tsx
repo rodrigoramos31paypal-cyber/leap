@@ -96,13 +96,14 @@ export function BookingDialog({
   const [busyWeekdays, setBusyWeekdays] = useState<Set<number>>(new Set([weekdayOf(viewedDate)]));
   const [replaceRecurring, setReplaceRecurring] = useState(false);
   const [duration, setDuration] = useState(String(defaultDuration));
-  const [sessionType, setSessionType] = useState<"individual" | "dupla">("individual");
+  const [sessionType, setSessionType] = useState<"individual" | "dupla" | "tripla">("individual");
   const [deduct, setDeduct] = useState(true);
   // Marcação recorrente (só individual) + saldo do cliente (para o aviso).
   const [recurring, setRecurring] = useState(false);
   const [recurringWeeks, setRecurringWeeks] = useState(4);
-  const [clientCredits, setClientCredits] = useState<{ individual: number; dupla: number } | null>(null);
+  const [clientCredits, setClientCredits] = useState<{ individual: number; dupla: number; tripla: number } | null>(null);
   const [clientHasPartner, setClientHasPartner] = useState<boolean | null>(null);
+  const [clientHasTrio, setClientHasTrio] = useState<boolean | null>(null);
 
   // Cliente existente (typeahead)
   const [picked, setPicked] = useState<ClientHit | null>(null);
@@ -223,6 +224,7 @@ export function BookingDialog({
     if (!picked) {
       setClientCredits(null);
       setClientHasPartner(null);
+      setClientHasTrio(null);
       return;
     }
     let cancelled = false;
@@ -230,9 +232,14 @@ export function BookingDialog({
       try {
         const hints = await getBookingClientHintsAction(picked.id, trainerId);
         if (cancelled) return;
-        setClientCredits({ individual: hints.individual, dupla: hints.dupla });
+        setClientCredits({ individual: hints.individual, dupla: hints.dupla, tripla: hints.tripla });
         setClientHasPartner(hints.hasPartner);
-        if (hints.hasPartner) {
+        setClientHasTrio(hints.hasTrio);
+        // Grupo activo → arranca no tipo do grupo (trio tem prioridade, mas
+        // são mutuamente exclusivos, por isso no máximo um é verdadeiro).
+        if (hints.hasTrio) {
+          setSessionType("tripla");
+        } else if (hints.hasPartner) {
           setSessionType("dupla");
         }
       } catch {
@@ -397,7 +404,11 @@ export function BookingDialog({
 
   // Saldo disponível para o tipo escolhido (para o aviso do recorrente).
   const availForType =
-    sessionType === "dupla" ? clientCredits?.dupla ?? 0 : clientCredits?.individual ?? 0;
+    sessionType === "dupla"
+      ? clientCredits?.dupla ?? 0
+      : sessionType === "tripla"
+        ? clientCredits?.tripla ?? 0
+        : clientCredits?.individual ?? 0;
 
   function announceVaga() {
     setVagaMsg(null);
@@ -641,14 +652,15 @@ export function BookingDialog({
                   id="bk_type"
                   value={sessionType}
                   onChange={(e) => {
-                    const v = e.target.value as "individual" | "dupla";
+                    const v = e.target.value as "individual" | "dupla" | "tripla";
                     setSessionType(v);
-                    if (v === "dupla") setRecurring(false); // recorrente só individual
+                    if (v !== "individual") setRecurring(false); // recorrente só individual
                   }}
                   className="input"
                 >
                   <option value="individual">Individual</option>
                   <option value="dupla">Dupla</option>
+                  <option value="tripla">Trio</option>
                 </select>
               </div>
             </div>
@@ -657,6 +669,12 @@ export function BookingDialog({
             {sessionType === "dupla" && clientHasPartner === false && (
               <div className="mb-3 rounded-lg border border-gold-200 bg-gold-50 px-3 py-2 text-[11px] text-ink-700 dark:border-gold-400/30 dark:bg-gold-400/10 dark:text-bone-100">
                 Sem par ligado — a sessão desconta do pack de dupla desta cliente. Podes ligar a parceira mais tarde.
+              </div>
+            )}
+            {/* Trio sem grupo ligado: desconta do pack de trio desta cliente. */}
+            {sessionType === "tripla" && clientHasTrio === false && (
+              <div className="mb-3 rounded-lg border border-gold-200 bg-gold-50 px-3 py-2 text-[11px] text-ink-700 dark:border-gold-400/30 dark:bg-gold-400/10 dark:text-bone-100">
+                Sem trio ligado — a sessão desconta do pack de trio desta cliente. Podes ligar as outras contas mais tarde.
               </div>
             )}
 

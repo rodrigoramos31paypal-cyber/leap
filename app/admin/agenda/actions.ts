@@ -20,6 +20,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getAccessibleTrainerIds } from "@/lib/trainer";
 import { getClientCredits } from "@/lib/credits";
 import { getActiveDuoPartnerId } from "@/lib/duo";
+import { getActiveTrioPartnerIds } from "@/lib/trio";
 import type { SessionType, PaymentMethod } from "@/types/database";
 import { randomUUID } from "crypto";
 import { setFlash } from "@/lib/flash";
@@ -304,8 +305,9 @@ export async function createAgendaBookingAction(
   const date = String(formData.get("date") ?? "");
   const time = String(formData.get("time") ?? "");
   const durationMin = Number(formData.get("durationMin") ?? 0);
-  const sessionType = (String(formData.get("sessionType") ?? "individual") === "dupla"
-    ? "dupla"
+  const sessionTypeRaw = String(formData.get("sessionType") ?? "individual");
+  const sessionType = (sessionTypeRaw === "dupla" || sessionTypeRaw === "tripla"
+    ? sessionTypeRaw
     : "individual") as SessionType;
   const deduct = formData.get("deduct") === "on" || formData.get("deduct") === "true";
   // Marcação recorrente (só individual): N semanas no mesmo dia/hora.
@@ -1359,22 +1361,25 @@ export async function skipRecurringDateAction(formData: FormData) {
 export async function getBookingClientHintsAction(
   clientId: string,
   trainerId?: string,
-): Promise<{ hasPartner: boolean; individual: number; dupla: number }> {
+): Promise<{ hasPartner: boolean; hasTrio: boolean; individual: number; dupla: number; tripla: number }> {
   await requireStaff();
-  if (!clientId) return { hasPartner: false, individual: 0, dupla: 0 };
+  if (!clientId) return { hasPartner: false, hasTrio: false, individual: 0, dupla: 0, tripla: 0 };
   try {
-    const [credits, partnerId] = await Promise.all([
+    const [credits, partnerId, trioPartnerIds] = await Promise.all([
       getClientCredits(clientId, trainerId),
       getActiveDuoPartnerId(clientId),
+      getActiveTrioPartnerIds(clientId),
     ]);
     return {
       hasPartner: !!partnerId,
+      hasTrio: trioPartnerIds.length >= 2,
       individual: credits.individual,
       dupla: credits.dupla,
+      tripla: credits.tripla,
     };
   } catch (e) {
     logError("getBookingClientHintsAction", e);
-    return { hasPartner: false, individual: 0, dupla: 0 };
+    return { hasPartner: false, hasTrio: false, individual: 0, dupla: 0, tripla: 0 };
   }
 }
 

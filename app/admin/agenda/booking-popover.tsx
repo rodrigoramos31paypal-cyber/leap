@@ -54,7 +54,11 @@ function lastNameLong(full?: string | null) {
 function duoNames(b: any, fmt: (s?: string | null) => string): string {
   const a = fmt(b?.profiles?.full_name) || "—";
   const partner = b?.partner_profiles?.full_name;
-  return partner ? `${a} & ${fmt(partner)}` : a;
+  const partner2 = b?.partner2_profiles?.full_name;
+  const names = [a];
+  if (partner) names.push(fmt(partner));
+  if (partner2) names.push(fmt(partner2));
+  return names.join(" & ");
 }
 
 type Preview = {
@@ -466,8 +470,12 @@ export function BookingBlock({
     );
   }
 
-  // Cliente é DUO? A cor da bolha passa a AZUL para as sessões duo.
+  // Cliente é DUO/TRIO? A cor da bolha passa a AZUL para as sessões de grupo.
   const isDuo = !!b.partner_profiles?.full_name;
+  // TRIO: sessão de 3 (tem 2.ª conta ligada, ou o tipo é 'tripla').
+  const isTrio = !!(b as any).partner2_profiles?.full_name || b.session_type === "tripla";
+  // Rótulo do grupo: "Trio" quando há 3, senão "Duo".
+  const groupLabel = isTrio ? "Trio" : "Duo";
 
   // Aniversário HOJE: o dia/mês da sessão coincide com o da data de
   // nascimento do cliente (no fuso do estúdio). Mostra um bolo no canto.
@@ -593,7 +601,7 @@ export function BookingBlock({
         {/* Pill "Duo" por cima do nome (transposta do fitnessv2). */}
         {b.partner_profiles?.full_name && (
           <span className="mt-0.5 inline-flex w-fit items-center gap-px rounded-full bg-[#CECBF6] px-[3px] py-px text-[7px] font-semibold uppercase leading-none tracking-wide text-[#26215C] dark:bg-[#534AB7] dark:text-[#EEEDFE]">
-            <Users size={7} strokeWidth={2.5} /> Duo
+            <Users size={7} strokeWidth={2.5} /> {groupLabel}
           </span>
         )}
         <div
@@ -614,6 +622,9 @@ export function BookingBlock({
             <>
               <span className="block">{firstNameLong(b.profiles?.full_name)}</span>
               <span className="block">{firstNameLong(b.partner_profiles?.full_name)}</span>
+              {(b as any).partner2_profiles?.full_name && (
+                <span className="block">{firstNameLong((b as any).partner2_profiles?.full_name)}</span>
+              )}
             </>
           ) : (
             <>
@@ -650,9 +661,12 @@ export function BookingBlock({
             <div className="truncate font-medium">
               {b.partner_profiles?.full_name ? (
                 <>
-                  <strong>Duo</strong>{" "}
+                  <strong>{groupLabel}</strong>{" "}
                   {shortName(b.profiles?.full_name)}{" "}
                   {shortName(b.partner_profiles.full_name)}
+                  {(b as any).partner2_profiles?.full_name
+                    ? ` ${shortName((b as any).partner2_profiles.full_name)}`
+                    : ""}
                 </>
               ) : (
                 shortName(b.profiles?.full_name)
@@ -686,9 +700,12 @@ export function BookingBlock({
               </div>
               {b.partner_profiles?.full_name ? (
                 <div className="text-xs text-ink-500 leading-tight">
-                  <span className="block font-bold text-ink-900 dark:text-bone-50">Duo</span>
+                  <span className="block font-bold text-ink-900 dark:text-bone-50">{groupLabel}</span>
                   <span className="block">{firstNameLong(b.profiles?.full_name)}</span>
                   <span className="block">{firstNameLong(b.partner_profiles?.full_name)}</span>
+                  {(b as any).partner2_profiles?.full_name && (
+                    <span className="block">{firstNameLong((b as any).partner2_profiles?.full_name)}</span>
+                  )}
                 </div>
               ) : (
                 <>
@@ -702,7 +719,7 @@ export function BookingBlock({
               )}
               {b.partner_profiles?.full_name && (
                 <div className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-gold-100 px-2 py-0.5 text-[10px] font-semibold text-gold-700 dark:bg-gold-400/15">
-                  <Users size={10} /> Sessão dupla
+                  <Users size={10} /> {isTrio ? "Sessão de trio" : "Sessão dupla"}
                 </div>
               )}
             </div>

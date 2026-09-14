@@ -7,11 +7,13 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { captureAlert } from "@/lib/alerts";
 import { getActiveDuoPartnerId, getPartnerDuplaRows } from "@/lib/duo";
+import { getActiveTrioPartnerIds, getPartnersTriplaRows } from "@/lib/trio";
 import type { PaymentMethod, SessionType } from "@/types/database";
 
 export type CreditSummary = {
   individual: number;
   dupla: number;
+  tripla: number;
   total: number;
   /** Soma de sessions_total de TODOS os packs activos (não-expirados, com
    *  saldo > 0). Usado em "O teu pack" como denominador agregado. */
@@ -25,6 +27,7 @@ export type CreditsByTrainer = Array<{
   avatarUrl: string | null;
   individual: number;
   dupla: number;
+  tripla: number;
 }>;
 
 /** Relação `trainers` embebida na query de packs (nested select). */
@@ -76,20 +79,31 @@ const fetchPartnerDuplaRows = cache(async (clientId: string) => {
   return getPartnerDuplaRows(partnerId);
 });
 
+// TRIO: o saldo PT Trio é PARTILHADO pelos 3. Buscamos os packs tripla dos
+// outros dois membros (se houver trio activo) para os somar ao do próprio.
+const fetchPartnerTriplaRows = cache(async (clientId: string) => {
+  const partnerIds = await getActiveTrioPartnerIds(clientId);
+  if (partnerIds.length === 0) return [];
+  return getPartnersTriplaRows(partnerIds);
+});
+
 export async function getClientCredits(
   clientId: string,
   trainerId?: string,
 ): Promise<CreditSummary> {
-  const [rows, partnerRows] = await Promise.all([
+  const [rows, partnerRows, partnerTriplaRows] = await Promise.all([
     fetchActiveCredits(clientId),
     fetchPartnerDuplaRows(clientId),
+    fetchPartnerTriplaRows(clientId),
   ]);
   let individual = 0,
     dupla = 0,
+    tripla = 0,
     totalAttributed = 0;
   for (const p of rows) {
     if (trainerId && p.trainer_id !== trainerId) continue;
     if (p.session_type === "individual") individual += p.sessions_remaining;
+    else if (p.session_type === "tripla") tripla += p.sessions_remaining;
     else dupla += p.sessions_remaining;
     totalAttributed += p.sessions_total ?? 0;
   }
@@ -99,13 +113,20 @@ export async function getClientCredits(
     dupla += p.sessions_remaining;
     totalAttributed += p.sessions_total;
   }
-  return { individual, dupla, total: individual + dupla, totalAttributed };
+  // TRIO: soma o saldo tripla dos outros membros (saldo partilhado).
+  for (const p of partnerTriplaRows) {
+    if (trainerId && p.trainer_id !== trainerId) continue;
+    tripla += p.sessions_remaining;
+    totalAttributed += p.sessions_total;
+  }
+  return { individual, dupla, tripla, total: individual + dupla + tripla, totalAttributed };
 }
 
 export async function getClientCreditsByTrainer(clientId: string): Promise<CreditsByTrainer> {
-  const [rows, partnerRows] = await Promise.all([
+  const [rows, partnerRows, partnerTriplaRows] = await Promise.all([
     fetchActiveCredits(clientId),
     fetchPartnerDuplaRows(clientId),
+    fetchPartnerTriplaRows(clientId),
   ]);
   const byTrainer = new Map<string, CreditsByTrainer[number]>();
   for (const p of rows) {
@@ -119,10 +140,12 @@ export async function getClientCreditsByTrainer(clientId: string): Promise<Credi
         avatarUrl: t?.avatar_url ?? null,
         individual: 0,
         dupla: 0,
+        tripla: 0,
       });
     }
     const entry = byTrainer.get(key)!;
     if (p.session_type === "individual") entry.individual += p.sessions_remaining;
+    else if (p.session_type === "tripla") entry.tripla += p.sessions_remaining;
     else entry.dupla += p.sessions_remaining;
   }
   // DUO: soma o saldo dupla partilhado do parceiro, criando a entrada do
@@ -137,9 +160,27 @@ export async function getClientCreditsByTrainer(clientId: string): Promise<Credi
         avatarUrl: p.avatarUrl,
         individual: 0,
         dupla: 0,
+        tripla: 0,
       });
     }
     byTrainer.get(key)!.dupla += p.sessions_remaining;
+  }
+  // TRIO: soma o saldo tripla partilhado dos outros membros, criando a
+  // entrada do treinador se o próprio não tiver packs com ele.
+  for (const p of partnerTriplaRows) {
+    const key = p.trainer_id;
+    if (!byTrainer.has(key)) {
+      byTrainer.set(key, {
+        trainerId: key,
+        trainerName: p.trainerName ?? "—",
+        slug: p.slug ?? "",
+        avatarUrl: p.avatarUrl,
+        individual: 0,
+        dupla: 0,
+        tripla: 0,
+      });
+    }
+    byTrainer.get(key)!.tripla += p.sessions_remaining;
   }
   return Array.from(byTrainer.values());
 }
