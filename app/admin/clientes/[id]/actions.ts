@@ -133,8 +133,8 @@ export async function grantPackAction(formData: FormData): Promise<void> {
     // ajustar especificamente um dos pools (típico em pares duo, onde o
     // admin quer mexer só no saldo dupla partilhado).
     const removeTypeRaw = String(formData.get("remove_session_type") ?? "any");
-    const removeType: "individual" | "dupla" | undefined =
-      removeTypeRaw === "individual" || removeTypeRaw === "dupla"
+    const removeType: "individual" | "dupla" | "tripla" | undefined =
+      removeTypeRaw === "individual" || removeTypeRaw === "dupla" || removeTypeRaw === "tripla"
         ? removeTypeRaw
         : undefined;
     const trainerId = (await getCurrentTrainerId()) ?? (await getAccessibleTrainerIds())[0];
@@ -176,8 +176,8 @@ export async function grantPackAction(formData: FormData): Promise<void> {
       // no saldo PARTILHADO pelo par (ver migration 0113), por isso uma
       // atribuição reflecte automaticamente nas duas contas ligadas.
       const sessionTypeRaw = String(formData.get("custom_session_type") ?? "individual");
-      const sessionType: "individual" | "dupla" =
-        sessionTypeRaw === "dupla" ? "dupla" : "individual";
+      const sessionType: "individual" | "dupla" | "tripla" =
+        sessionTypeRaw === "dupla" || sessionTypeRaw === "tripla" ? sessionTypeRaw : "individual";
       if (sessions <= 0) {
         await setFlash("Indica um número de sessões válido", "error");
         return;

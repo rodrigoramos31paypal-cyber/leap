@@ -32,6 +32,7 @@ export function GrantPackForm({
   clientId,
   packs,
   hasPartner = false,
+  hasTrio = false,
 }: {
   clientId: string;
   packs: GrantPackPack[];
@@ -39,6 +40,9 @@ export function GrantPackForm({
    *  ("Sessões avulso" e "Remover sessões") arrancam em "PT Dupla" —
    *  caso típico de uso, já que o saldo dupla é partilhado pelo par. */
   hasPartner?: boolean;
+  /** Cliente está num trio activo. Quando true, os selectores de Tipo
+   *  arrancam em "PT Trio" (saldo partilhado pelos 3). */
+  hasTrio?: boolean;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>(packs.length > 0 ? "pack" : "custom");
@@ -153,11 +157,12 @@ export function GrantPackForm({
             <label className="label">Tipo</label>
             <select
               name="custom_session_type"
-              defaultValue={hasPartner ? "dupla" : "individual"}
+              defaultValue={hasTrio ? "tripla" : hasPartner ? "dupla" : "individual"}
               className="input"
             >
               <option value="individual">PT Individual</option>
               <option value="dupla">PT Dupla (partilhado com o par)</option>
+              <option value="tripla">PT Trio (partilhado com o grupo)</option>
             </select>
           </div>
           <div>
@@ -201,12 +206,13 @@ export function GrantPackForm({
             <label className="label">Tipo</label>
             <select
               name="remove_session_type"
-              defaultValue={hasPartner ? "dupla" : "any"}
+              defaultValue={hasTrio ? "tripla" : hasPartner ? "dupla" : "any"}
               className="input"
             >
               <option value="any">Qualquer (mais antigas primeiro)</option>
               <option value="individual">Só PT Individual</option>
               <option value="dupla">Só PT Dupla (partilhado com o par)</option>
+              <option value="tripla">Só PT Trio (partilhado com o grupo)</option>
             </select>
           </div>
           <p className="text-xs text-ink-500 sm:col-span-2">
