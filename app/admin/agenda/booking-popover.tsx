@@ -609,11 +609,11 @@ export function BookingBlock({
           className={`${overlap ? "mt-0" : "mt-px"} break-words font-medium leading-[1.2] [overflow-wrap:anywhere]`}
           style={{
             // Base responsiva; o auto-fit (useEffect) reduz a fonte se um nome
-            // longo não couber numa linha. Em duo, a pill "Duo" saiu para cima,
-            // por isso 2 linhas (nome + parceiro) chegam.
+            // longo não couber numa linha. Duo = 2 linhas (nome + parceiro);
+            // trio = 3 linhas (os 3 nomes), um por linha.
             fontSize: "clamp(6px, 1.85vw, 9.5px)",
             display: "-webkit-box",
-            WebkitLineClamp: 2,
+            WebkitLineClamp: isTrio ? 3 : 2,
             WebkitBoxOrient: "vertical",
             overflow: "hidden",
           }}
