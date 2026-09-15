@@ -548,6 +548,19 @@ function RegrasTab({
           {
             id: "marcacoes",
             label: "Marcações",
+            extraContent: (
+              <div className="card p-5">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">
+                  Horário de marcações (abertura / fecho)
+                </h2>
+                <p className="mt-1 text-xs text-ink-500">
+                  Define, por dia da semana, a hora a que as marcações abrem e fecham. Podes ter
+                  mais do que um intervalo por dia (ex.: manhã e tarde) e desligar dias sem
+                  marcações. Vem preenchido com o horário atual e é guardado automaticamente.
+                </p>
+                <WeeklyScheduleEditor trainerId={trainerId} initial={availability} />
+              </div>
+            ),
             formContent: (
               <div className="card space-y-4 p-5">
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Marcações</h2>
