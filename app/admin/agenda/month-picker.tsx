@@ -31,6 +31,7 @@ export function MonthPicker({
   view = "week",
   prevHref,
   nextHref,
+  rightSlot,
 }: {
   label: string;
   anchorIso: string; // dia de referência da vista actual (YYYY-MM-DD)
@@ -38,6 +39,8 @@ export function MonthPicker({
   // Setas ‹ › ao lado do mês (recuar/avançar período), quando fornecidas.
   prevHref?: string;
   nextHref?: string;
+  // Slot opcional à direita da barra (ex.: controlo de zoom da agenda).
+  rightSlot?: React.ReactNode;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -110,6 +113,7 @@ export function MonthPicker({
             <ChevronRight size={16} />
           </Link>
         )}
+        {rightSlot && <div className="shrink-0 pl-0.5 pr-1">{rightSlot}</div>}
       </div>
 
       {open && (
