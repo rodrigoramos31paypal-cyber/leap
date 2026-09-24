@@ -961,9 +961,9 @@ function BlockItem({ b }: { b: any }) {
 const HOUR_START = 0;
 const HOUR_END = 24;
 const TOTAL_HOURS = HOUR_END - HOUR_START; // 24
-const FULL_HOUR_HEIGHT = 56; // px — hora útil (base a 100% de zoom). Reduzido
-// de 80→56 (set/2026) para tirar o espaço morto por baixo do nome e encolher
-// a altura total da agenda. O zoom do trainer multiplica este valor.
+const FULL_HOUR_HEIGHT = 80; // px — hora útil (base a 100% de zoom). O zoom do
+// trainer multiplica este valor; o bloco de sessão adapta o layout (pílula de
+// uma linha quando é baixo) para os nomes não serem cortados ao reduzir.
 const COLLAPSED_HOUR_HEIGHT = 22; // px — hora não-marcável encolhida
 // Quando duas sessões arrancam com poucos minutos de intervalo dentro da
 // mesma hora, a da frente (mobile) fica cortada até ao arranque da seguinte
