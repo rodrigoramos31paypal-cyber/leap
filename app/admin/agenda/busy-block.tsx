@@ -72,9 +72,6 @@ export function BusyBlock({
   // "Todas as semanas". Não mudam quando o utilizador edita os selects.
   const origFrom = hhmmLocal(b.starts_at);
   const origTo = hhmmLocal(b.ends_at);
-  // Intervalo compacto para a faixa "Ocupado" (ex.: "09h–17h"; horas com
-  // minutos ficam "14:45"). Mantém a etiqueta curta em colunas estreitas.
-  const compactRange = `${origFrom.replace(":00", "h")}–${origTo.replace(":00", "h")}`;
   const [from, setFrom] = useState(origFrom);
   const [to, setTo] = useState(origTo);
   // Pausa livre dentro do bloqueio ("split-on-save"): grava o bloqueio
@@ -259,33 +256,23 @@ export function BusyBlock({
 
   return (
     <div
-      className="absolute left-0.5 right-0.5 overflow-hidden rounded border border-dashed border-red-300/60 bg-red-50/40 text-red-800 dark:border-red-400/25 dark:bg-red-500/10 dark:text-red-200"
+      className="absolute left-0.5 right-0.5 overflow-hidden rounded border border-red-200 bg-red-50 text-red-800"
       style={style}
     >
-      {/* Ocupado DISCRETO (set/2026): faixa fina com etiqueta no topo em vez
-          de retângulo cheio de altura proporcional. O intervalo continua a
-          ocupar a sua posição na grelha (alinhamento com os outros dias),
-          mas visualmente deixa de dominar o ecrã. */}
       <button
         type="button"
         onClick={() => canEdit && setOpen(true)}
         disabled={!canEdit}
-        className={`flex h-full w-full flex-col items-stretch text-left ${canEdit ? "cursor-pointer" : "cursor-default"}`}
-        title={b.reason ? `Ocupado · ${b.reason}` : `Ocupado ${compactRange}`}
+        className={`flex h-full w-full flex-col px-0.5 py-0.5 text-left ${canEdit ? "cursor-pointer" : "cursor-default"}`}
+        title={b.reason ?? "Ocupado"}
       >
-        <div className="flex items-center gap-0.5 border-b border-red-300/50 bg-red-100/70 px-1 py-0.5 text-red-800 dark:border-red-400/20 dark:bg-red-500/20 dark:text-red-200">
-          <Ban size={9} strokeWidth={2.5} className="shrink-0" />
-          <span className="truncate text-[8px] font-semibold leading-none">Ocupado</span>
-        </div>
-        <div className="truncate px-1 pt-0.5 text-[7px] font-medium leading-none text-red-700/80 dark:text-red-300/80">
-          {compactRange}
-        </div>
+        <div className="text-[8px] font-semibold leading-none">Ocupado</div>
         {isRecurring && (
-          <div className="truncate px-1 pt-0.5 text-[6px] font-medium uppercase leading-none tracking-tight text-red-700/60 dark:text-red-300/60">
+          <div className="mt-0.5 text-[6px] font-medium uppercase leading-none tracking-tight text-red-700/70">
             recorrente
           </div>
         )}
-        {b.reason && <div className="mt-0.5 truncate px-1 text-[8px] font-medium leading-none text-red-700/70 dark:text-red-300/70">{b.reason}</div>}
+        {b.reason && <div className="mt-0.5 truncate text-[9px] font-medium leading-none text-red-700/80">{b.reason}</div>}
       </button>
 
       {open && (

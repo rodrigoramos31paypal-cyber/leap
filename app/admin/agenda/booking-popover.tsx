@@ -155,25 +155,6 @@ export function BookingBlock({
   const [packPos, setPackPos] = useState<number | null | undefined>(undefined);
   const ref = useRef<HTMLDivElement>(null);
   const nameRef = useRef<HTMLDivElement>(null);
-  const compactRef = useRef<HTMLSpanElement>(null);
-
-  // Modo COMPACTO (set/2026): quando o bloco é baixo (por zoom ou por
-  // duração curta) o layout multi-linha corta o apelido e o Duo/Trio.
-  // Nesse caso passamos a UMA linha "pílula" — hora + nome — com a fonte
-  // a encolher para caber, em vez de cortar. A altura pretendida chega no
-  // `style.height` (px) calculado pela grelha, por isso a decisão é
-  // determinística e não precisa de medir o DOM.
-  const _styleH =
-    typeof (style as any)?.height === "number" ? ((style as any).height as number) : undefined;
-  const compact = _styleH !== undefined && _styleH < 42;
-  const _first = firstNameLong(b.profiles?.full_name);
-  const _last = lastNameLong(b.profiles?.full_name);
-  const _lastInit = _last ? `${_last.trim().charAt(0).toUpperCase()}.` : "";
-  const _partners =
-    (b.partner_profiles?.full_name ? 1 : 0) + ((b as any).partner2_profiles?.full_name ? 1 : 0);
-  // Duo/Trio → "Nome +1"/"+2" (a cor azul do bloco já sinaliza o grupo).
-  const compactName =
-    _partners > 0 ? `${_first} +${_partners}` : _lastInit ? `${_first} ${_lastInit}` : _first;
 
   // Portal so no cliente (document indisponivel no SSR).
   const [mounted, setMounted] = useState(false);
@@ -209,28 +190,6 @@ export function BookingBlock({
     window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
   }, [b.id]);
-
-  // ── Auto-fit da PÍLULA compacta: encolhe a fonte da linha única (hora +
-  // nome) até caber na largura da coluna, com piso a 6 px. Se ainda assim
-  // não couber, o `truncate` corta com reticências (nunca esconde tudo).
-  useEffect(() => {
-    if (!compact) return;
-    const el = compactRef.current;
-    if (!el) return;
-    const fit = () => {
-      let size = 9.5;
-      el.style.setProperty("font-size", `${size}px`, "important");
-      let guard = 0;
-      while (el.scrollWidth > el.clientWidth + 0.5 && size > 6 && guard < 32) {
-        size -= 0.5;
-        el.style.setProperty("font-size", `${size}px`, "important");
-        guard++;
-      }
-    };
-    fit();
-    window.addEventListener("resize", fit);
-    return () => window.removeEventListener("resize", fit);
-  }, [b.id, compact, compactName]);
 
   // ── Posição da sessão no pack. Só busca quando o popover abre e existe
   // um pack com total. Dá um número ESTÁVEL por sessão (ao contrário do
@@ -636,57 +595,46 @@ export function BookingBlock({
         }}
         // h-full: a área de clique/arrasto cobre TODO o bloco (antes só
         // cobria o texto, e clicar na parte vazia não abria o popover).
-        className={`flex h-full w-full [cursor:inherit] px-0.5 text-left ${compact ? "items-center py-0" : "flex-col py-0.5"}`}
+        className="flex h-full w-full flex-col [cursor:inherit] px-0.5 py-0.5 text-left"
       >
-        {compact ? (
-          // PÍLULA de uma linha: hora + nome, fonte a encolher (useEffect)
-          // até caber. Nunca corta o nome inteiro; no limite trunca com "…".
-          <span ref={compactRef} className="block w-full truncate leading-none" style={{ fontSize: "9px" }}>
-            <span className="font-semibold tabular-nums">{formatTime(b.starts_at)}</span>{" "}
-            <span className="font-medium">{compactName}</span>
+        <div className="font-semibold tabular-nums leading-none text-[9px]">{formatTime(b.starts_at)}</div>
+        {/* Pill "Duo" por cima do nome (transposta do fitnessv2). */}
+        {b.partner_profiles?.full_name && (
+          <span className="mt-0.5 inline-flex w-fit items-center gap-px rounded-full bg-[#CECBF6] px-[3px] py-px text-[7px] font-semibold uppercase leading-none tracking-wide text-[#26215C] dark:bg-[#534AB7] dark:text-[#EEEDFE]">
+            <Users size={7} strokeWidth={2.5} /> {groupLabel}
           </span>
-        ) : (
-          <>
-            <div className="font-semibold tabular-nums leading-none text-[9px]">{formatTime(b.starts_at)}</div>
-            {/* Pill "Duo" por cima do nome (transposta do fitnessv2). */}
-            {b.partner_profiles?.full_name && (
-              <span className="mt-0.5 inline-flex w-fit items-center gap-px rounded-full bg-[#CECBF6] px-[3px] py-px text-[7px] font-semibold uppercase leading-none tracking-wide text-[#26215C] dark:bg-[#534AB7] dark:text-[#EEEDFE]">
-                <Users size={7} strokeWidth={2.5} /> {groupLabel}
-              </span>
-            )}
-            <div
-              ref={nameRef}
-              className={`${overlap ? "mt-0" : "mt-px"} break-words font-medium leading-[1.2] [overflow-wrap:anywhere]`}
-              style={{
-                // Base responsiva; o auto-fit (useEffect) reduz a fonte se um nome
-                // longo não couber numa linha. Duo = 2 linhas (nome + parceiro);
-                // trio = 3 linhas (os 3 nomes), um por linha.
-                fontSize: "clamp(6px, 1.85vw, 9.5px)",
-                display: "-webkit-box",
-                WebkitLineClamp: isTrio ? 3 : 2,
-                WebkitBoxOrient: "vertical",
-                overflow: "hidden",
-              }}
-            >
-              {b.partner_profiles?.full_name ? (
-                <>
-                  <span className="block">{firstNameLong(b.profiles?.full_name)}</span>
-                  <span className="block">{firstNameLong(b.partner_profiles?.full_name)}</span>
-                  {(b as any).partner2_profiles?.full_name && (
-                    <span className="block">{firstNameLong((b as any).partner2_profiles?.full_name)}</span>
-                  )}
-                </>
-              ) : (
-                <>
-                  {firstNameLong(b.profiles?.full_name)}
-                  {lastNameLong(b.profiles?.full_name) && (
-                    <span className="block">{lastNameLong(b.profiles?.full_name)}</span>
-                  )}
-                </>
-              )}
-            </div>
-          </>
         )}
+        <div
+          ref={nameRef}
+          className={`${overlap ? "mt-0" : "mt-px"} break-words font-medium leading-[1.2] [overflow-wrap:anywhere]`}
+          style={{
+            // Base responsiva; o auto-fit (useEffect) reduz a fonte se um nome
+            // longo não couber numa linha. Duo = 2 linhas (nome + parceiro);
+            // trio = 3 linhas (os 3 nomes), um por linha.
+            fontSize: "clamp(6px, 1.85vw, 9.5px)",
+            display: "-webkit-box",
+            WebkitLineClamp: isTrio ? 3 : 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
+          {b.partner_profiles?.full_name ? (
+            <>
+              <span className="block">{firstNameLong(b.profiles?.full_name)}</span>
+              <span className="block">{firstNameLong(b.partner_profiles?.full_name)}</span>
+              {(b as any).partner2_profiles?.full_name && (
+                <span className="block">{firstNameLong((b as any).partner2_profiles?.full_name)}</span>
+              )}
+            </>
+          ) : (
+            <>
+              {firstNameLong(b.profiles?.full_name)}
+              {lastNameLong(b.profiles?.full_name) && (
+                <span className="block">{lastNameLong(b.profiles?.full_name)}</span>
+              )}
+            </>
+          )}
+        </div>
       </button>
 
       {/* Pré-visualização durante o arrasto */}

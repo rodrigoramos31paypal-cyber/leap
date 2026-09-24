@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { formatTime, BOOKING_STATUS } from "@/lib/utils";
 import { confirmAttendanceAction, markNoShowAction, cancelAdminAction, addBlockQuickAction, deleteBlockAction, skipRecurringDateAction, deleteRecurringBlockAction } from "./actions";
@@ -15,7 +14,6 @@ import { SlotClickLayer } from "./slot-click-layer";
 import { CardSkeleton } from "@/components/skeleton";
 import { AgendaScrollTo7am } from "./agenda-scroll-to-7am";
 import { MonthPicker } from "./month-picker";
-import { AgendaZoom } from "./agenda-zoom";
 import { WeekSwipeNav } from "./week-swipe-nav";
 // PERF (QW-11): lazy/no-SSR dos diálogos. Next 16 não deixa usar
 // `next/dynamic({ ssr: false })` em Server Components — vive num
@@ -40,10 +38,6 @@ export default async function AdminAgendaPage(props: {
   const dayParam = searchParams.d;
   const day = dayParam ? new Date(dayParam + "T00:00:00") : new Date();
   day.setHours(0, 0, 0, 0);
-  // Zoom da agenda escolhido pelo trainer, memorizado por cookie (por
-  // dispositivo, entre sessões). Limitado a 70%–160%; default 100%.
-  const zoomRaw = parseFloat((await cookies()).get("leap_agenda_zoom")?.value ?? "");
-  const zoom = Number.isFinite(zoomRaw) ? Math.min(1.6, Math.max(0.7, zoomRaw)) : 1;
   // Deep-link de notificação: abrir o popover da sessão alvo. Validado
   // como UUID antes de descer aos BookingBlocks para evitar attribute
   // injection no DOM.
@@ -124,7 +118,6 @@ export default async function AdminAgendaPage(props: {
           rangeStart={rangeStart}
           rangeEnd={rangeEnd}
           canBook={canBook}
-          zoom={zoom}
           focusBookingId={focusBookingId}
         />
       </Suspense>
@@ -147,11 +140,9 @@ export default async function AdminAgendaPage(props: {
 }
 
 async function CalendarView({
-  view, day, rangeStart, rangeEnd, canBook, zoom, focusBookingId,
+  view, day, rangeStart, rangeEnd, canBook, focusBookingId,
 }: {
   view: View; day: Date; rangeStart: Date; rangeEnd: Date; canBook: boolean;
-  /** Zoom da agenda (multiplica a altura das horas), memorizado por cookie. */
-  zoom: number;
   /** Quando definido, o BookingBlock com este id auto-abre o popover. */
   focusBookingId?: string;
 }) {
@@ -445,7 +436,6 @@ async function CalendarView({
           lastCreditIds={lastCreditIds}
           canBook={canBook}
           avail={availMap}
-          zoom={zoom}
           focusBookingId={focusBookingId}
           prevHref={`/admin/agenda?view=day&d=${isoDate(stepBack("day", day))}`}
           nextHref={`/admin/agenda?view=day&d=${isoDate(stepForward("day", day))}`}
@@ -464,7 +454,6 @@ async function CalendarView({
           lastCreditIds={lastCreditIds}
           canBook={canBook}
           avail={availMap}
-          zoom={zoom}
           focusBookingId={focusBookingId}
           prevHref={`/admin/agenda?view=week&d=${isoDate(stepBack("week", day))}`}
           nextHref={`/admin/agenda?view=week&d=${isoDate(stepForward("week", day))}`}
@@ -568,7 +557,6 @@ function DayView({
   lastCreditIds,
   canBook,
   avail,
-  zoom,
   focusBookingId,
   prevHref,
   nextHref,
@@ -584,7 +572,6 @@ function DayView({
   lastCreditIds: Set<string>;
   canBook: boolean;
   avail: AvailMap;
-  zoom: number;
   focusBookingId?: string;
   prevHref: string;
   nextHref: string;
@@ -598,7 +585,7 @@ function DayView({
 
   // Mesmo layout de horas com altura variável usado na semana — horas
   // não-marcáveis encolhem, dia de trabalho cabe sem scroll.
-  const layout = buildRowLayout(days, byDay, avail, zoom);
+  const layout = buildRowLayout(days, byDay, avail);
   const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => HOUR_START + i);
 
   const todayHM = localHM(today);
@@ -626,7 +613,6 @@ function DayView({
                 view="day"
                 prevHref={prevHref}
                 nextHref={nextHref}
-                rightSlot={<AgendaZoom current={zoom} />}
               />
               <div
                 className="grid border-b border-ink-900/10 bg-bone-50"
@@ -961,9 +947,7 @@ function BlockItem({ b }: { b: any }) {
 const HOUR_START = 0;
 const HOUR_END = 24;
 const TOTAL_HOURS = HOUR_END - HOUR_START; // 24
-const FULL_HOUR_HEIGHT = 80; // px — hora útil (base a 100% de zoom). O zoom do
-// trainer multiplica este valor; o bloco de sessão adapta o layout (pílula de
-// uma linha quando é baixo) para os nomes não serem cortados ao reduzir.
+const FULL_HOUR_HEIGHT = 80; // px — hora útil (slot de 15 min ≈ 20 px)
 const COLLAPSED_HOUR_HEIGHT = 22; // px — hora não-marcável encolhida
 // Quando duas sessões arrancam com poucos minutos de intervalo dentro da
 // mesma hora, a da frente (mobile) fica cortada até ao arranque da seguinte
@@ -1152,13 +1136,7 @@ function hourIsFullOnDay(h: number, dow: number, bucket: DayBucket, avail: Avail
   return !hourFullyBlocked(bucket.blocks, hs, he); // bloqueada toda → encolhível
 }
 
-function buildRowLayout(days: Date[], byDay: Map<string, DayBucket>, avail: AvailMap, zoom = 1): RowLayout {
-  // Zoom do trainer (persistido por cookie): multiplica as alturas base.
-  // Tudo o resto (posições dos blocos, mapa tempo→px, drag) deriva destas
-  // alturas, por isso o zoom mantém-se sempre alinhado.
-  const full = Math.max(1, Math.round(FULL_HOUR_HEIGHT * zoom));
-  const collapsedH = Math.max(1, Math.round(COLLAPSED_HOUR_HEIGHT * zoom));
-  const stackMin = Math.max(1, Math.round(STACK_MIN_PX * zoom));
+function buildRowLayout(days: Date[], byDay: Map<string, DayBucket>, avail: AvailMap): RowLayout {
   const collapsed: boolean[] = [];
   for (let h = 0; h < 24; h++) {
     let anyFull = false;
@@ -1214,7 +1192,7 @@ function buildRowLayout(days: Date[], byDay: Map<string, DayBucket>, avail: Avai
   const stopsY: number[] = [0];
   let acc = 0;
   for (let h = 0; h < 24; h++) {
-    const base = collapsed[h] ? collapsedH : full;
+    const base = collapsed[h] ? COLLAPSED_HOUR_HEIGHT : FULL_HOUR_HEIGHT;
     const hs = h * 60;
     tops[h] = acc;
     const wl = collapsed[h] ? 0 : winLen[h];
@@ -1222,7 +1200,7 @@ function buildRowLayout(days: Date[], byDay: Map<string, DayBucket>, avail: Avai
       const ws = winStart[h];
       const we = ws + wl;
       const naturalWin = (wl / 60) * base;
-      const winPx = Math.max(stackMin, naturalWin);
+      const winPx = Math.max(STACK_MIN_PX, naturalWin);
       const yWs = acc + (ws / 60) * base;
       if (ws > 0) {
         stopsMin.push(hs + ws);
@@ -1256,7 +1234,6 @@ function WeekView({
   lastCreditIds,
   canBook,
   avail,
-  zoom,
   focusBookingId,
   prevHref,
   nextHref,
@@ -1272,7 +1249,6 @@ function WeekView({
   lastCreditIds: Set<string>;
   canBook: boolean;
   avail: AvailMap;
-  zoom: number;
   focusBookingId?: string;
   prevHref: string;
   nextHref: string;
@@ -1287,7 +1263,7 @@ function WeekView({
 
   // Layout das linhas-hora (altura variável). Horas não-marcáveis e sem
   // sessões encolhem para uma faixa fina → cabem mais horas no ecrã.
-  const layout = buildRowLayout(days, byDay, avail, zoom);
+  const layout = buildRowLayout(days, byDay, avail);
   const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => HOUR_START + i);
 
   // Mesma razão que `localHM`: o servidor pode estar em UTC, queremos
@@ -1338,7 +1314,6 @@ function WeekView({
               view="week"
               prevHref={prevHref}
               nextHref={nextHref}
-              rightSlot={<AgendaZoom current={zoom} />}
             />
             <div
               className="grid border-b border-ink-900/10 bg-bone-50"
