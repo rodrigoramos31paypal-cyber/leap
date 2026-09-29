@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { Flame, Trophy, ChevronLeft, ChevronRight } from "lucide-react";
+import { Trophy, ChevronLeft, ChevronRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getAccessibleTrainerIds, getActiveTrainersPublic } from "@/lib/trainer";
-import { levelForStreak, LEVEL_LABEL, LEVEL_CHIP, attendanceRate } from "@/lib/streak";
 import { ActivitiesAdmin } from "./activities-admin";
 
 export const metadata = { title: "Ranking LEAP", robots: { index: false, follow: false } };
@@ -15,10 +14,11 @@ type Tab = "ranking" | "atividades";
 type Row = {
   client_id: string;
   full_name: string | null;
+  pack_pct: number | null;
+  pt_done_month: number;
+  extra_month: number;
+  activities_total: number;
   current_streak: number;
-  best_streak: number;
-  attended: number;
-  faltas: number;
   rank: number;
 };
 
@@ -109,10 +109,14 @@ export default async function AdminLeaderboardPage(props: {
         <div className="card p-6 text-center text-sm text-ink-500">Ainda não há clientes no ranking.</div>
       ) : (
         <div className="space-y-1.5">
+          {/* Cabeçalho das colunas */}
+          <div className="flex items-center gap-3 px-3 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+            <span className="w-6 shrink-0 text-center">#</span>
+            <span className="flex-1">Nome</span>
+            <span className="w-12 shrink-0 text-right">% Pack</span>
+            <span className="w-12 shrink-0 text-right">Ativid.</span>
+          </div>
           {pageRows.map((r) => {
-            const lvl = levelForStreak(r.current_streak);
-            const chip = LEVEL_CHIP[lvl];
-            const taxa = attendanceRate(r.attended, r.faltas);
             const podium = r.rank <= 3;
             return (
               <Link
@@ -135,21 +139,13 @@ export default async function AdminLeaderboardPage(props: {
 
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">{r.full_name || "—"}</div>
-                  <div className="text-[11px] text-ink-500">
-                    {taxa !== null ? `Presença ${taxa}%` : "Sem dados"}
-                    {r.best_streak > 0 ? ` · recorde ${r.best_streak}` : ""}
-                  </div>
                 </div>
 
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${chip.bg} ${chip.text}`}>
-                  {LEVEL_LABEL[lvl]}
+                <span className="w-12 shrink-0 text-right text-sm font-semibold tabular-nums">
+                  {r.pack_pct === null ? "—" : `${r.pack_pct}%`}
                 </span>
-
-                <span className="flex w-[42px] shrink-0 items-center justify-end gap-1 text-gold-600 dark:text-gold-400">
-                  <Flame size={14} />
-                  <span className="text-sm font-semibold tabular-nums text-ink-900 dark:text-bone-50">
-                    {r.current_streak}
-                  </span>
+                <span className="w-12 shrink-0 text-right text-sm font-semibold tabular-nums text-gold-700 dark:text-gold-300">
+                  {r.activities_total}
                 </span>
               </Link>
             );

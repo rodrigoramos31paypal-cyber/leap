@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Flame, Trophy, ChevronLeft, ChevronRight, Info } from "lucide-react";
+import { Trophy, ChevronLeft, ChevronRight, Info } from "lucide-react";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { getTrainerForClient, getActiveTrainersPublic } from "@/lib/trainer";
-import { displayName, levelForStreak, LEVEL_LABEL, LEVEL_CHIP } from "@/lib/streak";
+import { displayName } from "@/lib/streak";
 
 export const metadata = { title: "Ranking LEAP", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
@@ -13,16 +13,21 @@ const PAGE_SIZE = 10;
 type Row = {
   client_id: string;
   full_name: string | null;
+  pack_pct: number | null;
+  pt_done_month: number;
+  extra_month: number;
+  activities_total: number;
   current_streak: number;
-  best_streak: number;
-  attended: number;
-  faltas: number;
   rank: number;
 };
 
 // Cor do círculo de posição para o pódio (1/2/3).
 const PODIUM = ["#F4ECC4", "#E7E7E2", "#FAECE7"]; // ouro, prata, bronze
 const PODIUM_TEXT = ["#65540B", "#5F5E5A", "#993C1D"];
+
+function pctLabel(p: number | null): string {
+  return p === null ? "—" : `${p}%`;
+}
 
 export default async function LeaderboardPage(props: {
   searchParams: Promise<{ page?: string }>;
@@ -56,7 +61,7 @@ export default async function LeaderboardPage(props: {
     <div className="space-y-4">
       <div>
         <h1 className="font-display text-2xl font-bold tracking-tight">Ranking LEAP</h1>
-        <p className="text-sm text-ink-500">Semanas de treinos consecutivos, sem faltas.</p>
+        <p className="text-sm text-ink-500">Baseado em % do pack + atividades validadas.</p>
       </div>
 
       {me ? (
@@ -64,11 +69,8 @@ export default async function LeaderboardPage(props: {
           <span className="font-medium text-ink-800 dark:text-bone-100">
             Estás em <strong>#{me.rank}</strong>
           </span>
-          <span className="inline-flex items-center gap-1.5 text-gold-700 dark:text-gold-300">
-            <Flame size={15} /> {me.current_streak} {me.current_streak === 1 ? "semana" : "semanas"}
-            {me.best_streak > me.current_streak && (
-              <span className="text-ink-500 dark:text-bone-100/60"> · recorde {me.best_streak}</span>
-            )}
+          <span className="text-gold-700 dark:text-gold-300">
+            {pctLabel(me.pack_pct)} · {me.activities_total} {me.activities_total === 1 ? "atividade" : "atividades"}
           </span>
         </div>
       ) : (
@@ -80,13 +82,19 @@ export default async function LeaderboardPage(props: {
 
       {rows.length === 0 ? (
         <div className="card p-6 text-center text-sm text-ink-500">
-          Ainda não há ranking. Começa a treinar para construíres a tua sequência.
+          Ainda não há ranking. Começa a treinar para construíres a tua consistência.
         </div>
       ) : (
         <div className="space-y-1.5">
+          {/* Cabeçalho das colunas */}
+          <div className="flex items-center gap-3 px-3 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+            <span className="w-6 shrink-0 text-center">#</span>
+            <span className="flex-1">Nome</span>
+            <span className="w-12 shrink-0 text-right">% Pack</span>
+            <span className="w-12 shrink-0 text-right">Ativid.</span>
+          </div>
+
           {pageRows.map((r) => {
-            const lvl = levelForStreak(r.current_streak);
-            const chip = LEVEL_CHIP[lvl];
             const isMe = r.client_id === user.id;
             const podium = r.rank <= 3;
             return (
@@ -118,15 +126,11 @@ export default async function LeaderboardPage(props: {
                   </div>
                 </div>
 
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${chip.bg} ${chip.text}`}>
-                  {LEVEL_LABEL[lvl]}
+                <span className="w-12 shrink-0 text-right text-sm font-semibold tabular-nums">
+                  {pctLabel(r.pack_pct)}
                 </span>
-
-                <span className="flex w-[42px] shrink-0 items-center justify-end gap-1 text-gold-600 dark:text-gold-400">
-                  <Flame size={14} />
-                  <span className="text-sm font-semibold tabular-nums text-ink-900 dark:text-bone-50">
-                    {r.current_streak}
-                  </span>
+                <span className="w-12 shrink-0 text-right text-sm font-semibold tabular-nums text-gold-700 dark:text-gold-300">
+                  {r.activities_total}
                 </span>
               </div>
             );
@@ -167,7 +171,7 @@ export default async function LeaderboardPage(props: {
       )}
 
       <Link href="/app/leaderboard/como-funciona" className="block pt-1 text-center text-xs font-medium text-gold-600 hover:text-gold-700 dark:text-gold-400">
-        Como funciona a sequência LEAP?
+        Como funciona o Ranking LEAP?
       </Link>
     </div>
   );
