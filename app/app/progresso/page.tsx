@@ -42,20 +42,11 @@ export default async function ProgressoPage() {
 
   const supabase = await createClient();
 
-  const [{ data: summaryRows }, { data: streakRows }, { data: consRows }, { data: packRow }] =
+  const [{ data: summaryRows }, { data: streakRows }, { data: consRows }] =
     await Promise.all([
       (supabase as any).rpc("get_client_activity_summary", { p_client: user.id }),
       (supabase as any).rpc("get_client_streak", { p_client: user.id }),
       (supabase as any).rpc("get_client_month_consistency", { p_client: user.id }),
-      supabase
-        .from("purchases")
-        .select("sessions_total, sessions_remaining, created_at, pack_snapshot")
-        .eq("client_id", user.id)
-        .eq("status", "confirmed")
-        .gt("sessions_total", 0)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
     ]);
 
   const summary = (summaryRows as any[] | null)?.[0] ?? null;
@@ -76,9 +67,8 @@ export default async function ProgressoPage() {
   const weeksDone = Number(cons?.weeks_done ?? 0);
   const weeksRel = Number(cons?.weeks_relevant ?? 0);
 
-  const packTotal = Number((packRow as any)?.sessions_total ?? 0);
-  const packRemaining = Number((packRow as any)?.sessions_remaining ?? 0);
-  const packUsed = Math.max(0, packTotal - packRemaining);
+  const packTotal = Number(summary?.pack_total ?? 0);
+  const packRealized = Number(summary?.pack_realized ?? 0);
 
   return (
     <div className="space-y-4">
@@ -90,18 +80,18 @@ export default async function ProgressoPage() {
         <p className="text-sm text-ink-500">Resumo do teu mês — pack, consistência e atividade.</p>
       </div>
 
-      {/* Pack atual */}
+      {/* Cumprimento do pack (por sessões realizadas) */}
       <div className="card p-4">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-500">Pack atual</span>
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-500">Cumprimento do pack</span>
           {packPct !== null && (
-            <span className="text-[11px] font-semibold text-gold-700 dark:text-gold-300">{packPct}% do pack</span>
+            <span className="text-[11px] font-semibold text-gold-700 dark:text-gold-300">{packPct}%</span>
           )}
         </div>
         {packTotal > 0 ? (
           <>
             <div className="mt-1 font-display text-lg font-bold tabular-nums">
-              {packUsed}/{packTotal} <span className="text-[11px] font-medium text-ink-500">sessões utilizadas</span>
+              {packRealized}/{packTotal} <span className="text-[11px] font-medium text-ink-500">sessões realizadas</span>
             </div>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-ink-900/10 dark:bg-white/10">
               <div className="h-full rounded-full bg-gold-400" style={{ width: `${packPct ?? 0}%` }} />
