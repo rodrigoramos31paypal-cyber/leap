@@ -6,8 +6,9 @@ import { createClient, getSessionUser, getCurrentProfile } from "@/lib/supabase/
 import { CardSkeleton } from "@/components/skeleton";
 import { getClientCredits, getClientCreditsByTrainer } from "@/lib/credits";
 import { formatDateTime, pluralize, BOOKING_STATUS } from "@/lib/utils";
-import { Calendar, ShoppingBag, Dumbbell, AlertCircle, ChevronRight, Flame } from "lucide-react";
+import { Calendar, ShoppingBag, Dumbbell, AlertCircle, ChevronRight, Trophy } from "lucide-react";
 import { levelForStreak, LEVEL_LABEL } from "@/lib/streak";
+import { getTrainerForClient, getActiveTrainersPublic } from "@/lib/trainer";
 import { PushSubscribeCard } from "@/components/push-subscribe-card";
 import { PromoSlot } from "@/components/promo-slot";
 import { ActivityButtons } from "@/components/activity-buttons";
@@ -262,7 +263,7 @@ async function BelowFold({
 
   // PERF (audit #3): uma única vaga paralela — histórico + presença.
   // Toda a secção é streamed, fora do caminho crítico.
-  const [{ data: recentPast }, presencaRes, streakRes] = await Promise.all([
+  const [{ data: recentPast }, presencaRes, streakRes, lbRows] = await Promise.all([
     supabase
       .from("bookings")
       .select("id, starts_at, session_type, status")
@@ -283,11 +284,21 @@ async function BelowFold({
       : Promise.resolve({ data: null }),
     // Sequência LEAP (0149): sequência atual + estado da semana em curso.
     (supabase as any).rpc("get_client_streak", { p_client: userId }),
+    // Posição no Ranking LEAP (card): resolve o trainer e busca o rank.
+    (async () => {
+      const tId =
+        (await getTrainerForClient(userId)) ??
+        (await getActiveTrainersPublic())[0]?.id ??
+        null;
+      if (!tId) return null;
+      const { data } = await (supabase as any).rpc("get_leaderboard", { p_trainer: tId });
+      return (data as any[] | null) ?? null;
+    })(),
   ]);
 
   const streakRow = ((streakRes as any)?.data as any[] | null)?.[0];
   const streakWeeks = Number(streakRow?.current_streak ?? 0);
-  const weekStatus = String(streakRow?.current_week_status ?? "none");
+  const myRank = ((lbRows as any[] | null) ?? []).find((r) => r.client_id === userId)?.rank ?? null;
 
   // Taxa de presença (apenas do pack activo mais recente).
   let presenca: number | null = null;
@@ -333,17 +344,16 @@ async function BelowFold({
               </div>
             </div>
             <Link
-              href="/app/leaderboard"
+              href="/app/progresso"
               className="block rounded-lg bg-bone-50 p-2.5 transition hover:bg-bone-100 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
             >
               <div className="text-[11px] font-semibold text-ink-600 dark:text-bone-100">Ranking</div>
               <div className="mt-1 flex items-center gap-1">
-                <Flame size={15} className="shrink-0 text-gold-500" />
-                <span className="font-display text-lg font-bold tabular-nums">{streakWeeks}</span>
+                <Trophy size={15} className="shrink-0 text-gold-500" />
+                <span className="font-display text-lg font-bold tabular-nums">{myRank ? `${myRank}º` : "—"}</span>
               </div>
               <div className="truncate text-[11px] font-medium text-gold-700 dark:text-gold-300">
-                {LEVEL_LABEL[levelForStreak(streakWeeks)]}
-                {weekStatus === "on_track" ? " · a contar ✓" : " · ver ›"}
+                {LEVEL_LABEL[levelForStreak(streakWeeks)]} · ver ›
               </div>
             </Link>
           </div>

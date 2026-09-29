@@ -9,6 +9,19 @@ import { NoteEditor } from "@/components/note-editor";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { getMyNotesMapForBookings } from "@/lib/notes";
 import { signBookingIcs } from "@/lib/calendar-token";
+import {
+  ACTIVITY_TYPE_LABEL,
+  ACTIVITY_TYPE_ICON,
+  ACTIVITY_STATUS_LABEL,
+  ACTIVITY_STATUS_CHIP,
+  type ActivityType,
+  type ActivityStatus,
+} from "@/lib/activities";
+
+const ACT_DATE_FMT = new Intl.DateTimeFormat("pt-PT", { day: "2-digit", month: "long", year: "numeric" });
+function fmtActivityDate(d: string): string {
+  return ACT_DATE_FMT.format(new Date(d + "T12:00:00"));
+}
 
 export default async function HistoricoPage(
   props: {
@@ -16,7 +29,12 @@ export default async function HistoricoPage(
   }
 ) {
   const searchParams = await props.searchParams;
-  const tab = searchParams.tab === "compras" ? "compras" : "sessoes";
+  const tab =
+    searchParams.tab === "compras"
+      ? "compras"
+      : searchParams.tab === "atividades"
+        ? "atividades"
+        : "sessoes";
   const sessFilter: "todas" | "futuras" | "passadas" =
     searchParams.f === "futuras" || searchParams.f === "passadas" ? searchParams.f : "todas";
   const hideCancelled = searchParams.hc === "1";
@@ -46,7 +64,7 @@ export default async function HistoricoPage(
     <div className="space-y-5">
       <div>
         <h1 className="font-display text-2xl font-bold tracking-tight">Histórico</h1>
-        <p className="text-sm text-ink-500">Sessões e compras.</p>
+        <p className="text-sm text-ink-500">Sessões, atividades e compras.</p>
       </div>
 
       {searchParams.ok === "pending" ? (
@@ -77,6 +95,16 @@ export default async function HistoricoPage(
           }
         >
           Sessões
+        </Link>
+        <Link
+          href="/app/historico?tab=atividades"
+          className={
+            tab === "atividades"
+              ? "flex-1 rounded-lg bg-white px-2 py-1.5 text-center text-[12.5px] font-semibold text-ink-900 shadow-sm dark:bg-ink-800 dark:text-bone-50"
+              : "flex-1 rounded-lg px-2 py-1.5 text-center text-[12.5px] font-medium text-ink-500 transition hover:text-ink-900 dark:hover:text-bone-50"
+          }
+        >
+          Atividades
         </Link>
         <Link
           href="/app/historico?tab=compras"
@@ -117,7 +145,21 @@ export default async function HistoricoPage(
         </div>
       )}
 
-      {tab === "sessoes" ? <SessoesTab userId={user.id} filter={sessFilter} hideCancelled={hideCancelled} /> : <ComprasTab userId={user.id} filter={compFilter} />}
+      {tab === "atividades" && (
+        <div className="flex justify-end">
+          <Link href="/app/atividades" className="inline-flex items-center gap-1 text-xs font-medium text-gold-600 hover:text-gold-700 dark:text-gold-400">
+            Ver linha do tempo (sessões + extra) ›
+          </Link>
+        </div>
+      )}
+
+      {tab === "sessoes" ? (
+        <SessoesTab userId={user.id} filter={sessFilter} hideCancelled={hideCancelled} />
+      ) : tab === "atividades" ? (
+        <AtividadesTab userId={user.id} />
+      ) : (
+        <ComprasTab userId={user.id} filter={compFilter} />
+      )}
     </div>
   );
 }
@@ -321,6 +363,51 @@ async function ComprasTab({ userId, filter }: { userId: string; filter: "todas" 
           </div>
         </li>
       ))}
+    </ul>
+  );
+}
+
+async function AtividadesTab({ userId }: { userId: string }) {
+  const supabase = await createClient();
+  const { data } = await (supabase as any)
+    .from("activities")
+    .select("id, type, activity_date, status, created_at")
+    .eq("client_id", userId)
+    .order("activity_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(60);
+  const rows = (data ?? []) as any[];
+
+  if (rows.length === 0) {
+    return (
+      <div className="card p-5 text-center text-sm text-ink-500">
+        Ainda não registaste treinos autónomos ou cardio. Regista na página inicial.
+      </div>
+    );
+  }
+
+  return (
+    <ul className="space-y-2">
+      {rows.map((a) => {
+        const type = a.type as ActivityType;
+        const status = a.status as ActivityStatus;
+        const Icon = ACTIVITY_TYPE_ICON[type];
+        const chip = ACTIVITY_STATUS_CHIP[status];
+        return (
+          <li key={a.id} className="card flex items-center gap-3 p-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-ink-900/[0.05] text-ink-500 dark:bg-white/5 dark:text-bone-100">
+              <Icon size={16} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold">{ACTIVITY_TYPE_LABEL[type]}</div>
+              <div className="text-xs text-ink-500">{fmtActivityDate(a.activity_date)}</div>
+            </div>
+            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${chip.bg} ${chip.text}`}>
+              {ACTIVITY_STATUS_LABEL[status]}
+            </span>
+          </li>
+        );
+      })}
     </ul>
   );
 }
