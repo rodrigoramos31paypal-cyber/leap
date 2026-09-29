@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Trophy, ChevronLeft, ChevronRight, Info } from "lucide-react";
+import { Trophy, ChevronLeft, ChevronRight, Info, Flame } from "lucide-react";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { getTrainerForClient, getActiveTrainersPublic } from "@/lib/trainer";
 import { displayName } from "@/lib/streak";
@@ -92,7 +92,7 @@ export default async function LeaderboardPage(props: {
             <span className="flex-1">Nome</span>
             <span className="w-16 shrink-0 whitespace-nowrap text-right">Progresso</span>
             <span className="w-9 shrink-0 text-right">Ativ.</span>
-            <span className="w-9 shrink-0 text-right">Seq.</span>
+            <span className="w-10 shrink-0 text-right">Seq.</span>
           </div>
 
           {pageRows.map((r) => {
@@ -133,7 +133,8 @@ export default async function LeaderboardPage(props: {
                 <span className="w-9 shrink-0 text-right text-sm font-semibold tabular-nums text-gold-700 dark:text-gold-300">
                   {r.activities_total ?? 0}
                 </span>
-                <span className="w-9 shrink-0 text-right text-sm font-medium tabular-nums text-ink-500 dark:text-bone-100/70">
+                <span className="flex w-10 shrink-0 items-center justify-end gap-0.5 text-sm font-medium tabular-nums text-ink-500 dark:text-bone-100/70">
+                  <Flame size={12} className="text-gold-500" />
                   {r.current_streak ?? 0}
                 </span>
               </div>
