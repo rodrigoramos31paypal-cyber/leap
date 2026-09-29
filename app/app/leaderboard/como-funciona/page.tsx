@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Flame, Check, X, Minus } from "lucide-react";
+import { ArrowLeft, Trophy, Percent, Activity, ListOrdered, Flame, Check, X, Minus } from "lucide-react";
 
 export const metadata = { title: "Como funciona · Ranking LEAP", robots: { index: false, follow: false } };
 
@@ -18,27 +18,51 @@ export default function ComoFuncionaPage() {
           <ArrowLeft size={14} /> Voltar ao ranking
         </Link>
         <h1 className="mt-2 flex items-center gap-2 font-display text-2xl font-bold tracking-tight">
-          <Flame size={22} className="shrink-0 text-gold-500" /> Sequência LEAP
+          <Trophy size={22} className="shrink-0 text-gold-500" /> Ranking LEAP
         </h1>
-        <p className="text-sm text-ink-500">O número de semanas seguidas em que treinas sem faltas.</p>
+        <p className="text-sm text-ink-500">Baseado em cumprires o teu pack e continuares ativo — não em quem compra o maior pack.</p>
       </div>
 
       <div className="card space-y-3 p-4 text-sm">
         <div className="flex items-start gap-2.5">
-          <Check size={16} className="mt-0.5 shrink-0 text-emerald-600" />
-          <p><span className="font-medium">Sobe</span> quando fazes todas as sessões marcadas dessa semana.</p>
+          <Percent size={16} className="mt-0.5 shrink-0 text-gold-600 dark:text-gold-400" />
+          <p><span className="font-medium">Percentagem do pack.</span> Quanto do teu pack atual já usaste (ex.: 6 de 8 = 75%). Coloca packs diferentes no mesmo pé — 8/8 e 12/12 são ambos 100%.</p>
         </div>
         <div className="flex items-start gap-2.5">
-          <Minus size={16} className="mt-0.5 shrink-0 text-ink-400" />
-          <p><span className="font-medium">Mantém-se</span> se não tiveres sessões nessa semana (ex.: férias, avisaste que não vinhas).</p>
+          <Activity size={16} className="mt-0.5 shrink-0 text-gold-600 dark:text-gold-400" />
+          <p><span className="font-medium">Atividades do mês.</span> Sessões PT realizadas + treinos autónomos + cardio, todos <span className="font-medium">validados</span>. Os treinos/cardio fora do PT precisam de validação (envia o comprovativo por WhatsApp).</p>
         </div>
         <div className="flex items-start gap-2.5">
-          <X size={16} className="mt-0.5 shrink-0 text-red-500" />
-          <p><span className="font-medium">Reinicia a 0</span> se tiveres uma falta: não comparecer (no-show) ou cancelar em cima da hora.</p>
+          <ListOrdered size={16} className="mt-0.5 shrink-0 text-gold-600 dark:text-gold-400" />
+          <p><span className="font-medium">Ordem:</span> 1.º maior % do pack · 2.º mais atividades no mês · 3.º maior Sequência LEAP. Quem num mês só treina fora do PT é ordenado pelas atividades.</p>
         </div>
         <p className="border-t border-ink-900/[0.06] pt-3 text-[12px] text-ink-500 dark:border-white/[0.07]">
-          As semanas contam de segunda a domingo. A sequência da semana só entra quando a semana fecha (domingo à noite) — durante a semana vês se está no bom caminho.
+          As atividades extra contam para o ranking, mas <span className="font-medium">não gastam sessões</span> do teu pack.
         </p>
+      </div>
+
+      <div>
+        <h2 className="mb-2 flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-ink-500">
+          <Flame size={14} className="text-gold-500" /> Sequência LEAP
+        </h2>
+        <div className="card space-y-3 p-4 text-sm">
+          <p className="text-[12px] text-ink-500">O número de semanas seguidas em que treinas sem faltas (critério de desempate no ranking).</p>
+          <div className="flex items-start gap-2.5">
+            <Check size={16} className="mt-0.5 shrink-0 text-emerald-600" />
+            <p><span className="font-medium">Sobe</span> quando fazes todas as sessões marcadas dessa semana.</p>
+          </div>
+          <div className="flex items-start gap-2.5">
+            <Minus size={16} className="mt-0.5 shrink-0 text-ink-400" />
+            <p><span className="font-medium">Mantém-se</span> se não tiveres sessões nessa semana (ex.: férias, avisaste que não vinhas).</p>
+          </div>
+          <div className="flex items-start gap-2.5">
+            <X size={16} className="mt-0.5 shrink-0 text-red-500" />
+            <p><span className="font-medium">Reinicia a 0</span> se tiveres uma falta: não comparecer (no-show) ou cancelar em cima da hora.</p>
+          </div>
+          <p className="border-t border-ink-900/[0.06] pt-3 text-[12px] text-ink-500 dark:border-white/[0.07]">
+            As semanas contam de segunda a domingo.
+          </p>
+        </div>
       </div>
 
       <div>

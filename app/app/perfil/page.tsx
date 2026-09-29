@@ -6,7 +6,8 @@ import { NotificationCategoryPrefs, type CategoryPrefs } from "@/components/noti
 import { LeaderboardToggle } from "@/components/leaderboard-toggle";
 import { CLIENT_CATEGORIES } from "@/lib/notifications-config";
 import { DeleteAccountSection } from "@/components/delete-account-section";
-import { ShieldCheck, User, Bell, NotebookPen, Plus, Sparkles, KeyRound, CalendarDays } from "lucide-react";
+import { ShieldCheck, User, Bell, NotebookPen, Plus, Sparkles, KeyRound, CalendarDays, Flame } from "lucide-react";
+import { levelForStreak, LEVEL_LABEL, LEVEL_CHIP } from "@/lib/streak";
 import { CalendarSubscribeCard } from "@/components/calendar-subscribe-card";
 import { NoteEditor } from "@/components/note-editor";
 import { GeneralNoteEditor } from "@/components/general-note-editor";
@@ -60,7 +61,12 @@ export default async function PerfilPage(
       <TabNav active={activeTab} />
 
       {activeTab === "perfil" && (
-        <PerfilTab profile={tabData.profile} factors={tabData.factors ?? []} />
+        <PerfilTab
+          profile={tabData.profile}
+          factors={tabData.factors ?? []}
+          activity={tabData.activity ?? null}
+          streak={tabData.streak ?? null}
+        />
       )}
       {activeTab === "calendario" && (
         <CalendarioTab
@@ -116,9 +122,15 @@ async function loadTabData(
   const data: any = {};
 
   if (tab === "perfil") {
-    const { data: profile } = await supabase.from("profiles").select("*").eq("id", userId).single();
+    const [{ data: profile }, { data: summaryRows }, { data: streakRows }] = await Promise.all([
+      supabase.from("profiles").select("*").eq("id", userId).single(),
+      (supabase as any).rpc("get_client_activity_summary", { p_client: userId }),
+      (supabase as any).rpc("get_client_streak", { p_client: userId }),
+    ]);
     data.profile = profile;
     data.factors = await listVerifiedFactors().catch(() => []);
+    data.activity = (summaryRows as any[] | null)?.[0] ?? null;
+    data.streak = (streakRows as any[] | null)?.[0] ?? null;
   }
 
   if (tab === "calendario") {
@@ -164,11 +176,70 @@ async function loadTabData(
   return data;
 }
 
-function PerfilTab({ profile, factors }: { profile: any; factors: any[] }) {
+function PerfilTab({
+  profile,
+  factors,
+  activity,
+  streak,
+}: {
+  profile: any;
+  factors: any[];
+  activity: any;
+  streak: any;
+}) {
   const hasFactor = factors.length > 0;
   const today = new Date().toISOString().slice(0, 10);
+
+  const streakWeeks = Number(streak?.current_streak ?? 0);
+  const lvl = levelForStreak(streakWeeks);
+  const chip = LEVEL_CHIP[lvl];
+  const packPct = activity?.pack_pct ?? null;
+  const total = Number(activity?.activities_total ?? 0);
+  const ptDone = Number(activity?.pt_done ?? 0);
+  const autoDone = Number(activity?.autonomous_validated ?? 0);
+  const cardioDone = Number(activity?.cardio_validated ?? 0);
+
   return (
     <div className="space-y-4">
+      {/* Resumo de consistência (mês corrente) */}
+      <div className="card space-y-3 p-5">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">A tua consistência</h2>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-lg bg-bone-50 p-3 dark:bg-white/[0.03]">
+            <div className="text-[11px] font-semibold text-ink-600 dark:text-bone-100">Consistência do pack</div>
+            <div className="mt-1 font-display text-lg font-bold tabular-nums">
+              {packPct === null ? "—" : `${packPct}%`}
+            </div>
+          </div>
+          <div className="rounded-lg bg-bone-50 p-3 dark:bg-white/[0.03]">
+            <div className="text-[11px] font-semibold text-ink-600 dark:text-bone-100">Sequência LEAP</div>
+            <div className="mt-1 inline-flex items-baseline gap-1.5">
+              <span className="font-display text-lg font-bold tabular-nums">{streakWeeks}</span>
+              <span className="text-[11px] text-ink-500">{streakWeeks === 1 ? "semana" : "semanas"}</span>
+            </div>
+          </div>
+        </div>
+        <div className="rounded-lg bg-bone-50 p-3 dark:bg-white/[0.03]">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-500">Atividade (este mês)</span>
+            <span className="font-display text-lg font-bold tabular-nums">
+              {total} {total === 1 ? "atividade" : "atividades"}
+            </span>
+          </div>
+          <div className="mt-1 text-[11px] text-ink-500">
+            {ptDone} {ptDone === 1 ? "sessão PT" : "sessões PT"} · {autoDone} {autoDone === 1 ? "treino autónomo" : "treinos autónomos"} · {cardioDone} {cardioDone === 1 ? "cardio" : "cardios"}
+          </div>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-ink-500">
+            <Flame size={13} className="text-gold-500" /> Nível
+          </span>
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${chip.bg} ${chip.text}`}>
+            {LEVEL_LABEL[lvl]}
+          </span>
+        </div>
+      </div>
+
       <form action={updateProfileAction} className="card space-y-4 p-5">
         <div>
           <label className="label">Nome completo</label>
