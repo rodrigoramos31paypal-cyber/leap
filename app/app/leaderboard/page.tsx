@@ -25,8 +25,8 @@ type Row = {
 const PODIUM = ["#F4ECC4", "#E7E7E2", "#FAECE7"]; // ouro, prata, bronze
 const PODIUM_TEXT = ["#65540B", "#5F5E5A", "#993C1D"];
 
-function pctLabel(p: number | null): string {
-  return p === null ? "—" : `${p}%`;
+function pctLabel(p: number | null | undefined): string {
+  return p == null ? "—" : `${p}%`;
 }
 
 export default async function LeaderboardPage(props: {
@@ -130,7 +130,7 @@ export default async function LeaderboardPage(props: {
                   {pctLabel(r.pack_pct)}
                 </span>
                 <span className="w-12 shrink-0 text-right text-sm font-semibold tabular-nums text-gold-700 dark:text-gold-300">
-                  {r.activities_total}
+                  {r.activities_total ?? 0}
                 </span>
               </div>
             );

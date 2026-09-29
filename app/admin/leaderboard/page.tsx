@@ -142,10 +142,10 @@ export default async function AdminLeaderboardPage(props: {
                 </div>
 
                 <span className="w-12 shrink-0 text-right text-sm font-semibold tabular-nums">
-                  {r.pack_pct === null ? "—" : `${r.pack_pct}%`}
+                  {r.pack_pct == null ? "—" : `${r.pack_pct}%`}
                 </span>
                 <span className="w-12 shrink-0 text-right text-sm font-semibold tabular-nums text-gold-700 dark:text-gold-300">
-                  {r.activities_total}
+                  {r.activities_total ?? 0}
                 </span>
               </Link>
             );
