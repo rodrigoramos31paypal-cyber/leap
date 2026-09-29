@@ -10,6 +10,7 @@ import { Calendar, ShoppingBag, Dumbbell, AlertCircle, ChevronRight, Flame } fro
 import { levelForStreak, LEVEL_LABEL } from "@/lib/streak";
 import { PushSubscribeCard } from "@/components/push-subscribe-card";
 import { PromoSlot } from "@/components/promo-slot";
+import { ActivityButtons } from "@/components/activity-buttons";
 
 // Fillers temporários até o cliente fornecer os banners reais.
 const FILLER_BANNERS = [
@@ -113,6 +114,10 @@ export default async function ClientDashboard() {
           </Link>
         </div>
       </div>
+
+      {/* Atividade extra (treino autónomo / cardio) — pendente de validação.
+          NÃO mexe em saldo/sessões do pack; conta para o Ranking após validar. */}
+      <ActivityButtons />
 
       {/* Avisos de saldo */}
       {noCredits && (
