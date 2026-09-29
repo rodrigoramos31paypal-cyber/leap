@@ -3,11 +3,14 @@ import { Flame, Trophy, ChevronLeft, ChevronRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getAccessibleTrainerIds, getActiveTrainersPublic } from "@/lib/trainer";
 import { levelForStreak, LEVEL_LABEL, LEVEL_CHIP, attendanceRate } from "@/lib/streak";
+import { ActivitiesAdmin } from "./activities-admin";
 
 export const metadata = { title: "Ranking LEAP", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 10;
+
+type Tab = "ranking" | "atividades";
 
 type Row = {
   client_id: string;
@@ -23,9 +26,11 @@ const PODIUM = ["#F4ECC4", "#E7E7E2", "#FAECE7"];
 const PODIUM_TEXT = ["#65540B", "#5F5E5A", "#993C1D"];
 
 export default async function AdminLeaderboardPage(props: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; tab?: string; atab?: string }>;
 }) {
   const sp = await props.searchParams;
+  const tab: Tab = sp.tab === "atividades" ? "atividades" : "ranking";
+  const sub = sp.atab === "historico" ? "historico" : "pendentes";
   const supabase = await createClient();
   // Mesma resolução do leaderboard do cliente: o trainer ATIVO do estúdio
   // (o que tem as marcações), com fallback ao scope acessível do admin.
@@ -34,9 +39,21 @@ export default async function AdminLeaderboardPage(props: {
     getAccessibleTrainerIds(),
   ]);
   const trainerId = actives[0]?.id ?? accessible[0] ?? null;
+  const trainerIds = accessible.length > 0 ? accessible : trainerId ? [trainerId] : [];
+
+  // Contador de pendentes para o badge da aba "Atividades".
+  let pendingCount = 0;
+  if (trainerIds.length > 0) {
+    const { count } = await (supabase as any)
+      .from("activities")
+      .select("id", { count: "exact", head: true })
+      .in("trainer_id", trainerIds)
+      .eq("status", "pending");
+    pendingCount = count ?? 0;
+  }
 
   let rows: Row[] = [];
-  if (trainerId) {
+  if (tab === "ranking" && trainerId) {
     const { data } = await (supabase as any).rpc("get_leaderboard", { p_trainer: trainerId });
     rows = ((data ?? []) as Row[]).sort((a, b) => a.rank - b.rank);
   }
@@ -53,11 +70,42 @@ export default async function AdminLeaderboardPage(props: {
       <div>
         <h1 className="font-display text-[1.75rem] font-bold leading-tight tracking-tight">Ranking LEAP</h1>
         <p className="text-sm text-ink-500">
-          {rows.length} {rows.length === 1 ? "cliente" : "clientes"} · sequência de treinos consecutivos, sem faltas
+          {tab === "ranking"
+            ? `${rows.length} ${rows.length === 1 ? "cliente" : "clientes"} · sequência de treinos consecutivos, sem faltas`
+            : "Validação de treinos autónomos e cardio submetidos pelos clientes"}
         </p>
       </div>
 
-      {rows.length === 0 ? (
+      {/* Abas: Ranking · Atividades (com contador de pendentes) */}
+      <div className="v2-segment flex gap-1 text-sm">
+        <Link
+          href="/admin/leaderboard"
+          data-active={tab === "ranking"}
+          className={`v2-seg-item flex flex-1 items-center justify-center px-3 py-2 text-center font-semibold ${
+            tab === "ranking" ? "text-ink-900 dark:text-bone-50" : "text-ink-500 dark:text-bone-100"
+          }`}
+        >
+          Ranking
+        </Link>
+        <Link
+          href="/admin/leaderboard?tab=atividades"
+          data-active={tab === "atividades"}
+          className={`v2-seg-item flex flex-1 items-center justify-center gap-1.5 px-3 py-2 text-center font-semibold ${
+            tab === "atividades" ? "text-ink-900 dark:text-bone-50" : "text-ink-500 dark:text-bone-100"
+          }`}
+        >
+          Atividades
+          {pendingCount > 0 && (
+            <span className="grid min-w-[18px] place-items-center rounded-full bg-gold-400 px-1 text-[10px] font-bold text-ink-900">
+              {pendingCount}
+            </span>
+          )}
+        </Link>
+      </div>
+
+      {tab === "atividades" ? (
+        <ActivitiesAdmin trainerIds={trainerIds} sub={sub} />
+      ) : rows.length === 0 ? (
         <div className="card p-6 text-center text-sm text-ink-500">Ainda não há clientes no ranking.</div>
       ) : (
         <div className="space-y-1.5">
