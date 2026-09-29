@@ -23,6 +23,12 @@ export const CLIENT_CATEGORIES: NotifCategory[] = [
   { key: "packs", label: "Packs e saldo", desc: "Pack ativo, saldo baixo e packs a expirar." },
   { key: "ratings", label: "Avaliações", desc: "Pedido de avaliação após a sessão." },
   {
+    key: "activities",
+    label: "Atividades",
+    desc: "Quando o teu treino autónomo ou cardio é validado ou rejeitado. Só in-app/push.",
+    pushOnly: true,
+  },
+  {
     key: "vaga",
     label: "Vagas de última hora",
     desc: "Aviso quando abre uma vaga e podes marcar uma sessão de última hora. Só push, sem email.",
@@ -35,6 +41,7 @@ export const TRAINER_CATEGORIES: NotifCategory[] = [
   { key: "payments", label: "Pagamentos", desc: "Compras de packs a aguardar confirmação." },
   { key: "notes", label: "Notas de clientes", desc: "Cliente deixou uma nota numa sessão." },
   { key: "signups", label: "Novos registos", desc: "Um cliente criou uma conta. Só in-app/push (sem email)." },
+  { key: "activities", label: "Atividades a validar", desc: "Um cliente registou um treino autónomo ou cardio para validares. Só in-app/push.", pushOnly: true },
   { key: "reminders", label: "Lembretes", desc: "Lembrete das sessões do dia." },
 ];
 
@@ -55,6 +62,8 @@ export function categoryForType(type: string, role: Role): string | null {
   // `new_signup_admin` cai na própria categoria `signups`, não em
   // `bookings`, senão o toggle de Marcações silenciava também os registos.
   if (type === "new_signup_admin") return "signups";
+  // Atividade a validar (staff). ANTES do catch-all `_admin`, senão caía em "bookings".
+  if (type === "activity_pending_admin") return "activities";
   if (type.endsWith("_admin")) return "bookings"; // booking_created_admin / booking_cancelled_admin
   if (type === "payment_pending") return "payments";
   if (type === "client_note") return "notes";
@@ -72,6 +81,8 @@ export function categoryForType(type: string, role: Role): string | null {
   }
   if (type === "rating_prompt") return "ratings";
   if (type === "vaga_open") return "vaga";
+  // Resultado da validação (cliente).
+  if (type === "activity_validated" || type === "activity_rejected") return "activities";
   return null;
 }
 
@@ -134,6 +145,8 @@ export const TYPES_BY_CATEGORY: Record<string, string[]> = {
   notes: ["client_note"],
   signups: ["new_signup_admin"],
   reminders: ["session_reminder"],
+  // atividades (staff: a validar · cliente: validada/rejeitada)
+  activities: ["activity_pending_admin", "activity_validated", "activity_rejected"],
   // cliente
   sessions: ["booking_created", "booking_cancelled", "booking_refunded", "session_reminder"],
   packs: ["purchase_confirmed", "low_credits", "no_credits", "credit_alert", "pack_expiring"],
