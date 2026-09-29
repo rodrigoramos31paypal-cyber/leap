@@ -61,7 +61,7 @@ export default async function LeaderboardPage(props: {
     <div className="space-y-4">
       <div>
         <h1 className="font-display text-2xl font-bold tracking-tight">Ranking LEAP</h1>
-        <p className="text-sm text-ink-500">Baseado em % do pack + atividades validadas.</p>
+        <p className="text-sm text-ink-500">Baseado em progresso + atividades validadas.</p>
       </div>
 
       {me ? (
@@ -90,8 +90,9 @@ export default async function LeaderboardPage(props: {
           <div className="flex items-center gap-3 px-3 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
             <span className="w-6 shrink-0 text-center">#</span>
             <span className="flex-1">Nome</span>
-            <span className="w-12 shrink-0 text-right">% Pack</span>
-            <span className="w-12 shrink-0 text-right">Ativid.</span>
+            <span className="w-16 shrink-0 whitespace-nowrap text-right">Progresso</span>
+            <span className="w-9 shrink-0 text-right">Ativ.</span>
+            <span className="w-9 shrink-0 text-right">Seq.</span>
           </div>
 
           {pageRows.map((r) => {
@@ -126,11 +127,14 @@ export default async function LeaderboardPage(props: {
                   </div>
                 </div>
 
-                <span className="w-12 shrink-0 text-right text-sm font-semibold tabular-nums">
+                <span className="w-16 shrink-0 text-right text-sm font-semibold tabular-nums">
                   {pctLabel(r.pack_pct)}
                 </span>
-                <span className="w-12 shrink-0 text-right text-sm font-semibold tabular-nums text-gold-700 dark:text-gold-300">
+                <span className="w-9 shrink-0 text-right text-sm font-semibold tabular-nums text-gold-700 dark:text-gold-300">
                   {r.activities_total ?? 0}
+                </span>
+                <span className="w-9 shrink-0 text-right text-sm font-medium tabular-nums text-ink-500 dark:text-bone-100/70">
+                  {r.current_streak ?? 0}
                 </span>
               </div>
             );
