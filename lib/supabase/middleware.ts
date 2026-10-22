@@ -192,7 +192,9 @@ export async function updateSession(
       return NextResponse.redirect(url);
     }
     // Não-staff a tentar /admin → manda para a app de cliente.
-    if (prof.role !== "trainer" && prof.role !== "owner") {
+    // 'viewer' (só-consulta) é permitido na área de admin; as escritas são
+    // bloqueadas no backend (RLS/RPCs continuam a exigir is_admin()).
+    if (prof.role !== "trainer" && prof.role !== "owner" && (prof.role as string) !== "viewer") {
       const url = request.nextUrl.clone();
       url.pathname = "/app/dashboard";
       url.search = "";

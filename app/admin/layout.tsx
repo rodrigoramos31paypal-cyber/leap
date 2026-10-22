@@ -45,7 +45,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     redirect("/auth/force-logout");
   }
 
-  if (profile?.role !== "trainer" && profile?.role !== "owner") {
+  // viewer = papel só-de-consulta: entra na área de admin (lê tudo), mas
+  // todas as escritas são recusadas no backend (RLS/RPCs exigem is_admin()).
+  if (
+    profile?.role !== "trainer" &&
+    profile?.role !== "owner" &&
+    (profile?.role as string) !== "viewer"
+  ) {
     redirect("/app/dashboard");
   }
 
