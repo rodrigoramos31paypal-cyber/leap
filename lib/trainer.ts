@@ -30,7 +30,9 @@ export const getCurrentTrainer = cache(async (): Promise<TrainerLite | null> => 
   if (data) return toTrainerLite(data);
 
   const profile = await getCurrentProfile();
-  if (profile?.role === "owner") {
+  // owner e viewer (só-consulta) veem o estúdio: num estúdio de 1 treinador,
+  // resolvem para esse treinador.
+  if (profile?.role === "owner" || (profile?.role as string) === "viewer") {
     const { data: actives } = await supabase
       .from("trainers")
       .select("id, profile_id, slug, active, bio, avatar_url, profiles:profile_id(full_name)")
@@ -61,7 +63,8 @@ export const getAccessibleTrainerIds = cache(async (): Promise<string[]> => {
   const profile = await getCurrentProfile();
   if (!profile) return [];
 
-  if (profile.role === "owner") {
+  // owner e viewer (só-consulta) acedem a TODOS os treinadores (leitura).
+  if (profile.role === "owner" || (profile.role as string) === "viewer") {
     const supabase = await createClient();
     const { data: all } = await supabase.from("trainers").select("id");
     return (all ?? []).map((t: any) => t.id);
@@ -161,7 +164,7 @@ export const getClientCountInScope = cache(async (trainerIds: string[]): Promise
   // de fora os órfãos, pelo que o KPI ficava ABAIXO da lista. Exclui
   // anonimizados (@removido.invalid).
   const profile = await getCurrentProfile();
-  if (profile?.role === "owner") {
+  if (profile?.role === "owner" || (profile?.role as string) === "viewer") {
     const { count } = await (supabase as any)
       .from("profiles")
       .select("id", { count: "exact", head: true })
