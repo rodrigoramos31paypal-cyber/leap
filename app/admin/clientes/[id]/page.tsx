@@ -18,6 +18,7 @@ import { setClientBannedAction } from "./actions";
 import { BlockPurchasesButton } from "./block-purchases-button";
 import { DeleteClientSection } from "./delete-client-section";
 import { LateCancelReview } from "./late-cancel-review";
+import { ScrollToSession } from "./scroll-to-session";
 
 const SESSIONS_PAGE_SIZE = 10;
 
@@ -37,14 +38,14 @@ function ageFromDob(dob: string): number | null {
 
 export default async function ClientDetail(props: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string; hc?: string; f?: string; page?: string; review?: string }>;
+  searchParams: Promise<{ tab?: string; hc?: string; f?: string; page?: string; review?: string; session?: string }>;
 }) {
   const params = await props.params;
-  const { tab: tabParam, hc, f, page: pageParam, review: reviewParam } = await props.searchParams;
+  const { tab: tabParam, hc, f, page: pageParam, review: reviewParam, session: sessionParam } = await props.searchParams;
   const tab: "resumo" | "compras" | "sessoes" =
     tabParam === "compras" || tabParam === "sessoes" ? tabParam : "resumo";
   const hideCancelled = hc === "1";
-  const pageNum = Math.max(1, Math.floor(Number(pageParam)) || 1);
+  let pageNum = Math.max(1, Math.floor(Number(pageParam)) || 1);
   const nowIso = new Date().toISOString();
   const supabase = await createClient();
 
@@ -62,8 +63,6 @@ export default async function ClientDetail(props: {
       reviewFilter = reviewBooking.starts_at >= nowIso ? "futuras" : "passadas";
     }
   }
-  const sessFilter: "todas" | "futuras" | "passadas" =
-    f === "futuras" || f === "passadas" ? f : reviewFilter ?? "todas";
   const { data: profile } = await (supabase as any)
     .from("profiles")
     .select("id, full_name, email, phone, banned, date_of_birth")
@@ -74,6 +73,43 @@ export default async function ClientDetail(props: {
   }
   const profileId = profile.id;
   const isDeleted = (profile.email ?? "").endsWith("@removido.invalid");
+
+  // Deep-link para uma sessão específica (?session=<booking>) — usado quando
+  // a agenda não consegue mostrar uma sessão cancelada com nota do cliente
+  // (trainer com "mostrar canceladas" desligado). Escolhemos o filtro
+  // futuras/passadas e a PÁGINA onde a sessão cai, para ela aparecer
+  // garantidamente na lista, e destacamo-la.
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  let focusSessionId: string | null = null;
+  let focusFilter: "futuras" | "passadas" | null = null;
+  if (sessionParam && UUID_RE.test(sessionParam) && !f && !reviewParam) {
+    const { data: fs } = await supabase
+      .from("bookings")
+      .select("id, starts_at")
+      .eq("id", sessionParam)
+      .maybeSingle();
+    if (fs?.starts_at) {
+      focusSessionId = fs.id;
+      const isFuture = fs.starts_at >= nowIso;
+      focusFilter = isFuture ? "futuras" : "passadas";
+      if (!pageParam) {
+        // Quantas sessões vêm ANTES desta na ordenação do filtro escolhido
+        // (futuras: asc; passadas: desc) → página onde ela cai.
+        let before = supabase
+          .from("bookings")
+          .select("id", { count: "exact", head: true })
+          .or(`client_id.eq.${profileId},partner_client_id.eq.${profileId},partner2_client_id.eq.${profileId}`);
+        if (hideCancelled) before = before.neq("status", "cancelled");
+        before = isFuture
+          ? before.gte("starts_at", nowIso).lt("starts_at", fs.starts_at)
+          : before.lt("starts_at", nowIso).gt("starts_at", fs.starts_at);
+        const { count } = await before;
+        pageNum = Math.floor((count ?? 0) / SESSIONS_PAGE_SIZE) + 1;
+      }
+    }
+  }
+  const sessFilter: "todas" | "futuras" | "passadas" =
+    f === "futuras" || f === "passadas" ? f : reviewFilter ?? focusFilter ?? "todas";
 
   // Hrefs das tabs.
   const tabHref = (t: "resumo" | "compras" | "sessoes") =>
@@ -360,7 +396,13 @@ export default async function ClientDetail(props: {
             <>
               <ul className="space-y-2">
                 {bookings.map((b) => (
-                  <li key={b.id} className="card p-4">
+                  <li
+                    key={b.id}
+                    id={`sess-${b.id}`}
+                    className={`card scroll-mt-24 p-4 ${
+                      focusSessionId === b.id ? "ring-2 ring-gold-400" : ""
+                    }`}
+                  >
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="text-sm font-semibold">{formatDateTime(b.starts_at)}</div>
@@ -404,6 +446,7 @@ export default async function ClientDetail(props: {
                   </li>
                 ))}
               </ul>
+              {focusSessionId && <ScrollToSession id={`sess-${focusSessionId}`} />}
               <Pagination
                 page={pageNum}
                 pageSize={SESSIONS_PAGE_SIZE}
