@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatTime, BOOKING_STATUS } from "@/lib/utils";
 import { confirmAttendanceAction, markNoShowAction, cancelAdminAction, addBlockQuickAction, deleteBlockAction, skipRecurringDateAction, deleteRecurringBlockAction } from "./actions";
@@ -50,6 +51,40 @@ export default async function AdminAgendaPage(props: {
   // trainerId precisa de ser conhecido para a BlockTimeForm / BookingDialog —
   // bloqueia apenas para isto (cached via React.cache, rapido).
   const trainerId = (await getCurrentTrainerId()) ?? "";
+
+  // Deep-link para uma sessão CANCELADA com nota do cliente, mas o trainer
+  // tem "mostrar canceladas" desligado → a sessão não aparece na agenda e o
+  // popover nunca abriria. Em vez disso, enviamos para o perfil do cliente
+  // (tab Sessões), onde a nota é visível dentro da sessão cancelada.
+  if (focusBookingId) {
+    const sb = await createClient();
+    const [{ data: fb }, { data: pref }] = await Promise.all([
+      (sb as any)
+        .from("bookings")
+        .select("id, status, client_id")
+        .eq("id", focusBookingId)
+        .maybeSingle(),
+      trainerId
+        ? (sb as any)
+            .from("trainer_settings")
+            .select("show_cancelled_in_calendar")
+            .eq("trainer_id", trainerId)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+    const showCancelledPref = (pref as any)?.show_cancelled_in_calendar ?? false;
+    if (fb && (fb as any).status === "cancelled" && (fb as any).client_id && !showCancelledPref) {
+      const { data: cn } = await sb
+        .from("session_notes")
+        .select("id")
+        .eq("booking_id", focusBookingId)
+        .eq("author_id", (fb as any).client_id)
+        .limit(1);
+      if (cn && cn.length > 0) {
+        redirect(`/admin/clientes/${(fb as any).client_id}?tab=sessoes&session=${focusBookingId}`);
+      }
+    }
+  }
 
   // Durações permitidas + default + packs activos para o BookingDialog.
   let durations: number[] = [45, 60, 90];
