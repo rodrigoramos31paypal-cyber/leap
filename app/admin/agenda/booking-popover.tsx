@@ -6,6 +6,7 @@ import Link from "next/link";
 import { NotebookPen, StickyNote, ExternalLink, Coins, Clock, Users, Cake } from "lucide-react";
 import { formatTime, BOOKING_STATUS } from "@/lib/utils";
 import { NoteEditor } from "@/components/note-editor";
+import { useIsViewer } from "@/components/viewer-mode";
 import {
   confirmAttendanceAction,
   markNoShowAction,
@@ -144,6 +145,7 @@ export function BookingBlock({
   autoOpen?: boolean;
 }) {
   const [open, setOpen] = useState(autoOpen);
+  const isViewer = useIsViewer();
   const [cancelOpen, setCancelOpen] = useState(false);
   // Reverter falta: devolver crédito por defeito (escolha do trainer).
   const [refundCredit, setRefundCredit] = useState(true);
@@ -408,6 +410,8 @@ export function BookingBlock({
 
   function onPointerDown(e: React.PointerEvent) {
     if (!draggable) return;
+    // viewer (só-consulta) não arrasta/reagenda.
+    if (isViewer) return;
     // só botão principal
     if (e.button !== 0) return;
     startRef.current = { x: e.clientX, y: e.clientY };
@@ -738,7 +742,7 @@ export function BookingBlock({
             </span>
           </div>
 
-          {draggable && (
+          {draggable && !isViewer && (
             <p className="mb-3 rounded bg-bone-100 px-2.5 py-1.5 text-[11px] text-ink-500">
               Arrasta o bloco para reagendar.
             </p>
@@ -801,7 +805,7 @@ export function BookingBlock({
             )}
           </div>
 
-          {(b.status === "booked" || b.status === "confirmed") && (
+          {!isViewer && (b.status === "booked" || b.status === "confirmed") && (
             <div className="mb-3 space-y-2">
               <div className="flex flex-wrap gap-1.5">
                 {b.status === "booked" && (
@@ -856,7 +860,7 @@ export function BookingBlock({
             </div>
           )}
 
-          {b.status === "no_show" && (
+          {!isViewer && b.status === "no_show" && (
             <div className="mb-3 space-y-2">
               <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-ink-600 dark:text-bone-100">
                 <input
@@ -888,7 +892,7 @@ export function BookingBlock({
             </div>
           )}
 
-          {(b.status === "booked" || b.status === "confirmed") && (
+          {!isViewer && (b.status === "booked" || b.status === "confirmed") && (
             <details className="mb-3 border-t border-ink-900/10 pt-3">
               <summary className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-ink-600 hover:text-ink-900">
                 <Clock size={12} /> Duração · {durationMin} min
@@ -1014,14 +1018,16 @@ export function BookingBlock({
             </div>
           )}
 
-          <details className="border-t border-ink-900/10 pt-3">
-            <summary className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-ink-600 hover:text-ink-900">
-              <NotebookPen size={12} /> Minhas notas{note ? " · ✓" : ""}
-            </summary>
-            <div className="mt-2">
-              <NoteEditor bookingId={b.id} initialBody={note?.body} compact />
-            </div>
-          </details>
+          {!isViewer && (
+            <details className="border-t border-ink-900/10 pt-3">
+              <summary className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-ink-600 hover:text-ink-900">
+                <NotebookPen size={12} /> Minhas notas{note ? " · ✓" : ""}
+              </summary>
+              <div className="mt-2">
+                <NoteEditor bookingId={b.id} initialBody={note?.body} compact />
+              </div>
+            </details>
+          )}
           </div>
         </div>,
         document.body,

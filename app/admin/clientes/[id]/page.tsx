@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { NotebookPen, Plus, EyeOff, Eye, Cake, Flame } from "lucide-react";
-import { levelForStreak, LEVEL_LABEL } from "@/lib/streak";
+import { NotebookPen, Plus, EyeOff, Eye, Cake } from "lucide-react";
+import { StreakPill } from "./streak-pill";
 import { createClient } from "@/lib/supabase/server";
 import { getClientCredits } from "@/lib/credits";
 import { getDuoPartner } from "@/lib/duo";
@@ -19,6 +19,7 @@ import { BlockPurchasesButton } from "./block-purchases-button";
 import { DeleteClientSection } from "./delete-client-section";
 import { LateCancelReview } from "./late-cancel-review";
 import { ScrollToSession } from "./scroll-to-session";
+import { HideFromViewer } from "@/components/viewer-mode";
 
 const SESSIONS_PAGE_SIZE = 10;
 
@@ -230,14 +231,7 @@ export default async function ClientDetail(props: {
               )}
             </div>
           )}
-          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-gold-300 bg-gold-50 px-3 py-1 text-[13px] text-ink-700 dark:border-gold-400/40 dark:bg-gold-400/10 dark:text-bone-100">
-            <Flame size={14} className="text-gold-500" />
-            Sequência:{" "}
-            <strong className="font-semibold text-ink-900 dark:text-bone-50">
-              {streakWeeks} {streakWeeks === 1 ? "semana" : "semanas"}
-            </strong>
-            <span className="text-ink-400">· {LEVEL_LABEL[levelForStreak(streakWeeks)]}</span>
-          </div>
+          <StreakPill clientId={params.id} weeks={streakWeeks} />
         </div>
         <BalanceChip total={credits?.total ?? 0} />
       </div>
@@ -259,16 +253,18 @@ export default async function ClientDetail(props: {
             // flex-nowrap + min-w-0 nos filhos mantém os dois botões na
             // MESMA linha mesmo em mobile estreito. Labels encurtados
             // ("Bloquear compras" / "Apagar conta") para caberem sem quebrar.
-            <div className="flex flex-nowrap items-start gap-2">
-              <form action={setClientBannedAction} className="min-w-0 flex-1">
-                <input type="hidden" name="clientId" value={profileId} />
-                <input type="hidden" name="banned" value={profile.banned ? "false" : "true"} />
-                <BlockPurchasesButton banned={!!profile.banned} />
-              </form>
-              <div className="min-w-0 flex-1">
-                <DeleteClientSection clientId={profileId} />
+            <HideFromViewer>
+              <div className="flex flex-nowrap items-start gap-2">
+                <form action={setClientBannedAction} className="min-w-0 flex-1">
+                  <input type="hidden" name="clientId" value={profileId} />
+                  <input type="hidden" name="banned" value={profile.banned ? "false" : "true"} />
+                  <BlockPurchasesButton banned={!!profile.banned} />
+                </form>
+                <div className="min-w-0 flex-1">
+                  <DeleteClientSection clientId={profileId} />
+                </div>
               </div>
-            </div>
+            </HideFromViewer>
           )}
 
           <div className="rounded-2xl border border-[#EBD98F] bg-[#FBF4DE] p-4 dark:border-gold-400/30 dark:bg-gold-400/10">
@@ -308,22 +304,32 @@ export default async function ClientDetail(props: {
               Esta conta foi removida (RGPD). Não é possível atribuir sessões.
             </div>
           ) : (
-            <details className="card p-5">
-              <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
-                <Plus size={16} /> Gerir sessões
-              </summary>
-              <GrantPackForm
-                clientId={profileId}
-                packs={packs.map((p) => ({ id: p.id, name: p.name, price_cents: p.price_cents }))}
-                hasPartner={!!duoPartner}
-                hasTrio={trioPartners.length > 0}
-              />
-            </details>
+            <HideFromViewer>
+              <details className="card p-5">
+                <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
+                  <Plus size={16} /> Gerir sessões
+                </summary>
+                <GrantPackForm
+                  clientId={profileId}
+                  packs={packs.map((p) => ({ id: p.id, name: p.name, price_cents: p.price_cents }))}
+                  hasPartner={!!duoPartner}
+                  hasTrio={trioPartners.length > 0}
+                />
+              </details>
+            </HideFromViewer>
           )}
 
-          {!isDeleted && <DuoLinkSection clientId={profileId} partner={duoPartner} />}
+          {!isDeleted && (
+            <HideFromViewer>
+              <DuoLinkSection clientId={profileId} partner={duoPartner} />
+            </HideFromViewer>
+          )}
 
-          {!isDeleted && <TrioLinkSection clientId={profileId} partners={trioPartners} />}
+          {!isDeleted && (
+            <HideFromViewer>
+              <TrioLinkSection clientId={profileId} partners={trioPartners} />
+            </HideFromViewer>
+          )}
 
           <div className="pt-1 text-center">
             <Link

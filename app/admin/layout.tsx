@@ -10,6 +10,7 @@ import { PushAutoHeal } from "@/components/push-auto-heal";
 import { SwNavigator } from "@/components/sw-navigator";
 import { AppHeight } from "@/components/app-height";
 import { consumeFlash } from "@/lib/flash";
+import { ViewerModeProvider } from "@/components/viewer-mode";
 import { getAalInfo, isDeviceTrusted } from "@/lib/mfa";
 import { LayoutDashboard, Calendar, Users, CreditCard, BarChart3, Settings, Package, NotebookPen, Megaphone, Store, Images, Trophy } from "lucide-react";
 
@@ -74,7 +75,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const flash = await consumeFlash();
 
+  // viewer = papel só-de-consulta. Esconde os controlos de escrita na UI
+  // (o backend já recusa qualquer escrita; isto é só para a área ficar
+  // visualmente só-de-leitura e não haver botões que iam falhar).
+  const isViewer = (profile?.role as string) === "viewer";
+
   return (
+    <ViewerModeProvider isViewer={isViewer}>
     <div className="flex h-[var(--app-height,100dvh)] flex-col overflow-hidden bg-bone-50 dark:bg-ink-900 md:block md:h-auto md:min-h-[100dvh] md:overflow-visible">
       <AppHeight />
       <TopBar
@@ -110,5 +117,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       </div>
       <BottomNav variant="admin" />
     </div>
+    </ViewerModeProvider>
   );
 }

@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
+import { useIsViewer } from "@/components/viewer-mode";
 import { deletePurchaseAction } from "./actions";
 
 // Ícone de caixote do lixo em cada pagamento. Ao clicar, pede
@@ -11,9 +12,13 @@ import { deletePurchaseAction } from "./actions";
 // "tem sessões associadas") em vez de falhar em silêncio.
 export function DeletePurchaseButton({ purchaseId }: { purchaseId: string }) {
   const router = useRouter();
+  const isViewer = useIsViewer();
   const [confirming, setConfirming] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // viewer (só-consulta) não vê o botão de eliminar.
+  if (isViewer) return null;
 
   function remove() {
     setErr(null);

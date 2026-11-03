@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getCurrentProfile } from "@/lib/supabase/server";
 import { formatTime, BOOKING_STATUS } from "@/lib/utils";
 import { confirmAttendanceAction, markNoShowAction, cancelAdminAction, addBlockQuickAction, deleteBlockAction, skipRecurringDateAction, deleteRecurringBlockAction } from "./actions";
 import { Ban, NotebookPen } from "lucide-react";
@@ -11,6 +11,7 @@ import { getCurrentTrainerId, getAccessibleTrainerIds } from "@/lib/trainer";
 import { BlockPresets } from "@/components/block-presets";
 import { BookingBlock } from "./booking-popover";
 import { BusyBlock } from "./busy-block";
+import { HideFromViewer } from "@/components/viewer-mode";
 import { SlotClickLayer } from "./slot-click-layer";
 import { CardSkeleton } from "@/components/skeleton";
 import { AgendaScrollTo7am } from "./agenda-scroll-to-7am";
@@ -119,7 +120,12 @@ export default async function AdminAgendaPage(props: {
   // (que controla o que os clientes veem) só permita 45. Não altera as
   // durações disponíveis para os clientes no fluxo /app.
   const adminDurations = Array.from(new Set([30, ...durations])).sort((a, b) => a - b);
-  const canBook = !!trainerId;
+  // viewer (só-consulta): sem escrita na agenda. canBook já controla os
+  // diálogos de marcação, o clique-para-marcar, a edição de "Ocupado" e os
+  // botões inline (aceitar/falta/cancelar) — desligá-lo torna a agenda
+  // só-de-leitura para o viewer num único ponto.
+  const isViewer = ((await getCurrentProfile())?.role as string) === "viewer";
+  const canBook = !!trainerId && !isViewer;
 
   let rangeStart: Date;
   let rangeEnd: Date;
@@ -530,6 +536,7 @@ function BookingItem({ b, note, isLastCredit = false }: { b: any; note?: { body:
           </span>
         )}
       </div>
+      <HideFromViewer>
       {(b.status === "booked" || b.status === "confirmed") && (
         <div className="mt-2 flex flex-wrap gap-1">
           {b.status === "booked" && (
@@ -562,6 +569,7 @@ function BookingItem({ b, note, isLastCredit = false }: { b: any; note?: { body:
           </form>
         </div>
       )}
+      </HideFromViewer>
       <details className="mt-2 border-t border-ink-900/10 pt-2">
         <summary className="cursor-pointer inline-flex items-center gap-1 text-[10px] font-semibold text-ink-600 hover:text-ink-900">
           <NotebookPen size={10} /> Minhas notas{note ? " · ✓" : ""}

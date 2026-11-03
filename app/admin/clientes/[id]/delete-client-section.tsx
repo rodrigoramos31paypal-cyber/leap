@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
+import { useIsViewer } from "@/components/viewer-mode";
 import { adminDeleteClientAction } from "./actions";
 
 // Admin · apagar conta do cliente com type-to-confirm ("APAGAR"). Usa
@@ -11,10 +12,14 @@ import { adminDeleteClientAction } from "./actions";
 // para um clientId arbitrário.
 export function DeleteClientSection({ clientId }: { clientId: string }) {
   const router = useRouter();
+  const isViewer = useIsViewer();
   const [open, setOpen] = useState(false);
   const [val, setVal] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // viewer (só-consulta) não vê o controlo de apagar.
+  if (isViewer) return null;
 
   function submit() {
     setErr(null);

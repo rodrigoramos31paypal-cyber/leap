@@ -14,6 +14,7 @@ import {
 import { getCurrentTrainerId, getAccessibleTrainerIds } from "@/lib/trainer";
 import { linkDuo, unlinkDuo, getActiveDuoPartnerId } from "@/lib/duo";
 import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
 import { setFlash } from "@/lib/flash";
 import { logError } from "@/lib/errors";
 import { logAudit } from "@/lib/audit";
@@ -520,4 +521,69 @@ export async function unlinkDuoAction(formData: FormData): Promise<void> {
     await setFlash("Não foi possível desligar as contas.", "error");
   }
   revalidateCreditsViews(clientId);
+}
+
+// ── Ajuste manual da Sequência LEAP (0168) ──────────────────────────
+// Define o valor atual da sequência de um cliente (baseline). A partir
+// daí continua a contar ao vivo. Reflete-se em todo o lado (perfil,
+// dashboard, leaderboard) porque tudo lê get_client_streak.
+export async function setClientStreakAction(input: {
+  clientId: string;
+  value: number;
+}): Promise<{ ok: true } | { error: string }> {
+  await requireStaff();
+  const { clientId, value } = input;
+  if (!clientId || !Number.isInteger(value) || value < 0 || value > 520) {
+    return { error: "Valor inválido." };
+  }
+  try {
+    const supabase = await createClient();
+    const { error } = await (supabase as any).rpc("set_client_streak", {
+      p_client: clientId,
+      p_value: value,
+    });
+    if (error) throw error;
+    await logAudit("streak_override_set", {
+      targetTable: "client_streak_overrides",
+      targetId: clientId,
+      payload: { value },
+    });
+  } catch (e) {
+    logError("setClientStreakAction", e);
+    if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "setClientStreak", clientId });
+    return { error: "Não foi possível atualizar a sequência." };
+  }
+  revalidatePath(`/admin/clientes/${clientId}`);
+  revalidatePath("/admin/leaderboard");
+  revalidatePath("/admin/dashboard");
+  return { ok: true };
+}
+
+/** Remove o ajuste manual — a sequência volta a ser 100% automática. */
+export async function clearClientStreakAction(input: {
+  clientId: string;
+}): Promise<{ ok: true } | { error: string }> {
+  await requireStaff();
+  const { clientId } = input;
+  if (!clientId) return { error: "Dados inválidos." };
+  try {
+    const supabase = await createClient();
+    const { error } = await (supabase as any).rpc("clear_client_streak", {
+      p_client: clientId,
+    });
+    if (error) throw error;
+    await logAudit("streak_override_clear", {
+      targetTable: "client_streak_overrides",
+      targetId: clientId,
+      payload: {},
+    });
+  } catch (e) {
+    logError("clearClientStreakAction", e);
+    if (isAccessDenied(e)) await captureAlert("admin_access_denied", { action: "clearClientStreak", clientId });
+    return { error: "Não foi possível repor a sequência." };
+  }
+  revalidatePath(`/admin/clientes/${clientId}`);
+  revalidatePath("/admin/leaderboard");
+  revalidatePath("/admin/dashboard");
+  return { ok: true };
 }

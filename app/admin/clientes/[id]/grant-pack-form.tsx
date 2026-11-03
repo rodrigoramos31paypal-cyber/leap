@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { eur } from "@/lib/utils";
+import { useIsViewer } from "@/components/viewer-mode";
 import { grantPackAction } from "./actions";
 
 export type GrantPackPack = {
@@ -45,8 +46,12 @@ export function GrantPackForm({
   hasTrio?: boolean;
 }) {
   const router = useRouter();
+  const isViewer = useIsViewer();
   const [mode, setMode] = useState<Mode>(packs.length > 0 ? "pack" : "custom");
   const [pending, startTransition] = useTransition();
+
+  // viewer (só-consulta) não vê o formulário de atribuir/remover sessões.
+  if (isViewer) return null;
 
   function onSubmit(formData: FormData) {
     // Garante que os hidden fields acompanham o estado actual do tab.

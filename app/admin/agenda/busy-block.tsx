@@ -12,6 +12,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Ban, X } from "lucide-react";
+import { useIsViewer } from "@/components/viewer-mode";
 import {
   updateBlockAction,
   updateRecurringBlockAction,
@@ -61,6 +62,9 @@ export function BusyBlock({
   style: React.CSSProperties;
 }) {
   const router = useRouter();
+  const isViewer = useIsViewer();
+  // viewer (só-consulta): vê o "Ocupado" mas não o pode editar/remover.
+  const canEditEff = canEdit && !isViewer;
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -261,9 +265,9 @@ export function BusyBlock({
     >
       <button
         type="button"
-        onClick={() => canEdit && setOpen(true)}
-        disabled={!canEdit}
-        className={`flex h-full w-full flex-col px-0.5 py-0.5 text-left ${canEdit ? "cursor-pointer" : "cursor-default"}`}
+        onClick={() => canEditEff && setOpen(true)}
+        disabled={!canEditEff}
+        className={`flex h-full w-full flex-col px-0.5 py-0.5 text-left ${canEditEff ? "cursor-pointer" : "cursor-default"}`}
         title={b.reason ?? "Ocupado"}
       >
         <div className="text-[8px] font-semibold leading-none">Ocupado</div>

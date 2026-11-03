@@ -15,6 +15,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { RotateCcw, Check, X, AlertTriangle } from "lucide-react";
+import { useIsViewer } from "@/components/viewer-mode";
 import { reviewLateCancelAction } from "./actions";
 
 type ReviewStatus = "pending" | "approved" | "rejected";
@@ -33,8 +34,9 @@ export function LateCancelReview({
   autoOpen?: boolean;
 }) {
   const router = useRouter();
+  const isViewer = useIsViewer();
   const [current, setCurrent] = useState<ReviewStatus>(status);
-  const [open, setOpen] = useState(autoOpen);
+  const [open, setOpen] = useState(autoOpen && !isViewer);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -81,6 +83,18 @@ export function LateCancelReview({
         : { label: "Por rever", cls: "text-amber-700 dark:text-amber-400", Icon: AlertTriangle };
 
   const LineIcon = line.Icon;
+
+  // viewer (só-consulta): mostra o estado, mas sem poder abrir a decisão.
+  if (isViewer) {
+    return (
+      <span
+        className={`mt-1 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold ${line.cls}`}
+      >
+        <LineIcon size={12} />
+        {line.label}
+      </span>
+    );
+  }
 
   return (
     <>

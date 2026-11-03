@@ -3,6 +3,7 @@
 // Botões Validar / Rejeitar por atividade (aba Atividades do Ranking).
 import { useTransition } from "react";
 import { decideActivityAction } from "./actions";
+import { useIsViewer } from "@/components/viewer-mode";
 import type { Flash } from "@/lib/flash-types";
 
 function toast(f: Flash) {
@@ -11,6 +12,10 @@ function toast(f: Flash) {
 
 export function ActivityDecide({ id }: { id: string }) {
   const [pending, startTransition] = useTransition();
+  const isViewer = useIsViewer();
+
+  // viewer (só-consulta) não vê os botões Validar/Rejeitar.
+  if (isViewer) return null;
 
   function decide(status: "validated" | "rejected") {
     startTransition(async () => {
