@@ -6,12 +6,12 @@ import { getTrainerForClient, getActiveTrainersPublic } from "@/lib/trainer";
 import { displayName } from "@/lib/streak";
 import { MedalBadges } from "@/components/medal-badges";
 import { MonthSelect } from "./month-select";
+import { periodLabel, periodsDownTo, currentPeriodLisbon } from "@/lib/ranking-periods";
 
 export const metadata = { title: "Ranking LEAP", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 10;
-const AWARDS_START = "2026-10"; // 1º mês com prémios
 
 type Row = {
   client_id: string;
@@ -29,31 +29,8 @@ type Medals = { gold: number; silver: number; bronze: number };
 const PODIUM = ["#F4ECC4", "#E7E7E2", "#FAECE7"]; // ouro, prata, bronze
 const PODIUM_TEXT = ["#65540B", "#5F5E5A", "#993C1D"];
 
-const MONTHS_PT = [
-  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
-];
-
 function pctLabel(p: number | null | undefined): string {
   return p == null ? "—" : `${p}%`;
-}
-
-function periodLabel(p: string): string {
-  const [y, m] = p.split("-").map(Number);
-  return `${MONTHS_PT[m - 1]} ${y}`;
-}
-
-// Lista de meses do corrente até AWARDS_START (descendente).
-function periodsDownTo(current: string): string[] {
-  const [sy, sm] = AWARDS_START.split("-").map(Number);
-  let [y, m] = current.split("-").map(Number);
-  const out: string[] = [];
-  while (y > sy || (y === sy && m >= sm)) {
-    out.push(`${y}-${String(m).padStart(2, "0")}`);
-    m--;
-    if (m === 0) { m = 12; y--; }
-  }
-  return out;
 }
 
 export default async function LeaderboardPage(props: {
@@ -71,11 +48,7 @@ export default async function LeaderboardPage(props: {
     null;
 
   // Mês corrente (fuso de Lisboa) e lista de meses disponíveis.
-  const currentPeriod = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Lisbon",
-    year: "numeric",
-    month: "2-digit",
-  }).format(new Date()).slice(0, 7);
+  const currentPeriod = currentPeriodLisbon();
   const periods = periodsDownTo(currentPeriod);
   const selectedPeriod = sp.month && periods.includes(sp.month) ? sp.month : currentPeriod;
   const isCurrent = selectedPeriod === currentPeriod;

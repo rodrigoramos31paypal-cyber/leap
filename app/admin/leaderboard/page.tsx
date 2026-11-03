@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getAccessibleTrainerIds, getActiveTrainersPublic } from "@/lib/trainer";
 import { ActivitiesAdmin } from "./activities-admin";
 import { MedalBadges } from "@/components/medal-badges";
+import { MonthSelect } from "@/app/app/leaderboard/month-select";
+import { periodLabel, periodsDownTo, currentPeriodLisbon } from "@/lib/ranking-periods";
 
 export const metadata = { title: "Ranking LEAP", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
@@ -27,12 +29,18 @@ const PODIUM = ["#F4ECC4", "#E7E7E2", "#FAECE7"];
 const PODIUM_TEXT = ["#65540B", "#5F5E5A", "#993C1D"];
 
 export default async function AdminLeaderboardPage(props: {
-  searchParams: Promise<{ page?: string; tab?: string; atab?: string }>;
+  searchParams: Promise<{ page?: string; tab?: string; atab?: string; month?: string }>;
 }) {
   const sp = await props.searchParams;
   const tab: Tab = sp.tab === "atividades" ? "atividades" : "ranking";
   const sub = sp.atab === "historico" ? "historico" : "pendentes";
   const supabase = await createClient();
+
+  // Meses disponíveis para o seletor (corrente → outubro/2026).
+  const currentPeriod = currentPeriodLisbon();
+  const periods = periodsDownTo(currentPeriod);
+  const selectedPeriod = sp.month && periods.includes(sp.month) ? sp.month : currentPeriod;
+  const isCurrent = selectedPeriod === currentPeriod;
   // Mesma resolução do leaderboard do cliente: o trainer ATIVO do estúdio
   // (o que tem as marcações), com fallback ao scope acessível do admin.
   const [actives, accessible] = await Promise.all([
@@ -59,7 +67,7 @@ export default async function AdminLeaderboardPage(props: {
     // Garante que os meses fechados estão gravados (captura lazy, sem cron).
     await (supabase as any).rpc("ensure_months_snapshotted", { p_trainer: trainerId });
     const [{ data }, { data: md }] = await Promise.all([
-      (supabase as any).rpc("get_leaderboard", { p_trainer: trainerId }),
+      (supabase as any).rpc("get_leaderboard_month", { p_trainer: trainerId, p_period: selectedPeriod }),
       (supabase as any).rpc("get_trainer_medals", { p_trainer: trainerId }),
     ]);
     rows = ((data ?? []) as Row[]).sort((a, b) => a.rank - b.rank);
@@ -73,17 +81,38 @@ export default async function AdminLeaderboardPage(props: {
   const from = (page - 1) * PAGE_SIZE;
   const pageRows = rows.slice(from, from + PAGE_SIZE);
 
-  const href = (p: number) => `/admin/leaderboard${p > 1 ? `?page=${p}` : ""}`;
+  const monthQS = isCurrent ? "" : `month=${selectedPeriod}`;
+  const href = (p: number) => {
+    const parts = [monthQS, p > 1 ? `page=${p}` : ""].filter(Boolean);
+    return `/admin/leaderboard${parts.length ? `?${parts.join("&")}` : ""}`;
+  };
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <div>
-        <h1 className="font-display text-[1.75rem] font-bold leading-tight tracking-tight">Ranking LEAP</h1>
-        <p className="text-sm text-ink-500">
-          {tab === "ranking"
-            ? `${rows.length} ${rows.length === 1 ? "cliente" : "clientes"} · progresso + atividades validadas`
-            : "Validação de treinos autónomos e cardio submetidos pelos clientes"}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-[1.75rem] font-bold leading-tight tracking-tight">Ranking LEAP</h1>
+          <p className="text-sm text-ink-500">
+            {tab === "ranking"
+              ? `${rows.length} ${rows.length === 1 ? "cliente" : "clientes"} · progresso + atividades validadas`
+              : "Validação de treinos autónomos e cardio submetidos pelos clientes"}
+          </p>
+        </div>
+        {tab === "ranking" && (
+          <div className="flex items-center gap-2">
+            <MonthSelect
+              selected={selectedPeriod}
+              current={currentPeriod}
+              options={periods.map((p) => ({ value: p, label: periodLabel(p) }))}
+              basePath="/admin/leaderboard"
+            />
+            {isCurrent && (
+              <span className="rounded-full border border-gold-400/60 bg-gold-50 px-2.5 py-1 text-xs font-semibold text-gold-700 dark:bg-gold-400/10 dark:text-gold-300">
+                Novo mês
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Abas: Ranking · Atividades (com contador de pendentes) */}

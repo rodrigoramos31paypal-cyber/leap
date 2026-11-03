@@ -43,21 +43,39 @@ export default function ComoFuncionaPage() {
 
       <div>
         <h2 className="mb-2 flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-ink-500">
+          <Trophy size={14} className="text-gold-500" /> Troféus mensais
+        </h2>
+        <div className="card space-y-3 p-4 text-sm">
+          <p className="text-[12px] text-ink-500">O ranking reinicia todos os meses. No fim de cada mês, os 3 primeiros ganham uma medalha.</p>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px]">
+            <span className="inline-flex items-center gap-1"><Trophy size={14} style={{ color: "#B8860B" }} /> 1.º · Ouro</span>
+            <span className="inline-flex items-center gap-1"><Trophy size={14} style={{ color: "#6B7280" }} /> 2.º · Prata</span>
+            <span className="inline-flex items-center gap-1"><Trophy size={14} style={{ color: "#A96A33" }} /> 3.º · Bronze</span>
+          </div>
+          <p><span className="font-medium">As medalhas acumulam</span> e aparecem ao lado do teu nome com a contagem. Ganhar a mesma medalha outra vez aumenta o número (ex.: duas pratas); uma medalha diferente junta-se às que já tens (ex.: um ouro e uma prata).</p>
+          <p className="border-t border-ink-900/[0.06] pt-3 text-[12px] text-ink-500 dark:border-white/[0.07]">
+            Usa o seletor de mês no topo do ranking para veres os meses anteriores.
+          </p>
+        </div>
+      </div>
+
+      <div>
+        <h2 className="mb-2 flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-ink-500">
           <Flame size={14} className="text-gold-500" /> Sequência LEAP
         </h2>
         <div className="card space-y-3 p-4 text-sm">
           <p className="text-[12px] text-ink-500">O número de semanas seguidas em que treinas sem faltas (critério de desempate no ranking).</p>
           <div className="flex items-start gap-2.5">
             <Check size={16} className="mt-0.5 shrink-0 text-emerald-600" />
-            <p><span className="font-medium">Sobe</span> quando fazes todas as sessões marcadas dessa semana.</p>
+            <p><span className="font-medium">Sobe +1</span> em cada semana em que treinas pelo menos uma sessão PT.</p>
           </div>
           <div className="flex items-start gap-2.5">
             <Minus size={16} className="mt-0.5 shrink-0 text-ink-400" />
-            <p><span className="font-medium">Mantém-se</span> se não tiveres sessões nessa semana (ex.: férias, avisaste que não vinhas).</p>
+            <p><span className="font-medium">Mantém-se</span> se numa semana não treinares PT mas fizeres uma atividade proativa validada (treino autónomo ou cardio).</p>
           </div>
           <div className="flex items-start gap-2.5">
             <X size={16} className="mt-0.5 shrink-0 text-red-500" />
-            <p><span className="font-medium">Reinicia a 0</span> se tiveres uma falta: não comparecer (no-show) ou cancelar em cima da hora.</p>
+            <p><span className="font-medium">Reinicia a 0</span> com uma falta (não comparecer ou cancelar em cima da hora) — ou se passares uma semana inteira sem treinar nem fazer uma atividade validada.</p>
           </div>
           <p className="border-t border-ink-900/[0.06] pt-3 text-[12px] text-ink-500 dark:border-white/[0.07]">
             As semanas contam de segunda a domingo.
