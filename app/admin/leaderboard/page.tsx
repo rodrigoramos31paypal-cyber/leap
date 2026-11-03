@@ -3,6 +3,7 @@ import { Trophy, ChevronLeft, ChevronRight, Flame } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getAccessibleTrainerIds, getActiveTrainersPublic } from "@/lib/trainer";
 import { ActivitiesAdmin } from "./activities-admin";
+import { MedalBadges } from "@/components/medal-badges";
 
 export const metadata = { title: "Ranking LEAP", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
@@ -53,9 +54,18 @@ export default async function AdminLeaderboardPage(props: {
   }
 
   let rows: Row[] = [];
+  const medalsByClient = new Map<string, { gold: number; silver: number; bronze: number }>();
   if (tab === "ranking" && trainerId) {
-    const { data } = await (supabase as any).rpc("get_leaderboard", { p_trainer: trainerId });
+    // Garante que os meses fechados estão gravados (captura lazy, sem cron).
+    await (supabase as any).rpc("ensure_months_snapshotted", { p_trainer: trainerId });
+    const [{ data }, { data: md }] = await Promise.all([
+      (supabase as any).rpc("get_leaderboard", { p_trainer: trainerId }),
+      (supabase as any).rpc("get_trainer_medals", { p_trainer: trainerId }),
+    ]);
     rows = ((data ?? []) as Row[]).sort((a, b) => a.rank - b.rank);
+    for (const m of (md ?? []) as any[]) {
+      medalsByClient.set(m.client_id, { gold: m.gold ?? 0, silver: m.silver ?? 0, bronze: m.bronze ?? 0 });
+    }
   }
 
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
@@ -138,8 +148,12 @@ export default async function AdminLeaderboardPage(props: {
                   </span>
                 )}
 
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{r.full_name || "—"}</div>
+                <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                  <span className="truncate text-sm font-medium">{r.full_name || "—"}</span>
+                  {(() => {
+                    const md = medalsByClient.get(r.client_id);
+                    return md ? <MedalBadges gold={md.gold} silver={md.silver} bronze={md.bronze} /> : null;
+                  })()}
                 </div>
 
                 <span className="w-16 shrink-0 text-right text-sm font-semibold tabular-nums">

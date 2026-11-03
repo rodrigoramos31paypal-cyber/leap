@@ -4,11 +4,14 @@ import { Trophy, ChevronLeft, ChevronRight, Info, Flame } from "lucide-react";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { getTrainerForClient, getActiveTrainersPublic } from "@/lib/trainer";
 import { displayName } from "@/lib/streak";
+import { MedalBadges } from "@/components/medal-badges";
+import { MonthSelect } from "./month-select";
 
 export const metadata = { title: "Ranking LEAP", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 10;
+const AWARDS_START = "2026-10"; // 1º mês com prémios
 
 type Row = {
   client_id: string;
@@ -21,16 +24,40 @@ type Row = {
   rank: number;
 };
 
-// Cor do círculo de posição para o pódio (1/2/3).
+type Medals = { gold: number; silver: number; bronze: number };
+
 const PODIUM = ["#F4ECC4", "#E7E7E2", "#FAECE7"]; // ouro, prata, bronze
 const PODIUM_TEXT = ["#65540B", "#5F5E5A", "#993C1D"];
+
+const MONTHS_PT = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+];
 
 function pctLabel(p: number | null | undefined): string {
   return p == null ? "—" : `${p}%`;
 }
 
+function periodLabel(p: string): string {
+  const [y, m] = p.split("-").map(Number);
+  return `${MONTHS_PT[m - 1]} ${y}`;
+}
+
+// Lista de meses do corrente até AWARDS_START (descendente).
+function periodsDownTo(current: string): string[] {
+  const [sy, sm] = AWARDS_START.split("-").map(Number);
+  let [y, m] = current.split("-").map(Number);
+  const out: string[] = [];
+  while (y > sy || (y === sy && m >= sm)) {
+    out.push(`${y}-${String(m).padStart(2, "0")}`);
+    m--;
+    if (m === 0) { m = 12; y--; }
+  }
+  return out;
+}
+
 export default async function LeaderboardPage(props: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; month?: string }>;
 }) {
   const sp = await props.searchParams;
   const user = await getSessionUser();
@@ -43,10 +70,30 @@ export default async function LeaderboardPage(props: {
     (await getActiveTrainersPublic())[0]?.id ??
     null;
 
+  // Mês corrente (fuso de Lisboa) e lista de meses disponíveis.
+  const currentPeriod = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Lisbon",
+    year: "numeric",
+    month: "2-digit",
+  }).format(new Date()).slice(0, 7);
+  const periods = periodsDownTo(currentPeriod);
+  const selectedPeriod = sp.month && periods.includes(sp.month) ? sp.month : currentPeriod;
+  const isCurrent = selectedPeriod === currentPeriod;
+
   let rows: Row[] = [];
+  const medalsByClient = new Map<string, Medals>();
   if (trainerId) {
-    const { data } = await (supabase as any).rpc("get_leaderboard", { p_trainer: trainerId });
-    rows = ((data ?? []) as Row[]).sort((a, b) => a.rank - b.rank);
+    // Garante que os meses fechados estão gravados (captura lazy, sem cron).
+    await (supabase as any).rpc("ensure_months_snapshotted", { p_trainer: trainerId });
+
+    const [{ data: rk }, { data: md }] = await Promise.all([
+      (supabase as any).rpc("get_leaderboard_month", { p_trainer: trainerId, p_period: selectedPeriod }),
+      (supabase as any).rpc("get_trainer_medals", { p_trainer: trainerId }),
+    ]);
+    rows = ((rk ?? []) as Row[]).sort((a, b) => a.rank - b.rank);
+    for (const m of (md ?? []) as any[]) {
+      medalsByClient.set(m.client_id, { gold: m.gold ?? 0, silver: m.silver ?? 0, bronze: m.bronze ?? 0 });
+    }
   }
 
   const me = rows.find((r) => r.client_id === user.id) ?? null;
@@ -55,16 +102,39 @@ export default async function LeaderboardPage(props: {
   const from = (page - 1) * PAGE_SIZE;
   const pageRows = rows.slice(from, from + PAGE_SIZE);
 
-  const href = (p: number) => `/app/leaderboard${p > 1 ? `?page=${p}` : ""}`;
+  const monthQS = isCurrent ? "" : `month=${selectedPeriod}`;
+  const href = (p: number) => {
+    const parts = [monthQS, p > 1 ? `page=${p}` : ""].filter(Boolean);
+    return `/app/leaderboard${parts.length ? `?${parts.join("&")}` : ""}`;
+  };
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Ranking LEAP</h1>
-        <p className="text-sm text-ink-500">Baseado em progresso + atividades validadas.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl font-bold tracking-tight">Ranking LEAP</h1>
+          <p className="text-sm text-ink-500">Baseado em progresso + atividades validadas.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <MonthSelect
+            selected={selectedPeriod}
+            current={currentPeriod}
+            options={periods.map((p) => ({ value: p, label: periodLabel(p) }))}
+          />
+          {isCurrent && (
+            <span className="rounded-full border border-gold-400/60 bg-gold-50 px-2.5 py-1 text-xs font-semibold text-gold-700 dark:bg-gold-400/10 dark:text-gold-300">
+              Novo mês
+            </span>
+          )}
+        </div>
       </div>
 
-      {me ? (
+      <div className="flex items-start gap-2 rounded-xl border border-ink-900/10 bg-bone-50 px-4 py-3 text-xs text-ink-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-bone-100">
+        <Info size={14} className="mt-0.5 shrink-0" />
+        O ranking reinicia todos os meses. Os troféus mostram vitórias anteriores.
+      </div>
+
+      {me && isCurrent && (
         <div className="flex items-center justify-between rounded-xl border border-gold-300 bg-gold-50 px-4 py-3 text-sm dark:border-gold-400/40 dark:bg-gold-400/10">
           <span className="font-medium text-ink-800 dark:text-bone-100">
             Estás em <strong>#{me.rank}</strong>
@@ -73,20 +143,16 @@ export default async function LeaderboardPage(props: {
             {pctLabel(me.pack_pct)} · {me.activities_total} {me.activities_total === 1 ? "atividade" : "atividades"}
           </span>
         </div>
-      ) : (
-        <div className="flex items-start gap-2 rounded-xl border border-ink-900/10 bg-bone-50 px-4 py-3 text-xs text-ink-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-bone-100">
-          <Info size={14} className="mt-0.5 shrink-0" />
-          Estás fora do ranking. Podes entrar em Perfil → Definições.
-        </div>
       )}
 
       {rows.length === 0 ? (
         <div className="card p-6 text-center text-sm text-ink-500">
-          Ainda não há ranking. Começa a treinar para construíres a tua consistência.
+          {isCurrent
+            ? "Ainda não há ranking este mês. Começa a treinar para construíres a tua consistência."
+            : "Não há ranking registado para este mês."}
         </div>
       ) : (
         <div className="space-y-1.5">
-          {/* Cabeçalho das colunas */}
           <div className="flex items-center gap-3 px-3 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
             <span className="w-6 shrink-0 text-center">#</span>
             <span className="flex-1">Nome</span>
@@ -98,6 +164,7 @@ export default async function LeaderboardPage(props: {
           {pageRows.map((r) => {
             const isMe = r.client_id === user.id;
             const podium = r.rank <= 3;
+            const medals = medalsByClient.get(r.client_id);
             return (
               <div
                 key={r.client_id}
@@ -120,11 +187,12 @@ export default async function LeaderboardPage(props: {
                   </span>
                 )}
 
-                <div className="min-w-0 flex-1">
-                  <div className={`truncate text-sm font-medium ${isMe ? "text-gold-700 dark:text-gold-300" : ""}`}>
+                <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                  <span className={`truncate text-sm font-medium ${isMe ? "text-gold-700 dark:text-gold-300" : ""}`}>
                     {isMe ? "Tu · " : ""}
                     {displayName(r.full_name)}
-                  </div>
+                  </span>
+                  {medals && <MedalBadges gold={medals.gold} silver={medals.silver} bronze={medals.bronze} />}
                 </div>
 
                 <span className="w-16 shrink-0 text-right text-sm font-semibold tabular-nums">
