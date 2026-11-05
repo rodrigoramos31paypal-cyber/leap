@@ -1,7 +1,7 @@
 "use server";
 
 import { createBooking, createRecurringBooking, type RecurringBookingResult } from "@/lib/credits";
-import { bookingNoticeError } from "@/lib/availability";
+import { bookingNoticeError, rescheduleCutoffError } from "@/lib/availability";
 import { dispatchBookingCreated, dispatchRecurringBookingCreated, emailStudioStaff } from "@/lib/email-dispatch";
 import { emailTemplates } from "@/lib/email";
 import { pushBookingToCalendars, removeBookingFromCalendars } from "@/lib/calendar-sync";
@@ -306,6 +306,15 @@ export async function rescheduleAction({
     if (noticeErr) {
       await setFlash(noticeErr, "error");
       return { error: noticeErr };
+    }
+    // Janela de reagendamento: bloqueia se a sessão ANTIGA está demasiado
+    // próxima (espelha o RPC 0148). Defesa server-side — não depende da UI.
+    const cutoffErr = ob && fromStartsAt
+      ? await rescheduleCutoffError((ob as any).trainer_id, fromStartsAt)
+      : null;
+    if (cutoffErr) {
+      await setFlash(cutoffErr, "error");
+      return { error: cutoffErr };
     }
   }
   // RPC atómica (0143): reagendamento IN-PLACE — muda só o horário e

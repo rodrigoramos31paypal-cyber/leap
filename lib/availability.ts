@@ -423,3 +423,31 @@ export async function bookingNoticeError(
   }
   return null;
 }
+
+// ════════════════════════════════════════════════════════════════
+// Janela de reagendamento (defesa server-side). Espelha a regra do RPC
+// reschedule_booking (0148): o CLIENTE não pode reagendar quando faltam
+// menos de `reschedule_cutoff_hours` para a sessão ATUAL (a antiga).
+// `oldStartsAtIso` é o início da sessão que está a ser movida.
+// Devolve mensagem de erro, ou null se permitido. 0 = sem restrição.
+// ════════════════════════════════════════════════════════════════
+export async function rescheduleCutoffError(
+  trainerId: string,
+  oldStartsAtIso: string,
+): Promise<string | null> {
+  const supabase = await createClient();
+  const { data } = await (supabase as any)
+    .from("trainer_settings")
+    .select("reschedule_cutoff_hours")
+    .eq("trainer_id", trainerId)
+    .maybeSingle();
+  const raw = Number((data as any)?.reschedule_cutoff_hours);
+  const hours = Number.isFinite(raw) && raw > 0 ? raw : 0;
+  if (hours <= 0) return null;
+  const startMs = new Date(oldStartsAtIso).getTime();
+  if (!Number.isFinite(startMs)) return null;
+  if (startMs < Date.now() + hours * 3_600_000) {
+    return `Já não é possível reagendar esta sessão — faltam menos de ${hours}h. Fala com o teu treinador.`;
+  }
+  return null;
+}
