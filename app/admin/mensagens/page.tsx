@@ -17,9 +17,9 @@ export default async function StaffMessages({ searchParams }: {
   const { cliente, antes, nome } = await searchParams;
   const context = cliente ? await chatContext(cliente) : null;
   if (cliente) return (
-    <div className="space-y-4">
-      <Link href="/admin/mensagens" className="text-sm font-semibold text-gold-700 dark:text-gold-300">← Caixa de entrada</Link>
-      {context ? <ChatThread context={context} before={antes} /> : <p>Esta conversa não está disponível.</p>}
+    <div className="flex h-full min-h-0 flex-col gap-3 md:h-[calc(100dvh-11rem)] md:min-h-[28rem]">
+      <Link href="/admin/mensagens" className="shrink-0 text-sm font-semibold text-gold-700 dark:text-gold-300">← Caixa de entrada</Link>
+      {context ? <ChatThread context={context} before={antes} fill /> : <p>Esta conversa não está disponível.</p>}
     </div>
   );
   const term = typeof nome === "string" ? nome.trim().slice(0, 80) : "";
