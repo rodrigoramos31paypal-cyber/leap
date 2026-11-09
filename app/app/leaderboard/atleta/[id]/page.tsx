@@ -90,32 +90,48 @@ export default async function AthletePage({ params, searchParams }: {
       <section className="card space-y-3 p-4">
         <h2 className="font-display text-lg font-bold">Vitrine de troféus</h2>
         {total ? (
-          <>
-            <ul className="divide-y divide-ink-900/10 dark:divide-white/10">
-              {awardDetails.map(({ rank, period, stats }) => (
-                <li key={period} className="flex items-start gap-3 py-3">
-                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-gold-400/10 text-gold-700 dark:text-gold-300">
-                    <Trophy size={19} aria-hidden="true" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-bold">{rank}.º lugar · {rank === 1 ? "Ouro" : rank === 2 ? "Prata" : "Bronze"}</p>
-                    <Link href={`/app/leaderboard?month=${encodeURIComponent(period)}`} className="text-sm font-semibold text-gold-700 hover:underline dark:text-gold-300">
-                      {periodLabel(period)}
-                    </Link>
-                    {stats && (
-                      <p className="mt-1 text-xs text-ink-500">
-                        {stats.activities_total} {stats.activities_total === 1 ? "atividade" : "atividades"} no mês
-                        {stats.pack_pct != null && ` · ${stats.pack_pct}% de progresso`}
-                      </p>
-                    )}
+          <ul className="divide-y divide-ink-900/10 dark:divide-white/10">
+            {awardDetails.map(({ rank, period, stats }) => {
+              const medal = rank === 1
+                ? { label: "Ouro", color: "bg-[#FBF1CE] text-[#89630B]" }
+                : rank === 2
+                  ? { label: "Prata", color: "bg-[#E9EAEC] text-[#555D69]" }
+                  : { label: "Bronze", color: "bg-[#F3E1D1] text-[#875025]" };
+
+              return (
+                <li key={period} className="py-3">
+                  <div className="flex items-start gap-3">
+                    <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${medal.color}`}>
+                      <Trophy size={19} aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold">{rank}.º lugar · {medal.label}</p>
+                      <Link href={`/app/leaderboard?month=${encodeURIComponent(period)}`} className="text-sm font-semibold text-gold-700 hover:underline dark:text-gold-300">
+                        {periodLabel(period)}
+                      </Link>
+                      <table className="mt-2 w-full table-fixed text-right tabular-nums">
+                        <thead className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+                          <tr>
+                            <th scope="col">Progresso</th>
+                            <th scope="col"><abbr title="Atividades" className="no-underline">Ativ.</abbr></th>
+                            <th scope="col"><abbr title="Sequência" className="no-underline">Seq.</abbr></th>
+                          </tr>
+                        </thead>
+                        <tbody className="text-sm font-semibold">
+                          <tr>
+                            <td className="pt-1">{stats?.pack_pct != null ? `${stats.pack_pct}%` : "—"}</td>
+                            <td className="pt-1 text-gold-700 dark:text-gold-300">{stats?.activities_total ?? "—"}</td>
+                            <td className="pt-1" aria-label="Sequência do mês indisponível">—</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </li>
-              ))}
-            </ul>
-            <p className="text-xs text-ink-500">A posição é a que ficou registada. Os dados do mês são calculados a partir do histórico.</p>
-          </>
+              );
+            })}
+          </ul>
         ) : <p className="text-sm text-ink-500">Ainda sem troféus neste ranking.</p>}
-        <p className="text-xs text-ink-500">Sequência atual de {current} {current === 1 ? "semana" : "semanas"}.</p>
       </section>
     </div>
   );
