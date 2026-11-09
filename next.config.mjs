@@ -23,9 +23,10 @@ const nextConfig = {
     // PERF (audit #4): autoriza o optimizer do Vercel a servir as imagens
     // do Supabase Storage (banners, fotos de produto, avatares) em
     // AVIF/WebP com resize/srcset. Sem este host, <Image> rejeitaria o URL.
-    remotePatterns: supabaseHost
-      ? [{ protocol: "https", hostname: supabaseHost, pathname: "/storage/v1/object/**" }]
-      : [],
+    remotePatterns: [
+      ...(supabaseHost ? [{ protocol: "https", hostname: supabaseHost, pathname: "/storage/v1/object/**" }] : []),
+      { protocol: "https", hostname: "static.sscontent.com", pathname: "/thumb/**" },
+    ],
   },
   // Next 16 (jun/2026): a key `eslint` no next.config foi descontinuada —
   // ESLint passa a ser tarefa do CI/IDE, não do `next build`.

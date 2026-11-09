@@ -1,4 +1,6 @@
 import Image from "next/image";
+import { Suspense } from "react";
+import { StoreInterestList } from "@/components/store-interest-list";
 import { createClient } from "@/lib/supabase/server";
 import { getAccessibleTrainerIds } from "@/lib/trainer";
 import { eur } from "@/lib/utils";
@@ -46,6 +48,8 @@ export default async function AdminLojaPage() {
           {list.length} {list.length === 1 ? "produto" : "produtos"}
         </span>
       </div>
+
+      <Suspense fallback={<div className="card p-4 text-sm text-ink-500">A carregar interesses…</div>}><StoreInterestList /></Suspense>
 
       <details className="card overflow-hidden p-0">
         <summary className="flex cursor-pointer list-none items-center gap-2.5 p-4 text-sm font-semibold text-ink-800 dark:text-bone-100">
