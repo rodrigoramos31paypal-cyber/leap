@@ -1,25 +1,28 @@
 import Link from "next/link";
 import { createAdminClient, getCurrentProfile } from "@/lib/supabase/server";
-import { chatContext } from "@/lib/chat";
+import { chatContext, chatStaffId } from "@/lib/chat";
 import { ChatThread, chatContactLabel } from "@/components/chat-thread";
 
 export default async function ClientMessages({ searchParams }: {
   searchParams: Promise<{ treino?: string; antes?: string; equipa?: string }>;
 }) {
   const params = await searchParams;
-  const requested = typeof params.equipa === "string" ? params.equipa : undefined;
-  const [context, profile] = await Promise.all([chatContext(undefined, requested), getCurrentProfile()]);
+  const requested = typeof params.equipa === "string" ? chatStaffId(params.equipa) : undefined;
+  const [context, defaultContext, profile] = await Promise.all([chatContext(undefined, requested), requested ? chatContext() : Promise.resolve(null), getCurrentProfile()]);
   const chats = profile?.role === "client" && !profile.access_blocked && profile.approval_status === "approved"
     ? await getTeamChats(profile.id) : [];
+
+  const primary = requested ? defaultContext : context;
+  const otherChats = chats.filter(chat => chat.id !== primary?.staffId);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 pb-1 md:h-[calc(100dvh-11rem)] md:min-h-[28rem]">
       <Link href="/app/dashboard" className="text-sm font-semibold text-gold-700 dark:text-gold-300">← Início</Link>
       <h1 className="font-display text-2xl font-bold">Mensagens</h1>
-      {chats.length > 0 && (
+      {otherChats.length > 0 && (
         <nav aria-label="Conversas" className="flex flex-wrap gap-2">
           <Link href="/app/mensagens" className="btn-outline min-h-11">O meu PT</Link>
-          {chats.filter(chat => chat.id !== context?.staffId || requested).map(chat => (
+          {otherChats.map(chat => (
             <Link key={chat.id} href={`/app/mensagens?equipa=${chat.id}`}
               aria-current={requested === chat.id ? "page" : undefined} className="btn-outline min-h-11">
               {chatContactLabel(chat.full_name)}
