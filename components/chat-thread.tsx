@@ -2,12 +2,13 @@ import Link from "next/link";
 import { chatContext, getChatBooking, isChatId, type ChatMessage } from "@/lib/chat";
 import { ChatPanel } from "./chat-panel";
 
-export async function ChatThread({ context, bookingId, before }: {
+export async function ChatThread({ context, bookingId, before, inProfile }: {
   context: NonNullable<Awaited<ReturnType<typeof chatContext>>>;
   bookingId?: string;
   before?: string;
+  inProfile?: boolean;
 }) {
-  const base = context.staff ? `/admin/mensagens?cliente=${context.clientId}` : "/app/mensagens";
+  const base = context.staff ? `/admin/mensagens?cliente=${context.clientId}` : inProfile ? "/app/perfil?tab=chat" : "/app/mensagens";
   let query = (context.db as any).from("leap_chat_messages")
     .select("id,sender_id,body,created_at,booking_id,booking_starts_at,read_at")
     .eq("client_id", context.clientId).eq("staff_id", context.staffId)
@@ -31,7 +32,7 @@ export async function ChatThread({ context, bookingId, before }: {
       {bookingId && !booking && <p className="text-sm text-ink-500">Este treino não pode ser associado a esta conversa.</p>}
       <div className="flex flex-wrap gap-3 text-sm font-semibold text-gold-700 dark:text-gold-300">
         {before && <Link href={base}>Voltar às mensagens recentes</Link>}
-        {rows.length > 50 && <Link href={`${base}${context.staff ? "&" : "?"}antes=${messages[0].id}`}>Ver mensagens anteriores</Link>}
+        {rows.length > 50 && <Link href={`${base}${base.includes("?") ? "&" : "?"}antes=${messages[0].id}`}>Ver mensagens anteriores</Link>}
       </div>
       <ChatPanel key={`${context.clientId}:${context.staffId}:${booking?.id ?? ""}`}
         messages={messages} userId={context.userId} clientId={context.staff ? context.clientId : undefined}
