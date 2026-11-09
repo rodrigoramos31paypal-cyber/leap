@@ -24,6 +24,12 @@ html, body {
    Sem isto, páginas que cabem no viewport (ex: /login, /recuperar) ficam
    ~8px mais largas que páginas com scroll (ex: /registar), e qualquer
    elemento centrado (logo) parece "saltar" ao mudar de página. */
+html.dark {
+  --background: 10 10 10;
+  --foreground: 250 250 247;
+  color-scheme: dark;
+}
+
 html {
   scrollbar-gutter: stable;
 }
