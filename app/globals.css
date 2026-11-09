@@ -43,6 +43,16 @@ html.kb-open #app-bottom-nav {
   display: none;
 }
 
+@media (max-width: 767px) {
+  html.kb-open #admin-app-shell {
+    position: fixed;
+    inset-inline: 0;
+    top: var(--keyboard-viewport-top, 0px);
+    height: var(--keyboard-viewport-height, 100dvh);
+  }
+}
+
+
 /* iOS Safari: input[type="date"] tem largura intrínseca baseada no
    conteúdo (placeholder + ícone do calendário) e ignora frequentemente
    `width: 100%` em layouts apertados, "saltando" para fora do viewport.
