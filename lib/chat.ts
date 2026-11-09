@@ -14,6 +14,14 @@ export type ChatMessage = {
   booking_starts_at: string | null;
 };
 
+// João Pedro uses his trainer and admin profiles for the same LEAP chat.
+const joaoTrainerId = "a444e83b-e56a-4d5f-95d0-ea0976f01a89";
+const joaoAdminId = "c4a7bb71-540e-4d41-ad53-c49f7085602b";
+
+export function chatStaffId(id: string | undefined) {
+  return id === joaoTrainerId ? joaoAdminId : id;
+}
+
 export function isChatId(value: unknown): value is string {
   return typeof value === "string" && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(value);
 }
@@ -25,6 +33,7 @@ export async function chatContext(clientId?: string, recipientId?: string) {
   if (clientId !== undefined) {
     if (!isChatId(clientId)) return null;
     const staff = await requireStaff();
+    const staffId = chatStaffId(staff.id)!;
     const { data: client } = await db.from("profiles")
       .select("id,full_name,role,approval_status,access_blocked").eq("id", clientId).eq("role", "client").maybeSingle();
     if (!client) return null;
@@ -36,12 +45,13 @@ export async function chatContext(clientId?: string, recipientId?: string) {
     const ownerCanStart = staff.role === "owner" && client.approval_status === "approved" && !client.access_blocked;
     if (trainer?.profile_id !== staff.id && !ownerCanStart) {
       const { data } = await (db as any).from("leap_chat_messages").select("id")
-        .eq("client_id", clientId).eq("staff_id", staff.id).limit(1).maybeSingle();
+        .eq("client_id", clientId).eq("staff_id", staffId).limit(1).maybeSingle();
       if (!data) return null;
     }
-    return { db, clientId, staffId: staff.id, userId: staff.id, name: client.full_name, staff: true };
+    return { db, clientId, staffId, userId: staffId, name: client.full_name, staff: true };
   }
   if (profile.role !== "client" || profile.approval_status !== "approved") return null;
+  recipientId = chatStaffId(recipientId);
   let staffId: string | undefined;
   if (recipientId !== undefined) {
     if (!isChatId(recipientId)) return null;
@@ -55,7 +65,7 @@ export async function chatContext(clientId?: string, recipientId?: string) {
     if (!trainerId) return null;
     const { data: trainer } = await db.from("trainers").select("profile_id")
       .eq("id", trainerId).eq("active", true).maybeSingle();
-    staffId = trainer?.profile_id;
+    staffId = chatStaffId(trainer?.profile_id);
     if (recipientId !== undefined && recipientId !== staffId) return null;
   }
   if (!staffId) return null;
@@ -70,7 +80,7 @@ export async function getChatBooking(context: NonNullable<Awaited<ReturnType<typ
   const { data } = await (context.db as any).from("bookings")
     .select("id,starts_at,trainers!inner(profile_id)")
     .eq("id", id)
-    .eq("trainers.profile_id", context.staffId)
+    .in("trainers.profile_id", context.staffId === joaoAdminId ? [joaoTrainerId, joaoAdminId] : [context.staffId])
     .or(`client_id.eq.${context.clientId},partner_client_id.eq.${context.clientId},partner2_client_id.eq.${context.clientId}`)
     .maybeSingle();
   return data as { id: string; starts_at: string } | null;
