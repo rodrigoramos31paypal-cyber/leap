@@ -12,6 +12,7 @@ export type ChatMessage = {
   kind: "message" | "cancellation" | "cancellation_approved" | "cancellation_rejected";
   read_at: string | null;
   booking_starts_at: string | null;
+  rescheduled_from: string | null;
 };
 
 // João Pedro uses his trainer and admin profiles for the same LEAP chat.
