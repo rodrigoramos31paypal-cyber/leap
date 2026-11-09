@@ -11,8 +11,9 @@ import { displayName, levelForStreak, LEVEL_LABEL, LEVEL_CHIP } from "@/lib/stre
 import { CalendarSubscribeCard } from "@/components/calendar-subscribe-card";
 import { chatContext } from "@/lib/chat";
 import { ChatThread } from "@/components/chat-thread";
+import { currentPeriodLisbon } from "@/lib/ranking-periods";
 import { MedalBadges } from "@/components/medal-badges";
-import { getTrainerForClient } from "@/lib/trainer";
+import { getActiveTrainersPublic, getTrainerForClient } from "@/lib/trainer";
 import { listVerifiedFactors } from "@/lib/mfa";
 import { EnrollCard } from "./seguranca/enroll-card";
 import { unenrollAction } from "./seguranca/actions";
@@ -185,27 +186,40 @@ async function loadTabData(
 
 type AthleteStats = {
   activities: number | null;
+  rank: number | null;
   medals: { gold: number; silver: number; bronze: number } | null;
 };
 
 async function loadAthleteStats(supabase: Awaited<ReturnType<typeof createClient>>, userId: string): Promise<AthleteStats> {
   const now = new Date();
   const day = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
-  const [sessions, extras, medals] = await Promise.all([
+  const [sessions, extras, ranking] = await Promise.all([
     (supabase as any).from("bookings").select("id", { count: "exact", head: true })
       .or(`client_id.eq.${userId},partner_client_id.eq.${userId},partner2_client_id.eq.${userId}`)
       .in("status", ["booked", "confirmed"]).lte("ends_at", now.toISOString()),
     (supabase as any).from("activities").select("id", { count: "exact", head: true })
       .eq("client_id", userId).eq("status", "validated").lte("activity_date", day),
     (async () => {
-      const trainerId = await getTrainerForClient(userId);
-      if (!trainerId) return null;
-      const { data, error } = await (supabase as any).rpc("get_trainer_medals", { p_trainer: trainerId });
-      if (error) return null;
-      return data?.find((row: { client_id: string }) => row.client_id === userId) ?? { gold: 0, silver: 0, bronze: 0 };
+      const trainerId = (await getTrainerForClient(userId)) ?? (await getActiveTrainersPublic())[0]?.id;
+      if (!trainerId) return { medals: null, rank: null };
+      const [{ data: awards, error: awardsError }, { data: rows }] = await Promise.all([
+        (supabase as any).rpc("get_trainer_medals", { p_trainer: trainerId }),
+        (supabase as any).rpc("get_leaderboard_month", {
+          p_trainer: trainerId,
+          p_period: currentPeriodLisbon(),
+        }),
+      ]);
+      return {
+        medals: awardsError ? null : awards?.find((row: { client_id: string }) => row.client_id === userId)
+          ?? { gold: 0, silver: 0, bronze: 0 },
+        rank: rows?.find((row: { client_id: string }) => row.client_id === userId)?.rank ?? null,
+      };
     })(),
   ]);
-  return { activities: sessions.error || extras.error ? null : (sessions.count ?? 0) + (extras.count ?? 0), medals };
+  return {
+    activities: sessions.error || extras.error ? null : (sessions.count ?? 0) + (extras.count ?? 0),
+    ...ranking,
+  };
 }
 
 function PerfilTab({
@@ -250,6 +264,12 @@ function PerfilTab({
                 <ShieldCheck size={14} aria-hidden="true" /> {LEVEL_LABEL[lvl]}
               </span>
             </div>
+            <Link href="/app/leaderboard" className="ml-auto shrink-0 rounded-xl border border-gold-400/30 bg-gold-400/10 px-2.5 py-2 text-right hover:border-gold-400">
+              <span className="block text-[10px] font-semibold text-gold-300">Ranking do mês</span>
+              <span className="block font-display text-lg font-bold tabular-nums">
+                {athlete.rank == null ? <span className="text-xs">Sem posição</span> : `${athlete.rank}.º`}
+              </span>
+            </Link>
           </div>
         </div>
         <div className="grid grid-cols-3 gap-2">
