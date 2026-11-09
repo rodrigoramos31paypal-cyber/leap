@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react";
 import { Check, CheckCheck, Send } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { markChatRead, sendChatMessage } from "@/app/app/mensagens/actions";
 import type { ChatMessage } from "@/lib/chat";
@@ -11,8 +12,9 @@ const dayKey = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Lisbon", dat
 const dayLabel = new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", dateStyle: "medium" });
 const messageTime = new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", hour: "2-digit", minute: "2-digit" });
 
-export function ChatPanel({ messages, userId, clientId, recipientId, booking, latest, fill }: {
+export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId, booking, latest, fill }: {
   messages: ChatMessage[];
+  reviewLinks: Record<string, string>;
   userId: string;
   clientId?: string;
   recipientId?: string;
@@ -67,6 +69,7 @@ export function ChatPanel({ messages, userId, clientId, recipientId, booking, la
           <ol aria-label="Mensagens da conversa">
             {messages.map((message, index) => {
               const mine = message.sender_id === userId;
+              const reviewLink = message.booking_id ? reviewLinks[message.booking_id] : undefined;
               const date = new Date(message.created_at);
               const day = dayKey.format(date);
               const previous = messages[index - 1];
@@ -88,10 +91,16 @@ export function ChatPanel({ messages, userId, clientId, recipientId, booking, la
                     <span className="sr-only">{mine ? "Tu" : clientId ? "Cliente" : "Treinador"}: </span>
                     {message.booking_starts_at && (
                       <p className="mb-1 rounded-md border-l-2 border-gold-500 bg-black/5 px-2 py-1 text-xs font-medium dark:bg-white/5">
+                        {message.kind !== "message" && (
+                          <strong className="block">{message.kind === "cancellation" ? "Cancelamento de treino" : "Decisão sobre o cancelamento"}</strong>
+                        )}
                         Treino de {formatDateTime(message.booking_starts_at)}
                       </p>
                     )}
                     <p className="whitespace-pre-wrap break-words text-sm leading-relaxed [overflow-wrap:anywhere]">{message.body}</p>
+                    {message.kind === "cancellation" && reviewLink && (
+                      <Link href={reviewLink} className="mt-2 inline-block text-sm font-semibold underline">Rever devolução da sessão</Link>
+                    )}
                     <div className="mt-0.5 flex items-center justify-end gap-1.5 text-[10px] text-ink-600 dark:text-bone-100/70">
                       <time dateTime={message.created_at}>{messageTime.format(date)}</time>
                       {mine && (message.read_at

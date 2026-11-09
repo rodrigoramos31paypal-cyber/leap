@@ -274,6 +274,10 @@ async function SessoesTab({ userId, filter, hideCancelled }: { userId: string; f
             </form>
             <form action={cancelBookingAction}>
               <input type="hidden" name="bookingId" value={b.id} />
+              <label className="mb-2 block text-xs">
+                Justificação do cancelamento (opcional)
+                <textarea name="reason" maxLength={1000} rows={2} className="mt-1 w-full rounded-lg border border-ink-500/30 bg-transparent p-2" />
+              </label>
               <PendingSubmitButton
                 className="btn-outline w-full text-xs text-red-700 hover:bg-red-50 border-red-200"
                 pendingLabel="A cancelar…"

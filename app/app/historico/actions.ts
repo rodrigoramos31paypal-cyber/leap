@@ -30,7 +30,8 @@ export async function cancelBookingAction(formData: FormData) {
     // chamada devolve `true`; as seguintes devolvem `false` porque a sessão
     // já está cancelada. Gate no email/audit/calendário evita enviar N
     // cópias do email de cancelamento pela mesma sessão.
-    const didCancel = await cancelBooking(bookingId, "Cancelado pelo cliente");
+    const reason = String(formData.get("reason") ?? "").trim().slice(0, 1000);
+    const didCancel = await cancelBooking(bookingId, reason || "Cancelado pelo cliente");
     if (didCancel) {
       // SEC: cancelBooking (RPC) já validou ownership acima. As chamadas
       // abaixo usam service role mas só correm com um bookingId que o
