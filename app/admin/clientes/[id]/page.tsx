@@ -1,16 +1,18 @@
+import { renderAthleteProfile } from "@/components/athlete-profile";
+import { requireStaff } from "@/lib/authz";
 import { StoreInterestList } from "@/components/store-interest-list";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { NotebookPen, Plus, EyeOff, Eye, Cake } from "lucide-react";
 import { StreakPill } from "./streak-pill";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getCurrentProfile } from "@/lib/supabase/server";
 import { getClientCredits } from "@/lib/credits";
 import { getDuoPartner } from "@/lib/duo";
 import { getTrioPartners } from "@/lib/trio";
 import { eur, formatDateTime, BOOKING_STATUS, PURCHASE_STATUS } from "@/lib/utils";
 import { NoteEditor } from "@/components/note-editor";
 import { getMyNotesMapForBookings, getClientNotesMapForBookings } from "@/lib/notes";
-import { getAccessibleTrainerIds } from "@/lib/trainer";
+import { getAccessibleTrainerIds, getActiveTrainersPublic, getTrainerForClient } from "@/lib/trainer";
 import { Pagination } from "@/components/pagination";
 import { GrantPackForm } from "./grant-pack-form";
 import { DuoLinkSection } from "./duo-link-section";
@@ -23,6 +25,7 @@ import { ScrollToSession } from "./scroll-to-session";
 import { HideFromViewer } from "@/components/viewer-mode";
 
 const SESSIONS_PAGE_SIZE = 10;
+const UUID_PATTERN = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 
 // Data de nascimento: "YYYY-MM-DD" → "DD/MM/YYYY" + idade actual.
 function formatDob(dob: string): string {
@@ -44,8 +47,7 @@ export default async function ClientDetail(props: {
 }) {
   const params = await props.params;
   const { tab: tabParam, hc, f, page: pageParam, review: reviewParam, session: sessionParam } = await props.searchParams;
-  const tab: "resumo" | "compras" | "sessoes" =
-    tabParam === "compras" || tabParam === "sessoes" ? tabParam : "resumo";
+  const tab = tabParam === "compras" || tabParam === "sessoes" || tabParam === "perfil-publico" ? tabParam : "resumo";
   const hideCancelled = hc === "1";
   let pageNum = Math.max(1, Math.floor(Number(pageParam)) || 1);
   const nowIso = new Date().toISOString();
@@ -76,6 +78,16 @@ export default async function ClientDetail(props: {
   const profileId = profile.id;
   const isDeleted = (profile.email ?? "").endsWith("@removido.invalid");
 
+  const viewer = await getCurrentProfile();
+  const canPreview = viewer?.role === "owner" || viewer?.role === "trainer";
+  let publicProfile = null;
+  if (tab === "perfil-publico" && canPreview && !isDeleted && UUID_PATTERN.test(profileId)) {
+    await requireStaff();
+    const trainerId = (await getTrainerForClient(profileId)) ?? (await getActiveTrainersPublic())[0]?.id;
+    if (trainerId) publicProfile = await renderAthleteProfile(profileId, trainerId, true);
+  }
+
+
   // Deep-link para uma sessão específica (?session=<booking>) — usado quando
   // a agenda não consegue mostrar uma sessão cancelada com nota do cliente
   // (trainer com "mostrar canceladas" desligado). Escolhemos o filtro
@@ -84,7 +96,7 @@ export default async function ClientDetail(props: {
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   let focusSessionId: string | null = null;
   let focusFilter: "futuras" | "passadas" | null = null;
-  if (sessionParam && UUID_RE.test(sessionParam) && !f && !reviewParam) {
+  if (sessionParam && UUID_PATTERN.test(sessionParam) && !f && !reviewParam) {
     const { data: fs } = await supabase
       .from("bookings")
       .select("id, starts_at")
@@ -114,7 +126,7 @@ export default async function ClientDetail(props: {
     f === "futuras" || f === "passadas" ? f : reviewFilter ?? focusFilter ?? "todas";
 
   // Hrefs das tabs.
-  const tabHref = (t: "resumo" | "compras" | "sessoes") =>
+  const tabHref = (t: typeof tab) =>
     t === "resumo" ? `/admin/clientes/${profileId}` : `/admin/clientes/${profileId}?tab=${t}`;
 
   // Hrefs dos filtros de sessões (preservam tab=sessoes + f + hc). Mudar de
@@ -241,7 +253,12 @@ export default async function ClientDetail(props: {
         <SegTab href={tabHref("resumo")} active={tab === "resumo"} label="Resumo" />
         <SegTab href={tabHref("compras")} active={tab === "compras"} label="Compras" />
         <SegTab href={tabHref("sessoes")} active={tab === "sessoes"} label="Sessões" />
+        {canPreview && <SegTab href={tabHref("perfil-publico")} active={tab === "perfil-publico"} label="Perfil público" />}
       </div>
+
+      {tab === "perfil-publico" && (publicProfile ?? (
+        <p className="card p-4 text-sm text-ink-500">Este cliente não tem um perfil visível no ranking.</p>
+      ))}
 
       {tab === "resumo" && (
         <>
@@ -480,10 +497,11 @@ function SegTab({ href, active, label }: { href: string; active: boolean; label:
   return (
     <Link
       href={href}
+      aria-current={active ? "page" : undefined}
       className={
         active
-          ? "flex-1 rounded-lg bg-white px-2 py-1.5 text-center text-[12px] font-semibold text-ink-900 shadow-sm dark:bg-ink-800 dark:text-bone-50"
-          : "flex-1 rounded-lg px-2 py-1.5 text-center text-[12px] font-medium text-ink-500 transition hover:text-ink-900 dark:hover:text-bone-50"
+          ? "flex-1 rounded-lg bg-white px-1 sm:px-2 py-1.5 text-center text-[12px] font-semibold text-ink-900 shadow-sm dark:bg-ink-800 dark:text-bone-50"
+          : "flex-1 rounded-lg px-1 sm:px-2 py-1.5 text-center text-[12px] font-medium text-ink-500 transition hover:text-ink-900 dark:hover:text-bone-50"
       }
     >
       {label}
