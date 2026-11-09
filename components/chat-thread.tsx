@@ -17,7 +17,7 @@ export async function ChatThread({ context, bookingId, before, inProfile, fill }
     ? `/admin/mensagens?cliente=${context.clientId}`
     : inProfile ? "/app/perfil?tab=chat" : `/app/mensagens?equipa=${context.staffId}`;
   let query = (context.db as any).from("leap_chat_messages")
-    .select("id,sender_id,body,created_at,booking_id,booking_starts_at,read_at,kind")
+    .select("id,sender_id,body,created_at,booking_id,booking_starts_at,rescheduled_from,read_at,kind")
     .eq("client_id", context.clientId).eq("staff_id", context.staffId)
     .order("created_at", { ascending: false }).order("id", { ascending: false }).limit(51);
   if (isChatId(before)) {
