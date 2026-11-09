@@ -18,7 +18,7 @@ export default async function ProductInterestsPage({ searchParams }: {
         <ArrowLeft size={16} /> Dashboard
       </Link>
       <header>
-        <h1 className="font-display text-2xl font-bold">Produtos de interesse</h1>
+        <h1 className="font-display text-2xl font-bold">Produtos de interesse dos clientes</h1>
         <p className="text-sm text-ink-500">Consulta quem declarou interesse em cada produto da loja.</p>
       </header>
       <StoreInterestList page={page} />
