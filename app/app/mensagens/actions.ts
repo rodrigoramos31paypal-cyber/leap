@@ -1,6 +1,8 @@
 "use server";
 
-import { chatContext, getChatBooking, isChatId } from "@/lib/chat";
+import { requireStaff } from "@/lib/authz";
+import { createAdminClient } from "@/lib/supabase/server";
+import { chatStaffId, chatContext, getChatBooking, isChatId } from "@/lib/chat";
 import { rateLimit } from "@/lib/rate-limit";
 import { revalidatePath } from "next/cache";
 
@@ -46,4 +48,13 @@ export async function markChatRead(clientId: string | undefined, messageIds: str
   await context.db.from("notifications").update({ read_at: new Date().toISOString() })
     .eq("user_id", context.userId).eq("type", "chat_message")
     .in("id", messageIds).is("read_at", null);
+}
+
+export async function countUnreadStaffMessages() {
+  const staff = await requireStaff();
+  const { count, error } = await (createAdminClient() as any).from("leap_chat_messages")
+    .select("id", { count: "exact", head: true })
+    .eq("staff_id", chatStaffId(staff.id)).is("read_at", null)
+    .neq("sender_id", chatStaffId(staff.id));
+  return error ? null : count ?? 0;
 }
