@@ -7,7 +7,8 @@
 // Reutiliza o estilo dos cards/botões existentes.
 // ════════════════════════════════════════════════════════════════
 import { useTransition } from "react";
-import { Dumbbell, Heart } from "lucide-react";
+import Link from "next/link";
+import { Dumbbell, Heart, Trophy, ChevronRight } from "lucide-react";
 import { logActivityAction } from "@/app/app/dashboard/actions";
 import type { Flash } from "@/lib/flash-types";
 
@@ -56,9 +57,12 @@ export function ActivityButtons() {
           <Heart size={16} /> Fiz cardio hoje
         </button>
       </div>
-      <p className="mt-2 text-[11px] text-ink-500">
-        Conta para o Ranking LEAP após validação.
-      </p>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-ink-900/5 pt-2 dark:border-white/10">
+        <p className="text-[11px] text-ink-500">Conta para o ranking após validação.</p>
+        <Link href="/app/leaderboard" className="inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-gold-700 hover:underline dark:text-gold-300">
+          <Trophy size={16} aria-hidden="true" /> Ver Ranking LEAP <ChevronRight size={14} aria-hidden="true" />
+        </Link>
+      </div>
     </div>
   );
 }
