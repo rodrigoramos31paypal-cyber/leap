@@ -70,6 +70,10 @@ export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId
             {messages.map((message, index) => {
               const mine = message.sender_id === userId;
               const reviewLink = message.booking_id ? reviewLinks[message.booking_id] : undefined;
+              const rescheduled = message.rescheduled_from && message.booking_starts_at;
+              const body = rescheduled
+                ? (message.body.startsWith("Sessão reagendada\n\n") ? message.body.slice("Sessão reagendada\n\n".length) : "")
+                : message.body;
               const date = new Date(message.created_at);
               const day = dayKey.format(date);
               const previous = messages[index - 1];
@@ -89,7 +93,13 @@ export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId
                       : "mr-auto rounded-bl-sm bg-white text-ink-900 dark:bg-ink-800 dark:text-bone-50"
                   }`}>
                     <span className="sr-only">{mine ? "Tu" : clientId ? "Cliente" : "Treinador"}: </span>
-                    {message.booking_starts_at && (
+                    {message.rescheduled_from && message.booking_starts_at ? (
+                      <div className="mb-1 rounded-md border-l-2 border-gold-500 bg-black/5 px-2 py-1 text-xs dark:bg-white/5">
+                        <strong className="block">Sessão reagendada</strong>
+                        <span>De <del>{formatDateTime(message.rescheduled_from)}</del>{" "}</span>
+                        <span>para <strong>{formatDateTime(message.booking_starts_at)}</strong></span>
+                      </div>
+                    ) : message.booking_starts_at && (
                       <p className="mb-1 rounded-md border-l-2 border-gold-500 bg-black/5 px-2 py-1 text-xs font-medium dark:bg-white/5">
                         {message.kind !== "message" && (
                           <strong className="block">{message.kind === "cancellation" ? "Cancelamento de treino" : "Decisão sobre o cancelamento"}</strong>
@@ -97,7 +107,7 @@ export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId
                         Treino de {formatDateTime(message.booking_starts_at)}
                       </p>
                     )}
-                    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed [overflow-wrap:anywhere]">{message.body}</p>
+                    {body && <p className="whitespace-pre-wrap break-words text-sm leading-relaxed [overflow-wrap:anywhere]">{body}</p>}
                     {message.kind === "cancellation" && reviewLink && (
                       <Link href={reviewLink} className="mt-2 inline-block text-sm font-semibold underline">Rever devolução da sessão</Link>
                     )}
