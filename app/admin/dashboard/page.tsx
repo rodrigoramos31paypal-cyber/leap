@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { createClient, getCurrentProfile } from "@/lib/supabase/server";
 import { eur, formatDateTime } from "@/lib/utils";
 import { CreditCard, Calendar, Users, TrendingUp, Activity, Package, ChevronLeft, ChevronRight } from "lucide-react";
-import { getAccessibleTrainerIds, getClientCountInScope } from "@/lib/trainer";
+import { getAccessibleTrainerIds, getActiveTrainersPublic, getClientCountInScope } from "@/lib/trainer";
 import { KpiGridSkeleton, CardSkeleton } from "@/components/skeleton";
 import { PushSubscribeCard } from "@/components/push-subscribe-card";
 
@@ -117,13 +117,20 @@ async function Kpis({ year, month }: { year: number; month: number }) {
   // vazio devolve zeros. FALLBACK: se a RPC falhar (ex.: codigo deployed
   // antes da migracao 0084 ser aplicada), corre o caminho antigo para o
   // dashboard nao partir.
-  const [kpiRes, totalClientsInScope, pendingApprovalRes] = await Promise.all([
+  const [kpiRes, totalClientsInScope, pendingApprovalRes, pendingActivities] = await Promise.all([
     (supabase as any).rpc("get_dashboard_kpis", {
       p_trainer_ids: trainerIds,
       p_month_start: monthStart.toISOString(),
       p_month_end: monthEnd.toISOString(),
     }),
     getClientCountInScope(trainerIds),
+    (async () => {
+      const ids = trainerIds.length ? trainerIds : (await getActiveTrainersPublic()).slice(0, 1).map(trainer => trainer.id);
+      if (!ids.length) return 0;
+      const { count, error } = await (supabase as any).from("activities")
+        .select("id", { count: "exact", head: true }).in("trainer_id", ids).eq("status", "pending");
+      return error ? null : count ?? 0;
+    })(),
     // Contas por aprovar (auto-registo pendente). Espelha a aba "Contas
     // pendentes" (que também não filtra por trainer — qualquer staff vê a
     // fila). Só o count; head:true não transfere linhas.
@@ -136,7 +143,6 @@ async function Kpis({ year, month }: { year: number; month: number }) {
   const pendingApprovalCount = (pendingApprovalRes as any)?.count ?? 0;
 
   let revenue = 0;
-  let packsSold = 0;
   let pendingPaymentsCount: number | null = 0;
   let sessionsBooked = 0;
   let sessionsConfirmed = 0;
@@ -146,7 +152,6 @@ async function Kpis({ year, month }: { year: number; month: number }) {
   const kpi = (kpiRes?.data as any[] | null)?.[0];
   if (!kpiRes?.error && kpi) {
     revenue = Number(kpi.revenue_cents) || 0;
-    packsSold = Number(kpi.packs_sold) || 0;
     pendingPaymentsCount = Number(kpi.pending_payments) || 0;
     sessionsBooked = Number(kpi.sessions_booked) || 0;
     sessionsConfirmed = Number(kpi.sessions_confirmed) || 0;
@@ -183,7 +188,6 @@ async function Kpis({ year, month }: { year: number; month: number }) {
         .lt("starts_at", monthEnd.toISOString()),
     ]);
     revenue = ((monthPurchases ?? []) as any[]).reduce((acc: number, r: any) => acc + r.amount_cents, 0);
-    packsSold = (monthPurchases ?? []).length;
     pendingPaymentsCount = pendingCount ?? 0;
     // Conjunto candidato de client_ids para "Clientes ativos no mês":
     // SÓ sessões CONFIRMADAS (status = 'confirmed'), distinto, filtrado a
@@ -226,7 +230,13 @@ async function Kpis({ year, month }: { year: number; month: number }) {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat icon={<TrendingUp size={16} />} label="Receita do mês" value={eur(revenue)} href="/admin/pagamentos?tab=confirmados" />
         <Stat icon={<Users size={16} />} label="Clientes ativos no mês" value={String(activeClients)} />
-        <Stat icon={<Package size={16} />} label="Packs vendidos" value={String(packsSold)} />
+        <Stat
+          icon={<Activity size={16} />}
+          label="Atividades por validar"
+          value={pendingActivities == null ? "—" : String(pendingActivities)}
+          accent={pendingActivities && pendingActivities > 0 ? "gold" : undefined}
+          href="/admin/leaderboard?tab=atividades&atab=pendentes"
+        />
         <Stat
           icon={<CreditCard size={16} />}
           label="Pagamentos pendentes"
