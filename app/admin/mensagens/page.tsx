@@ -2,7 +2,7 @@ import Link from "next/link";
 import { MessageCircle, Search } from "lucide-react";
 import { requireStaff } from "@/lib/authz";
 import { createAdminClient, getCurrentProfile } from "@/lib/supabase/server";
-import { chatContext } from "@/lib/chat";
+import { chatContext, chatStaffId } from "@/lib/chat";
 import { ChatThread } from "@/components/chat-thread";
 import { formatDateTime } from "@/lib/utils";
 
@@ -24,7 +24,7 @@ export default async function StaffMessages({ searchParams }: {
   );
   const term = typeof nome === "string" ? nome.trim().slice(0, 80) : "";
   const search = term ? await searchClients(staff.id, staff.role === "owner", term) : null;
-  const { data, error } = await (createAdminClient() as any).rpc("leap_chat_inbox", { p_staff: staff.id });
+  const { data, error } = await (createAdminClient() as any).rpc("leap_chat_inbox", { p_staff: chatStaffId(staff.id) });
   const rows = (data ?? []) as { client_id: string; full_name: string; unread: number; last_message: string }[];
   return (
     <div className="space-y-4">
