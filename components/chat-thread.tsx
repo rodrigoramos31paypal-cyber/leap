@@ -8,7 +8,9 @@ export async function ChatThread({ context, bookingId, before, inProfile }: {
   before?: string;
   inProfile?: boolean;
 }) {
-  const base = context.staff ? `/admin/mensagens?cliente=${context.clientId}` : inProfile ? "/app/perfil?tab=chat" : "/app/mensagens";
+  const base = context.staff
+    ? `/admin/mensagens?cliente=${context.clientId}`
+    : inProfile ? "/app/perfil?tab=chat" : `/app/mensagens?equipa=${context.staffId}`;
   let query = (context.db as any).from("leap_chat_messages")
     .select("id,sender_id,body,created_at,booking_id,booking_starts_at,read_at")
     .eq("client_id", context.clientId).eq("staff_id", context.staffId)
@@ -36,6 +38,7 @@ export async function ChatThread({ context, bookingId, before, inProfile }: {
       </div>
       <ChatPanel key={`${context.clientId}:${context.staffId}:${booking?.id ?? ""}`}
         messages={messages} userId={context.userId} clientId={context.staff ? context.clientId : undefined}
+        recipientId={context.staff ? undefined : context.staffId}
         booking={booking} latest={!before} />
     </div>
   );

@@ -17,7 +17,7 @@ export function isChatId(value: unknown): value is string {
   return typeof value === "string" && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(value);
 }
 
-export async function chatContext(clientId?: string) {
+export async function chatContext(clientId?: string, recipientId?: string) {
   const profile = await getCurrentProfile();
   if (!profile || profile.access_blocked) return null;
   const db = createAdminClient();
@@ -25,14 +25,15 @@ export async function chatContext(clientId?: string) {
     if (!isChatId(clientId)) return null;
     const staff = await requireStaff();
     const { data: client } = await db.from("profiles")
-      .select("id,full_name,role").eq("id", clientId).eq("role", "client").maybeSingle();
+      .select("id,full_name,role,approval_status,access_blocked").eq("id", clientId).eq("role", "client").maybeSingle();
     if (!client) return null;
     // A staff member can open a thread only if assigned or already a participant.
     const trainerId = await getTrainerForClient(clientId);
     const { data: trainer } = trainerId
       ? await db.from("trainers").select("profile_id").eq("id", trainerId).eq("active", true).maybeSingle()
       : { data: null };
-    if (trainer?.profile_id !== staff.id) {
+    const ownerCanStart = staff.role === "owner" && client.approval_status === "approved" && !client.access_blocked;
+    if (trainer?.profile_id !== staff.id && !ownerCanStart) {
       const { data } = await (db as any).from("leap_chat_messages").select("id")
         .eq("client_id", clientId).eq("staff_id", staff.id).limit(1).maybeSingle();
       if (!data) return null;
@@ -40,11 +41,25 @@ export async function chatContext(clientId?: string) {
     return { db, clientId, staffId: staff.id, userId: staff.id, name: client.full_name, staff: true };
   }
   if (profile.role !== "client" || profile.approval_status !== "approved") return null;
-  const trainerId = await getTrainerForClient(profile.id);
-  if (!trainerId) return null;
-  const { data: trainer } = await db.from("trainers").select("profile_id").eq("id", trainerId).eq("active", true).maybeSingle();
-  if (!trainer) return null;
-  const { data: staff } = await db.from("profiles").select("id,full_name,role,access_blocked").eq("id", trainer.profile_id).maybeSingle();
+  let staffId: string | undefined;
+  if (recipientId !== undefined) {
+    if (!isChatId(recipientId)) return null;
+    const { data: incoming } = await (db as any).from("leap_chat_messages").select("id")
+      .eq("client_id", profile.id).eq("staff_id", recipientId).eq("sender_id", recipientId)
+      .limit(1).maybeSingle();
+    if (incoming) staffId = recipientId;
+  }
+  if (!staffId) {
+    const trainerId = await getTrainerForClient(profile.id);
+    if (!trainerId) return null;
+    const { data: trainer } = await db.from("trainers").select("profile_id")
+      .eq("id", trainerId).eq("active", true).maybeSingle();
+    staffId = trainer?.profile_id;
+    if (recipientId !== undefined && recipientId !== staffId) return null;
+  }
+  if (!staffId) return null;
+  const { data: staff } = await db.from("profiles").select("id,full_name,role,access_blocked")
+    .eq("id", staffId).maybeSingle();
   if (!staff || staff.access_blocked || !["owner", "trainer"].includes(staff.role)) return null;
   return { db, clientId: profile.id, staffId: staff.id, userId: profile.id, name: staff.full_name, staff: false };
 }
