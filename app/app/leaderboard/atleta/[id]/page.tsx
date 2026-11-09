@@ -40,7 +40,7 @@ export default async function AthletePage({ params, searchParams }: {
     db.from("activities").select("id", { count: "exact", head: true })
       .eq("client_id", id).eq("status", "validated").lte("activity_date", lisbonDate),
     db.rpc("get_client_streak", { p_client: id }),
-    db.from("ranking_monthly_winners").select("rank,period").eq("trainer_id", trainerId).eq("client_id", id).order("period", { ascending: false }),
+    db.from("ranking_monthly_winners").select("rank,period,pack_pct_snapshot,activities_total_snapshot,streak_snapshot").eq("trainer_id", trainerId).eq("client_id", id).order("period", { ascending: false }),
   ]);
   if ([sessions, extras, streak, trophies].some(result => result.error)) {
     return <p role="alert" className="card p-4">Não foi possível carregar o perfil. Atualiza a página para tentar novamente.</p>;
@@ -48,9 +48,21 @@ export default async function AthletePage({ params, searchParams }: {
   const current = Number(streak.data?.[0]?.current_streak ?? 0);
   const best = Number(streak.data?.[0]?.best_streak ?? 0);
   const level = levelForStreak(current);
-  const awards = (trophies.data ?? []) as { rank: number; period: string }[];
+  const awards = (trophies.data ?? []) as {
+    rank: number;
+    period: string;
+    pack_pct_snapshot: number | null;
+    activities_total_snapshot: number | null;
+    streak_snapshot: number | null;
+  }[];
   const total = awards.length;
   const awardDetails = await Promise.all(awards.map(async award => {
+    if (award.activities_total_snapshot != null) {
+      return {
+        ...award,
+        stats: { pack_pct: award.pack_pct_snapshot, activities_total: award.activities_total_snapshot },
+      };
+    }
     const { data } = await db.rpc("get_leaderboard_month", {
       p_trainer: trainerId,
       p_period: award.period,
@@ -91,7 +103,7 @@ export default async function AthletePage({ params, searchParams }: {
         <h2 className="font-display text-lg font-bold">Vitrine de troféus</h2>
         {total ? (
           <ul className="divide-y divide-ink-900/10 dark:divide-white/10">
-            {awardDetails.map(({ rank, period, stats }) => {
+            {awardDetails.map(({ rank, period, stats, streak_snapshot }) => {
               const medal = rank === 1
                 ? { label: "Ouro", color: "bg-[#FBF1CE] text-[#89630B]" }
                 : rank === 2
@@ -121,7 +133,9 @@ export default async function AthletePage({ params, searchParams }: {
                           <tr>
                             <td className="pt-1">{stats?.pack_pct != null ? `${stats.pack_pct}%` : "—"}</td>
                             <td className="pt-1 text-gold-700 dark:text-gold-300">{stats?.activities_total ?? "—"}</td>
-                            <td className="pt-1" aria-label="Sequência do mês indisponível">—</td>
+                            <td className="pt-1" aria-label={streak_snapshot == null ? "Sequência do mês indisponível" : undefined}>
+                              {streak_snapshot ?? "—"}
+                            </td>
                           </tr>
                         </tbody>
                       </table>
