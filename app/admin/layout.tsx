@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createClient, getSessionUser, getCurrentProfile } from "@/lib/supabase/server";
@@ -12,7 +13,7 @@ import { AppHeight } from "@/components/app-height";
 import { consumeFlash } from "@/lib/flash";
 import { ViewerModeProvider } from "@/components/viewer-mode";
 import { getAalInfo, isDeviceTrusted } from "@/lib/mfa";
-import { LayoutDashboard, Calendar, Users, CreditCard, BarChart3, Settings, Package, NotebookPen, Megaphone, Store, Images, Trophy } from "lucide-react";
+import { LayoutDashboard, Calendar, Users, CreditCard, BarChart3, Settings, Package, NotebookPen, Megaphone, Store, Images, Trophy, MessageCircle } from "lucide-react";
 
 import type { Metadata } from "next";
 export const metadata: Metadata = { robots: { index: false, follow: false } };
@@ -85,6 +86,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="flex h-[var(--app-height,100dvh)] flex-col overflow-hidden bg-bone-50 dark:bg-ink-900 md:block md:h-auto md:min-h-[100dvh] md:overflow-visible">
       <AppHeight />
       <TopBar
+        right={profile?.role === "owner" || profile?.role === "trainer" ? (
+          <Link href="/admin/mensagens" className="btn-outline min-h-11 gap-2" aria-label="Mensagens">
+            <MessageCircle size={16} aria-hidden="true" />
+            <span className="hidden sm:inline">Mensagens</span>
+          </Link>
+        ) : undefined}
         title="Admin"
         unread={0}
         notifLink="/admin/notificacoes"

@@ -138,10 +138,14 @@ export default async function LeaderboardPage(props: {
             const isMe = r.client_id === user.id;
             const podium = r.rank <= 3;
             const medals = medalsByClient.get(r.client_id);
+            const profileQuery = new URLSearchParams({ month: selectedPeriod, page: String(page) });
             return (
-              <div
+              <Link
                 key={r.client_id}
-                className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${
+                href={`/app/leaderboard/atleta/${r.client_id}?${profileQuery}`}
+                prefetch={false}
+                aria-label={`Ver perfil de ${displayName(r.full_name)}`}
+                className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 transition hover:border-gold-400 ${
                   isMe
                     ? "border-gold-400 bg-gold-50 dark:border-gold-400/50 dark:bg-gold-400/10"
                     : "border-ink-900/10 bg-white dark:border-white/10 dark:bg-ink-800"
@@ -178,7 +182,7 @@ export default async function LeaderboardPage(props: {
                   <Flame size={12} className="text-gold-500" />
                   {r.current_streak ?? 0}
                 </span>
-              </div>
+              </Link>
             );
           })}
 

@@ -1,3 +1,4 @@
+import { chatContext } from "@/lib/chat";
 import Image from "next/image";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -6,7 +7,7 @@ import { createClient, getSessionUser, getCurrentProfile } from "@/lib/supabase/
 import { CardSkeleton } from "@/components/skeleton";
 import { getClientCredits, getClientCreditsByTrainer } from "@/lib/credits";
 import { formatDateTime, pluralize } from "@/lib/utils";
-import { Calendar, ShoppingBag, AlertCircle, ChevronRight, Trophy } from "lucide-react";
+import { Calendar, ShoppingBag, AlertCircle, ChevronRight, Trophy, MessageCircle } from "lucide-react";
 import { levelForStreak, LEVEL_LABEL } from "@/lib/streak";
 import { getTrainerForClient, getActiveTrainersPublic } from "@/lib/trainer";
 import { PushSubscribeCard } from "@/components/push-subscribe-card";
@@ -70,21 +71,23 @@ export default async function ClientDashboard() {
 
   return (
     <div className="space-y-4">
-      <div className="-mb-1.5">
-        <h1 className="font-display text-2xl font-bold tracking-tight">
-          Olá, {profile?.full_name?.split(" ")[0] ?? "atleta"}.
-        </h1>
-        <p className="text-sm text-ink-500">Pronto para mais uma sessão?</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="font-display text-2xl font-bold tracking-tight">
+            Olá, {profile?.full_name?.split(" ")[0] ?? "atleta"}.
+          </h1>
+          <p className="text-sm text-ink-500">Pronto para mais uma sessão?</p>
+        </div>
+        <Suspense fallback={<MessagesLink unread={0} />}>
+          <ClientMessagesLink />
+        </Suspense>
       </div>
 
       {/* Sessões disponíveis */}
       <div className="rounded-[18px] border border-[#EBD98F] bg-[#FBF4DE] p-3.5 dark:border-gold-400/30 dark:bg-gold-400/10">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="text-sm font-medium text-[#8A6D12] dark:text-gold-300">Sessões disponíveis</span>
-          <span className="flex items-baseline gap-1.5 text-[#3d3100] dark:text-gold-100">
-            <strong className="font-display text-3xl tabular-nums">{credits.total}</strong>
-            <span className="text-xs">{pluralize(credits.total, "sessão", "sessões")}</span>
-          </span>
+        <div className="flex items-baseline gap-2 text-[#3d3100] dark:text-gold-100">
+          <strong className="font-display text-3xl tabular-nums">{credits.total}</strong>
+          <span className="text-sm font-medium">{pluralize(credits.total, "sessão disponível", "sessões disponíveis")}</span>
         </div>
         <div className="mt-2.5 flex gap-2.5">
           <Link
@@ -340,5 +343,24 @@ async function BelowFold({
       </section>
 
     </>
+  );
+}
+
+async function ClientMessagesLink() {
+  const context = await chatContext();
+  if (!context) return <MessagesLink unread={0} />;
+  const { count } = await (context.db as any).from("leap_chat_messages")
+    .select("id", { count: "exact", head: true })
+    .eq("client_id", context.clientId).eq("staff_id", context.staffId)
+    .eq("sender_id", context.staffId).is("read_at", null);
+  return <MessagesLink unread={count ?? 0} />;
+}
+
+function MessagesLink({ unread }: { unread: number }) {
+  return (
+    <Link href="/app/mensagens" className="btn-outline min-h-11 gap-2">
+      <MessageCircle size={16} aria-hidden="true" /> Mensagens
+      {unread > 0 && <span className="chip-gold" aria-label={`${unread} por ler`}>{unread}</span>}
+    </Link>
   );
 }
