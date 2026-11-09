@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createAdminClient, getCurrentProfile } from "@/lib/supabase/server";
 import { chatContext } from "@/lib/chat";
-import { ChatThread } from "@/components/chat-thread";
+import { ChatThread, chatContactLabel } from "@/components/chat-thread";
 
 export default async function ClientMessages({ searchParams }: {
   searchParams: Promise<{ treino?: string; antes?: string; equipa?: string }>;
@@ -13,7 +13,7 @@ export default async function ClientMessages({ searchParams }: {
     ? await getTeamChats(profile.id) : [];
 
   return (
-    <div className="space-y-4">
+    <div className="flex h-full min-h-0 flex-col gap-3 pb-1 md:h-[calc(100dvh-11rem)] md:min-h-[28rem]">
       <Link href="/app/dashboard" className="text-sm font-semibold text-gold-700 dark:text-gold-300">← Início</Link>
       <h1 className="font-display text-2xl font-bold">Mensagens</h1>
       {chats.length > 0 && (
@@ -22,12 +22,12 @@ export default async function ClientMessages({ searchParams }: {
           {chats.filter(chat => chat.id !== context?.staffId || requested).map(chat => (
             <Link key={chat.id} href={`/app/mensagens?equipa=${chat.id}`}
               aria-current={requested === chat.id ? "page" : undefined} className="btn-outline min-h-11">
-              {chat.full_name}
+              {chatContactLabel(chat.full_name)}
             </Link>
           ))}
         </nav>
       )}
-      {context ? <ChatThread context={context} bookingId={params.treino} before={params.antes} /> :
+      {context ? <ChatThread context={context} bookingId={params.treino} before={params.antes} fill /> :
         <p className="card p-4 text-sm">A conversa fica disponível assim que tiveres um treinador associado.</p>}
     </div>
   );
