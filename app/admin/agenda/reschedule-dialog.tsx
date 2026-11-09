@@ -33,6 +33,7 @@ function prettyDate(iso: string) {
 export function RescheduleDialog() {
   const router = useRouter();
   const [detail, setDetail] = useState<Detail | null>(null);
+  const [message, setMessage] = useState("");
   const [notify, setNotify] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // Pedido de confirmação pendente: "overlap" (sobrepõe outra sessão) ou
@@ -45,6 +46,7 @@ export function RescheduleDialog() {
       const d = (e as CustomEvent).detail as Detail;
       setDetail(d);
       setNotify(true);
+      setMessage("");
       setError(null);
       setConfirmKind(null);
     }
@@ -79,6 +81,7 @@ export function RescheduleDialog() {
         startsAtIso,
         durationMin: detail.durationMin,
         notify,
+        message: notify ? message : undefined,
         force,
       });
       if (res?.busy) {
@@ -108,7 +111,7 @@ export function RescheduleDialog() {
         if (e.target === e.currentTarget) setDetail(null);
       }}
     >
-      <div className="w-full rounded-t-2xl bg-white p-5 shadow-xl dark:bg-ink-800 sm:max-w-sm sm:rounded-2xl">
+      <div className="max-h-[90dvh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl dark:bg-ink-800 sm:max-w-sm sm:rounded-2xl">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="inline-flex items-center gap-2 font-display text-lg font-bold">
             <CalendarClock size={18} /> Reagendar sessão
@@ -147,6 +150,21 @@ export function RescheduleDialog() {
             </span>
           </span>
         </label>
+
+        {notify && (
+          <label className="mb-4 block text-sm font-medium">
+            Mensagem no chat (opcional)
+            <textarea
+              className="input mt-1 w-full"
+              rows={2}
+              maxLength={1000}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              disabled={pending}
+              placeholder="Escreve uma mensagem sobre o novo horário…"
+            />
+          </label>
+        )}
 
         {error && (
           <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">

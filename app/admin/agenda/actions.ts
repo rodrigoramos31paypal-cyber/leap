@@ -590,10 +590,13 @@ export async function rescheduleBookingAdminAction(args: {
   startsAtIso: string;
   durationMin: number;
   notify: boolean;
+  message?: string;
   force?: boolean;
 }): Promise<{ ok?: true; error?: string; conflict?: true; busy?: true }> {
   await requireStaff(); // S-10
   const { bookingId, startsAtIso, durationMin, notify, force } = args;
+  const message = notify && typeof args.message === "string" ? args.message.trim() : "";
+  if (message.length > 1000) return { error: "A mensagem pode ter até 1000 caracteres." };
   if (!bookingId || !startsAtIso || !durationMin) {
     return { error: "Dados em falta para reagendar." };
   }
@@ -628,6 +631,7 @@ export async function rescheduleBookingAdminAction(args: {
       startsAt,
       durationMin,
       notifyClient: notify,
+      message,
       force,
     });
 

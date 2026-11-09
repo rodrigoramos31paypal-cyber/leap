@@ -431,6 +431,7 @@ export async function rescheduleBookingAdmin(args: {
   startsAt: Date;
   durationMin: number;
   notifyClient: boolean;
+  message?: string;
   force?: boolean;
 }): Promise<string> {
   const supabase = await createClient();
@@ -440,6 +441,7 @@ export async function rescheduleBookingAdmin(args: {
     p_duration_min: args.durationMin,
     p_notify_client: args.notifyClient,
     p_force: args.force ?? false,
+    ...(args.message ? { p_message: args.message } : {}),
   });
   if (error) throw error;
   return data as unknown as string;
