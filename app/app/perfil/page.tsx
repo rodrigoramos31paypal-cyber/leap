@@ -6,31 +6,31 @@ import { NotificationCategoryPrefs, type CategoryPrefs } from "@/components/noti
 import { LeaderboardToggle } from "@/components/leaderboard-toggle";
 import { CLIENT_CATEGORIES } from "@/lib/notifications-config";
 import { DeleteAccountSection } from "@/components/delete-account-section";
-import { ShieldCheck, User, Bell, NotebookPen, Plus, Sparkles, KeyRound, CalendarDays, Flame } from "lucide-react";
-import { levelForStreak, LEVEL_LABEL, LEVEL_CHIP } from "@/lib/streak";
+import { ShieldCheck, User, Bell, MessageCircle, Dumbbell, Trophy, KeyRound, CalendarDays, Flame } from "lucide-react";
+import { displayName, levelForStreak, LEVEL_LABEL, LEVEL_CHIP } from "@/lib/streak";
 import { CalendarSubscribeCard } from "@/components/calendar-subscribe-card";
-import { NoteEditor } from "@/components/note-editor";
-import { GeneralNoteEditor } from "@/components/general-note-editor";
-import { listMyNotes } from "@/lib/notes";
-import { formatDateTime } from "@/lib/utils";
+import { chatContext } from "@/lib/chat";
+import { ChatThread } from "@/components/chat-thread";
+import { MedalBadges } from "@/components/medal-badges";
+import { getTrainerForClient } from "@/lib/trainer";
 import { listVerifiedFactors } from "@/lib/mfa";
 import { EnrollCard } from "./seguranca/enroll-card";
 import { unenrollAction } from "./seguranca/actions";
 
 // "seguranca" foi absorvida pela tab "Perfil" — 2FA + mudança de
 // palavra-passe + apagar conta estão agora no mesmo ecrã.
-type TabId = "perfil" | "calendario" | "notas" | "notificacoes";
+type TabId = "perfil" | "calendario" | "chat" | "notificacoes";
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: "perfil",       label: "Perfil",       icon: <User size={14} /> },
   { id: "calendario",   label: "Calendário",   icon: <CalendarDays size={14} /> },
-  { id: "notas",        label: "Notas",        icon: <NotebookPen size={14} /> },
+  { id: "chat", label: "Chat com o PT", icon: <MessageCircle size={14} /> },
   { id: "notificacoes", label: "Notificações", icon: <Bell size={14} /> },
 ];
 
 export default async function PerfilPage(
   props: {
-    searchParams: Promise<{ ok?: string; tab?: string }>;
+    searchParams: Promise<{ ok?: string; tab?: string; antes?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -41,11 +41,15 @@ export default async function PerfilPage(
 
   const activeTab: TabId = ((): TabId => {
     const t = searchParams.tab;
-    if (t === "calendario" || t === "notas" || t === "notificacoes") return t;
+    if (t === "notas") redirect("/app/notas");
+    if (t === "calendario" || t === "chat" || t === "notificacoes") return t;
     return "perfil";
   })();
 
-  const tabData = await loadTabData(activeTab, supabase, user.id);
+  const [tabData, chat] = await Promise.all([
+    loadTabData(activeTab, supabase, user.id),
+    activeTab === "chat" ? chatContext() : Promise.resolve(null),
+  ]);
 
   return (
     <div className="space-y-5">
@@ -66,6 +70,7 @@ export default async function PerfilPage(
           factors={tabData.factors ?? []}
           activity={tabData.activity ?? null}
           streak={tabData.streak ?? null}
+          athlete={tabData.athlete}
         />
       )}
       {activeTab === "calendario" && (
@@ -75,7 +80,10 @@ export default async function PerfilPage(
           feedLastFetchedAt={tabData.feedLastFetchedAt ?? null}
         />
       )}
-      {activeTab === "notas" && <NotasTab notes={tabData.notes ?? []} />}
+      {activeTab === "chat" && (chat
+        ? <ChatThread context={chat} before={searchParams.antes} inProfile />
+        : <p className="card p-4 text-sm">A conversa fica disponível assim que tiveres um treinador associado.</p>
+      )}
       {activeTab === "notificacoes" && (
         <NotificacoesTab prefs={tabData.notifPrefs ?? {}} />
       )}
@@ -89,7 +97,7 @@ function TabNav({ active }: { active: TabId }) {
   const short: Record<TabId, string> = {
     perfil: "Perfil",
     calendario: "Calendário",
-    notas: "Notas",
+    chat: "Chat com o PT",
     notificacoes: "Notificações",
   };
   return (
@@ -102,8 +110,8 @@ function TabNav({ active }: { active: TabId }) {
             href={`/app/perfil?tab=${t.id}`}
             className={
               isActive
-                ? "flex-1 truncate rounded-lg bg-white px-0.5 py-1.5 text-center text-[10.5px] font-semibold text-ink-900 shadow-sm dark:bg-ink-800 dark:text-bone-50"
-                : "flex-1 truncate rounded-lg px-0.5 py-1.5 text-center text-[10.5px] font-medium text-ink-500 transition hover:text-ink-900 dark:hover:text-bone-50"
+                ? "flex min-h-10 flex-1 items-center justify-center rounded-lg bg-white px-0.5 py-1.5 text-center text-[10.5px] font-semibold text-ink-900 shadow-sm dark:bg-ink-800 dark:text-bone-50"
+                : "flex min-h-10 flex-1 items-center justify-center rounded-lg px-0.5 py-1.5 text-center text-[10.5px] font-medium text-ink-500 transition hover:text-ink-900 dark:hover:text-bone-50"
             }
           >
             {short[t.id] ?? t.label}
@@ -122,13 +130,16 @@ async function loadTabData(
   const data: any = {};
 
   if (tab === "perfil") {
-    const [{ data: profile }, { data: summaryRows }, { data: streakRows }] = await Promise.all([
+    const [{ data: profile }, { data: summaryRows }, { data: streakRows }, athlete, factors] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", userId).single(),
       (supabase as any).rpc("get_client_activity_summary", { p_client: userId }),
       (supabase as any).rpc("get_client_streak", { p_client: userId }),
+      loadAthleteStats(supabase, userId),
+      listVerifiedFactors().catch(() => []),
     ]);
     data.profile = profile;
-    data.factors = await listVerifiedFactors().catch(() => []);
+    data.factors = factors;
+    data.athlete = athlete;
     data.activity = (summaryRows as any[] | null)?.[0] ?? null;
     data.streak = (streakRows as any[] | null)?.[0] ?? null;
   }
@@ -154,10 +165,6 @@ async function loadTabData(
     data.feedLastFetchedAt = (profile as any)?.calendar_feed_last_fetched_at ?? null;
   }
 
-  if (tab === "notas") {
-    data.notes = await listMyNotes({ clientId: userId, limit: 100 });
-  }
-
   if (tab === "notificacoes") {
     const { data: prefsRows } = await (supabase as any)
       .from("notification_preferences")
@@ -176,16 +183,43 @@ async function loadTabData(
   return data;
 }
 
+type AthleteStats = {
+  activities: number | null;
+  medals: { gold: number; silver: number; bronze: number } | null;
+};
+
+async function loadAthleteStats(supabase: Awaited<ReturnType<typeof createClient>>, userId: string): Promise<AthleteStats> {
+  const now = new Date();
+  const day = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  const [sessions, extras, medals] = await Promise.all([
+    (supabase as any).from("bookings").select("id", { count: "exact", head: true })
+      .or(`client_id.eq.${userId},partner_client_id.eq.${userId},partner2_client_id.eq.${userId}`)
+      .in("status", ["booked", "confirmed"]).lte("ends_at", now.toISOString()),
+    (supabase as any).from("activities").select("id", { count: "exact", head: true })
+      .eq("client_id", userId).eq("status", "validated").lte("activity_date", day),
+    (async () => {
+      const trainerId = await getTrainerForClient(userId);
+      if (!trainerId) return null;
+      const { data, error } = await (supabase as any).rpc("get_trainer_medals", { p_trainer: trainerId });
+      if (error) return null;
+      return data?.find((row: { client_id: string }) => row.client_id === userId) ?? { gold: 0, silver: 0, bronze: 0 };
+    })(),
+  ]);
+  return { activities: sessions.error || extras.error ? null : (sessions.count ?? 0) + (extras.count ?? 0), medals };
+}
+
 function PerfilTab({
   profile,
   factors,
   activity,
   streak,
+  athlete,
 }: {
   profile: any;
   factors: any[];
   activity: any;
   streak: any;
+  athlete: AthleteStats;
 }) {
   const hasFactor = factors.length > 0;
   const today = new Date().toISOString().slice(0, 10);
@@ -193,6 +227,9 @@ function PerfilTab({
   const streakWeeks = Number(streak?.current_streak ?? 0);
   const lvl = levelForStreak(streakWeeks);
   const chip = LEVEL_CHIP[lvl];
+  const name = displayName(profile?.full_name);
+  const medals = athlete.medals;
+  const trophyCount = medals ? medals.gold + medals.silver + medals.bronze : null;
   const packPct = activity?.pack_pct ?? null;
   const total = Number(activity?.activities_total ?? 0);
   const ptDone = Number(activity?.pt_done ?? 0);
@@ -201,6 +238,33 @@ function PerfilTab({
 
   return (
     <div className="space-y-4">
+      <section aria-label="Perfil de atleta LEAP" className="space-y-3">
+        <div className="relative overflow-hidden rounded-2xl border border-gold-400/30 bg-ink-900 p-5 text-bone-50">
+          <div className="absolute inset-0 bg-gradient-to-br from-gold-400/20 via-transparent to-transparent" aria-hidden="true" />
+          <div className="relative flex items-center gap-4">
+            <div className="grid size-16 shrink-0 place-items-center rounded-2xl border border-gold-400/50 bg-gold-400/10 text-3xl font-bold text-gold-300" aria-hidden="true">{Array.from(name)[0]}</div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-widest text-gold-300">Atleta LEAP</p>
+              <h2 className="break-words font-display text-2xl font-bold">{name}</h2>
+              <span className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${chip.bg} ${chip.text}`}>
+                <ShieldCheck size={14} aria-hidden="true" /> {LEVEL_LABEL[lvl]}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <AthleteStat icon={<Dumbbell size={18} />} value={athlete.activities} label="Atividades no total" />
+          <AthleteStat icon={<Flame size={18} />} value={streak ? Number(streak.best_streak ?? 0) : null} label="Melhor sequência" unit={streak?.best_streak === 1 ? "semana" : "semanas"} />
+          <AthleteStat icon={<Trophy size={18} />} value={trophyCount} label="Troféus" />
+        </div>
+        {medals && trophyCount ? (
+          <div className="card flex flex-wrap items-center justify-between gap-2 p-3">
+            <span className="text-sm font-semibold">Vitrine de troféus</span>
+            <MedalBadges {...medals} size={15} />
+          </div>
+        ) : null}
+      </section>
+
       {/* Resumo de consistência (mês corrente) */}
       <div className="card space-y-3 p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">A tua consistência</h2>
@@ -230,14 +294,7 @@ function PerfilTab({
             {ptDone} {ptDone === 1 ? "sessão PT" : "sessões PT"} · {autoDone} {autoDone === 1 ? "treino autónomo" : "treinos autónomos"} · {cardioDone} {cardioDone === 1 ? "cardio" : "cardios"}
           </div>
         </div>
-        <div className="flex items-center justify-between">
-          <span className="inline-flex items-center gap-1.5 text-[11px] text-ink-500">
-            <Flame size={13} className="text-gold-500" /> Nível
-          </span>
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${chip.bg} ${chip.text}`}>
-            {LEVEL_LABEL[lvl]}
-          </span>
-        </div>
+
       </div>
 
       <form action={updateProfileAction} className="card space-y-4 p-5">
@@ -399,55 +456,13 @@ function CalendarioTab({
   );
 }
 
-function NotasTab({ notes }: { notes: any[] }) {
+function AthleteStat({ icon, value, label, unit }: { icon: React.ReactNode; value: number | null; label: string; unit?: string }) {
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-ink-500">Diário das tuas sessões. Só tu lês.</p>
-        <Link href="/app/notas/nova" className="btn-primary inline-flex shrink-0 items-center gap-1.5 text-xs">
-          <Plus size={14} /> Adicionar nota
-        </Link>
-      </div>
-      {notes.length === 0 ? (
-        <div className="card p-5 text-center text-sm text-ink-500">
-          Ainda não tens notas. Carrega em{" "}
-          <Link href="/app/notas/nova" className="font-semibold text-gold-600">Adicionar nota</Link>{" "}
-          para começar.
-        </div>
-      ) : (
-        <ul className="space-y-3">
-          {notes.map((n: any) => (
-            <li key={n.id} className="card p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  {n.booking_id ? (
-                    <>
-                      <div className="text-sm font-semibold">
-                        {n.bookings?.starts_at ? formatDateTime(n.bookings.starts_at) : "—"}
-                      </div>
-                      <div className="text-xs text-ink-500 capitalize">{n.bookings?.session_type ?? "sessão"}</div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="inline-flex items-center gap-1.5 text-sm font-semibold">
-                        <Sparkles size={12} className="text-gold-600" /> Nota geral
-                      </div>
-                      <div className="text-xs text-ink-500">{formatDateTime(n.created_at)}</div>
-                    </>
-                  )}
-                </div>
-              </div>
-              <div className="mt-3 border-t border-ink-900/5 pt-3">
-                {n.booking_id ? (
-                  <NoteEditor bookingId={n.booking_id} initialBody={n.body} compact />
-                ) : (
-                  <GeneralNoteEditor noteId={n.id} initialBody={n.body} />
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+    <div className="card min-w-0 p-3">
+      <span className="text-gold-600 dark:text-gold-300" aria-hidden="true">{icon}</span>
+      <p className="mt-2 font-display text-2xl font-bold tabular-nums">{value ?? "—"}</p>
+      {unit && value != null && <p className="text-xs text-ink-500">{unit}</p>}
+      <p className="mt-1 text-xs font-semibold">{label}</p>
     </div>
   );
 }
