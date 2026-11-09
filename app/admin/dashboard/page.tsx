@@ -117,7 +117,7 @@ async function Kpis({ year, month }: { year: number; month: number }) {
   // vazio devolve zeros. FALLBACK: se a RPC falhar (ex.: codigo deployed
   // antes da migracao 0084 ser aplicada), corre o caminho antigo para o
   // dashboard nao partir.
-  const [kpiRes, totalClientsInScope, pendingApprovalRes, pendingActivities] = await Promise.all([
+  const [kpiRes, totalClientsInScope, pendingActivities, pendingApprovalRes] = await Promise.all([
     (supabase as any).rpc("get_dashboard_kpis", {
       p_trainer_ids: trainerIds,
       p_month_start: monthStart.toISOString(),
