@@ -9,6 +9,7 @@ import { Toaster } from "@/components/toaster";
 import { AppUpdater } from "@/components/app-updater";
 import { PushAutoHeal } from "@/components/push-auto-heal";
 import { SwNavigator } from "@/components/sw-navigator";
+import { ViewportKeyboard } from "@/components/viewport-keyboard";
 import { AppHeight } from "@/components/app-height";
 import { consumeFlash } from "@/lib/flash";
 import { ViewerModeProvider } from "@/components/viewer-mode";
@@ -83,8 +84,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <ViewerModeProvider isViewer={isViewer}>
-    <div className="flex h-[var(--app-height,100dvh)] flex-col overflow-hidden bg-bone-50 dark:bg-ink-900 md:block md:h-auto md:min-h-[100dvh] md:overflow-visible">
+    <div id="admin-app-shell" className="flex h-[var(--app-height,100dvh)] flex-col overflow-hidden bg-bone-50 dark:bg-ink-900 md:block md:h-auto md:min-h-[100dvh] md:overflow-visible">
       <AppHeight />
+      <ViewportKeyboard />
       <TopBar
         right={profile?.role === "owner" || profile?.role === "trainer" ? <AdminChatIcon /> : undefined}
         title="Admin"
