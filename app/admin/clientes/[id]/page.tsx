@@ -1,3 +1,4 @@
+import { StoreInterestList } from "@/components/store-interest-list";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { NotebookPen, Plus, EyeOff, Eye, Cake } from "lucide-react";
@@ -244,6 +245,7 @@ export default async function ClientDetail(props: {
 
       {tab === "resumo" && (
         <>
+          <StoreInterestList clientId={profileId} />
           {profile.banned && (
             <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
               Compras bloqueadas — este cliente não consegue comprar packs.

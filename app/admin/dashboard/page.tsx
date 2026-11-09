@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { createClient, getCurrentProfile } from "@/lib/supabase/server";
 import { eur, formatDateTime } from "@/lib/utils";
-import { CreditCard, Calendar, Users, TrendingUp, Activity, Package, ChevronLeft, ChevronRight, Heart } from "lucide-react";
+import { CreditCard, Calendar, Users, TrendingUp, Activity, Package, ChevronLeft, ChevronRight } from "lucide-react";
 import { getAccessibleTrainerIds, getClientCountInScope } from "@/lib/trainer";
 import { KpiGridSkeleton, CardSkeleton } from "@/components/skeleton";
 import { PushSubscribeCard } from "@/components/push-subscribe-card";
@@ -69,10 +69,6 @@ export default async function AdminDashboard(props: { searchParams: Promise<{ m?
         </div>
       </div>
 
-      <Suspense fallback={null}>
-        <ProductInterestsShortcut />
-      </Suspense>
-
       <PushSubscribeCard />
 
       <Suspense fallback={<KpisSkeleton />}>
@@ -81,6 +77,10 @@ export default async function AdminDashboard(props: { searchParams: Promise<{ m?
 
       <Suspense fallback={<TodaySkeleton />}>
         <TodaySessions />
+      </Suspense>
+
+      <Suspense fallback={null}>
+        <ProductInterestsShortcut />
       </Suspense>
     </div>
   );
@@ -340,14 +340,13 @@ async function ProductInterestsShortcut() {
   const { count, error } = await (supabase as any).from("store_product_interests")
     .select("id", { count: "exact", head: true });
   return (
-    <Link href="/admin/produtos-de-interesse" className="card flex min-h-14 items-center gap-3 p-4 transition hover:border-gold-400">
-      <Heart size={20} className="shrink-0 text-gold-600 dark:text-gold-300" aria-hidden="true" />
-      <span className="flex-1">
-        <span className="block font-semibold">Produtos de interesse</span>
-        <span className="block text-xs text-ink-500">Vê que clientes se interessaram por cada produto.</span>
-      </span>
-      {!error && <span className="chip-gold">{count ?? 0}</span>}
-      <ChevronRight size={17} className="shrink-0 text-ink-500" aria-hidden="true" />
-    </Link>
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <Stat
+        icon={<Package size={16} aria-hidden="true" />}
+        label="Produtos de interesse dos clientes"
+        value={error ? "—" : String(count ?? 0)}
+        href="/admin/produtos-de-interesse"
+      />
+    </div>
   );
 }

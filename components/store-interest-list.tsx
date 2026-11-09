@@ -15,7 +15,7 @@ const PAGE_SIZE = 30;
 const LIST_PATH = "/admin/produtos-de-interesse";
 
 // A RLS limita os pedidos aos produtos dos treinadores acessíveis ao staff.
-export async function StoreInterestList({ page }: { page?: number } = {}) {
+export async function StoreInterestList({ page, clientId }: { page?: number; clientId?: string } = {}) {
   const profile = await getCurrentProfile();
   if (!profile || !["trainer", "owner"].includes(profile.role)) return null;
   await requireStaff();
@@ -24,6 +24,7 @@ export async function StoreInterestList({ page }: { page?: number } = {}) {
     .select("id, created_at, client_id, product:store_products(name), client:profiles(full_name)")
     .order("created_at", { ascending: false })
     .order("id", { ascending: false });
+  if (clientId) query.eq("client_id", clientId);
   const offset = ((page ?? 1) - 1) * PAGE_SIZE;
   const { data, error } = await (page ? query.range(offset, offset + PAGE_SIZE) : query.limit(100));
   const interests = (data ?? []) as Interest[];
@@ -33,7 +34,7 @@ export async function StoreInterestList({ page }: { page?: number } = {}) {
     <section className="card p-4">
       {!page && (
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-display text-lg font-bold">Interesses em suplementos</h2>
+          <h2 className="font-display text-lg font-bold">{clientId ? "Produtos de interesse" : "Interesses em suplementos"}</h2>
           <Link href={LIST_PATH} className="text-sm font-semibold text-gold-700 dark:text-gold-300">Ver todos →</Link>
         </div>
       )}
@@ -44,10 +45,10 @@ export async function StoreInterestList({ page }: { page?: number } = {}) {
       ) : (
         <ul className="divide-y divide-ink-900/10 dark:divide-white/10">
           {visible.map(interest => (
-            <li key={interest.id} className="grid items-baseline gap-1 py-3 sm:grid-cols-[1fr_1.5fr_auto] sm:gap-4">
-              <Link href={`/admin/clientes/${interest.client_id}`} className="break-words text-sm font-semibold text-gold-700 underline dark:text-gold-300">
+            <li key={interest.id} className="grid items-baseline gap-1 py-3 sm:flex sm:justify-between sm:gap-4">
+              {!clientId && <Link href={`/admin/clientes/${interest.client_id}`} className="break-words text-sm font-semibold text-gold-700 underline dark:text-gold-300">
                 {interest.client?.full_name ?? "Ver cliente"}
-              </Link>
+              </Link>}
               <p className="break-words text-sm">{interest.product?.name ?? "Produto"}</p>
               <time dateTime={interest.created_at} className="text-xs text-ink-500">{formatDateTime(interest.created_at)}</time>
             </li>
