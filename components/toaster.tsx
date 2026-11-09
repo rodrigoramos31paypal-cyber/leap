@@ -6,6 +6,7 @@
 // e auto-dismiss em ~4s.
 // ════════════════════════════════════════════════════════════════
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CheckCircle2, AlertCircle, Info, X } from "lucide-react";
 import type { Flash } from "@/lib/flash-types";
 
@@ -89,8 +90,8 @@ export function Toaster({ initial }: { initial: Flash | null }) {
 
   if (items.length === 0) return null;
 
-  return (
-    <div className="pointer-events-none fixed inset-x-0 top-16 z-[60] flex flex-col items-center gap-2 px-4 sm:top-20 sm:right-6 sm:left-auto sm:items-end">
+  return createPortal(
+    <div className="pointer-events-none fixed left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] top-[calc(env(safe-area-inset-top,0px)+5rem)] z-[100] flex flex-col items-center gap-2 sm:items-end">
       {items.map((t) => (
         <div
           key={t.id}
@@ -104,7 +105,7 @@ export function Toaster({ initial }: { initial: Flash | null }) {
                 : "border-emerald-200 bg-emerald-50 text-emerald-900"
           }`}
         >
-          <span className="mt-0.5">
+          <span className="mt-0.5 shrink-0">
             {t.kind === "error" ? (
               <AlertCircle size={16} />
             ) : t.kind === "info" ? (
@@ -113,20 +114,21 @@ export function Toaster({ initial }: { initial: Flash | null }) {
               <CheckCircle2 size={16} />
             )}
           </span>
-          <div className="flex-1">
+          <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
             <div className="font-semibold">{t.title}</div>
             {t.body && <div className="mt-0.5 text-xs opacity-80">{t.body}</div>}
           </div>
           <button
             type="button"
             onClick={() => dismiss(t.id)}
-            className="rounded p-1 opacity-60 hover:opacity-100"
+            className="grid min-h-8 min-w-8 shrink-0 place-items-center rounded opacity-60 hover:opacity-100"
             aria-label="Fechar"
           >
             <X size={14} />
           </button>
         </div>
       ))}
-    </div>
+    </div>,
+    document.body,
   );
 }
