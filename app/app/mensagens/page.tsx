@@ -36,7 +36,7 @@ export default async function ClientMessages({ searchParams }: {
 async function getTeamChats(clientId: string): Promise<{ id: string; full_name: string }[]> {
   const db = createAdminClient();
   const { data, error } = await (db as any).from("leap_chat_messages")
-    .select("staff_id,sender_id").eq("client_id", clientId).neq("sender_id", clientId)
+    .select("staff_id").eq("client_id", clientId)
     .order("created_at", { ascending: false }).limit(100);
   if (error || !data?.length) return [];
   const ids = [...new Set<string>(data.map((row: { staff_id: string }) => row.staff_id))];
