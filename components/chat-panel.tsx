@@ -11,13 +11,14 @@ const dayKey = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Lisbon", dat
 const dayLabel = new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", dateStyle: "medium" });
 const messageTime = new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", hour: "2-digit", minute: "2-digit" });
 
-export function ChatPanel({ messages, userId, clientId, recipientId, booking, latest }: {
+export function ChatPanel({ messages, userId, clientId, recipientId, booking, latest, fill }: {
   messages: ChatMessage[];
   userId: string;
   clientId?: string;
   recipientId?: string;
   booking?: { id: string; starts_at: string } | null;
   latest: boolean;
+  fill?: boolean;
 }) {
   const router = useRouter();
   const history = useRef<HTMLDivElement>(null);
@@ -55,13 +56,13 @@ export function ChatPanel({ messages, userId, clientId, recipientId, booking, la
 
   const today = dayKey.format(new Date());
   return (
-    <div className="overflow-hidden rounded-2xl border border-ink-900/10 bg-bone-100 dark:border-white/10 dark:bg-ink-900">
+    <div className={`overflow-hidden rounded-2xl border border-ink-900/10 bg-bone-100 dark:border-white/10 dark:bg-ink-900 ${fill ? "flex min-h-0 flex-1 flex-col" : ""}`}>
       <div ref={history} tabIndex={0} aria-label="Histórico da conversa"
         onScroll={event => {
           const { scrollHeight, scrollTop, clientHeight } = event.currentTarget;
           followLatest.current = scrollHeight - scrollTop - clientHeight < 80;
         }}
-        className="min-h-32 max-h-[min(52dvh,32rem)] overflow-y-auto overscroll-contain px-3 py-4 sm:px-5">
+        className={`overflow-y-auto overscroll-contain px-3 py-4 sm:px-5 ${fill ? "min-h-0 flex-1" : "min-h-32 max-h-[min(52dvh,32rem)]"}`}>
         {messages.length ? (
           <ol aria-label="Mensagens da conversa">
             {messages.map((message, index) => {
@@ -105,7 +106,7 @@ export function ChatPanel({ messages, userId, clientId, recipientId, booking, la
         ) : <p className="py-6 text-center text-sm text-ink-500">Envia uma mensagem para começar a conversa.</p>}
       </div>
       {latest && (
-        <form className="space-y-2 border-t border-ink-900/10 bg-bone-50 p-2.5 dark:border-white/10 dark:bg-ink-900" onSubmit={event => {
+        <form className="shrink-0 space-y-2 border-t border-ink-900/10 bg-bone-50 p-2.5 dark:border-white/10 dark:bg-ink-900" onSubmit={event => {
           event.preventDefault();
           if (pending || !body.trim()) return;
           setError("");
