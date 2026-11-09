@@ -3,16 +3,14 @@ import { redirect, notFound } from "next/navigation";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { formatDateTime, BOOKING_STATUS } from "@/lib/utils";
 import { cancelBookingAction, rebookAction } from "@/app/app/historico/actions";
-import { CalendarPlus, RefreshCcw, X, NotebookPen, MessageCircle, ChevronRight, Star, Users } from "lucide-react";
+import { CalendarPlus, RefreshCcw, X, MessageCircle, ChevronRight, Star, Users } from "lucide-react";
 import { BackLink } from "@/components/back-link";
-import { NoteEditor } from "@/components/note-editor";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
-import { getMyNoteForBooking } from "@/lib/notes";
 import { getMyRatingForBooking } from "@/lib/ratings";
 import { signBookingIcs } from "@/lib/calendar-token";
 
 // Página de uma sessão específica (cliente). Opções: adicionar ao
-// calendário, reagendar, cancelar, avaliar e as minhas notas.
+// calendário, reagendar, cancelar, avaliar e contactar o PT.
 export default async function SessaoPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const user = await getSessionUser();
@@ -37,7 +35,6 @@ export default async function SessaoPage(props: { params: Promise<{ id: string }
     ? (user.id === b.client_id ? b.partner_profiles?.full_name : b.profiles?.full_name) ?? null
     : null;
 
-  const note = await getMyNoteForBooking(b.id);
   const isFuture = new Date(b.starts_at).getTime() > Date.now();
   const canModify = isFuture && (b.status === "booked" || b.status === "confirmed");
 
@@ -197,17 +194,10 @@ export default async function SessaoPage(props: { params: Promise<{ id: string }
       )}
 
       <Link href={`/app/mensagens?treino=${b.id}`} className="btn-primary min-h-11 gap-2">
-        <MessageCircle size={16} aria-hidden="true" /> Enviar mensagem
+        <MessageCircle size={16} aria-hidden="true" /> Enviar mensagem ao PT
       </Link>
 
-      <div>
-        <h2 className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-ink-500">
-          <NotebookPen size={14} /> As minhas notas
-        </h2>
-        <div className="card p-4">
-          <NoteEditor bookingId={b.id} initialBody={note?.body ?? undefined} compact sharedWithTrainer />
-        </div>
-      </div>
+
     </div>
   );
 }
