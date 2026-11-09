@@ -50,7 +50,7 @@ export default async function LojaCategoriaPage(props: { params: Promise<{ categ
       </header>
       {supplements && <div className="rounded-2xl bg-bone-100 p-4 dark:bg-white/5">
         <p className="text-sm font-semibold">Gostavas de saber mais sobre um produto?</p>
-        <p className="mt-1 text-xs text-ink-500">Ao declarares interesse, o pedido fica disponível para a equipa LEAP. Não é uma encomenda e não implica pagamento.</p>
+        <p className="mt-1 text-xs text-ink-500">Consulta o preço no site da Prozis. Se quiseres saber que condições se aplicam através da LEAP, declara interesse e confirma com a equipa antes de comprar. A declaração não cria uma encomenda nem implica pagamento.</p>
         <a href="https://www.prozis.com/pt/pt" target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-gold-700 dark:text-gold-300">Explorar o site da Prozis <ArrowUpRight size={16} /><span className="sr-only"> (nova janela)</span></a>
       </div>}
       {interestsResult.error && <p role="alert" className="text-sm text-amber-800 dark:text-amber-300">Não conseguimos carregar os teus interesses anteriores. Podes tentar novamente; os pedidos não serão duplicados.</p>}

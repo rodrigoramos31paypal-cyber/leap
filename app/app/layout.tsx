@@ -86,7 +86,7 @@ export default async function ClientLayout({ children }: { children: React.React
       {/* Mobile: main é o contentor de SCROLL (flex-1 + min-h-0) numa coluna
           de altura = viewport (100lvh). A barra fica em fluxo no fundo → não
           pode flutuar. Desktop (md): scroll normal do documento. */}
-      <main className="mx-auto min-h-0 w-full max-w-6xl flex-1 overflow-y-auto overflow-x-hidden px-4 pt-1 pb-6 md:flex-none md:overflow-visible">{children}</main>
+      <main className="mx-auto min-h-0 w-full max-w-6xl flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain px-4 pt-1 pb-6 md:flex-none md:overflow-visible">{children}</main>
       <BottomNav variant="client" />
     </div>
   );
