@@ -1,4 +1,3 @@
-import { chatContext } from "@/lib/chat";
 import Image from "next/image";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -7,7 +6,7 @@ import { createClient, getSessionUser, getCurrentProfile } from "@/lib/supabase/
 import { CardSkeleton } from "@/components/skeleton";
 import { getClientCredits, getClientCreditsByTrainer } from "@/lib/credits";
 import { formatDateTime, pluralize } from "@/lib/utils";
-import { Calendar, ShoppingBag, AlertCircle, ChevronRight, Trophy, MessageCircle } from "lucide-react";
+import { Calendar, ShoppingBag, AlertCircle, ChevronRight, Trophy } from "lucide-react";
 import { levelForStreak, LEVEL_LABEL } from "@/lib/streak";
 import { getTrainerForClient, getActiveTrainersPublic } from "@/lib/trainer";
 import { PushSubscribeCard } from "@/components/push-subscribe-card";
@@ -27,7 +26,6 @@ export default async function ClientDashboard() {
     credits,
     creditsByTrainer,
     { data: upcoming },
-    { data: latestPackRows },
     { data: banners },
   ] = await Promise.all([
     getCurrentProfile(),
@@ -42,13 +40,6 @@ export default async function ClientDashboard() {
       .gte("starts_at", nowIso)
       .order("starts_at", { ascending: true })
       .limit(1),
-    supabase
-      .from("purchases")
-      .select("id, pack_snapshot, sessions_total, sessions_remaining, created_at, expires_at")
-      .eq("client_id", user.id)
-      .eq("status", "confirmed")
-      .order("created_at", { ascending: false })
-      .limit(5),
     (supabase as any)
       .from("promo_banners")
       .select("id, title, subtitle, image_url, button_label, link_url")
@@ -78,9 +69,6 @@ export default async function ClientDashboard() {
           </h1>
           <p className="text-sm text-ink-500">Pronto para mais uma sessão?</p>
         </div>
-        <Suspense fallback={<MessagesLink unread={0} />}>
-          <ClientMessagesLink />
-        </Suspense>
       </div>
 
       {/* Sessões disponíveis */}
@@ -210,7 +198,6 @@ export default async function ClientDashboard() {
         <BelowFold
           userId={user.id}
           nowIso={nowIso}
-          latestPackRows={(latestPackRows ?? []) as any[]}
           packRemaining={credits.total}
           packTotal={credits.totalAttributed}
         />
@@ -224,40 +211,26 @@ export default async function ClientDashboard() {
 async function BelowFold({
   userId,
   nowIso,
-  latestPackRows,
   packRemaining,
   packTotal,
 }: {
   userId: string;
   nowIso: string;
-  latestPackRows: any[];
   // Agregados de TODOS os packs activos (não-expirados, com saldo > 0),
   // alinhados com "Sessões disponíveis". packRemaining === credits.total.
   packRemaining: number;
   packTotal: number;
 }) {
   const supabase = await createClient();
-  const nowMs = Date.now();
+  const countAttendance = (status: "confirmed" | "no_show") =>
+    supabase.from("bookings").select("id", { count: "exact", head: true })
+      .or(`client_id.eq.${userId},partner_client_id.eq.${userId},partner2_client_id.eq.${userId}`)
+      .lt("starts_at", nowIso)
+      .eq("status", status);
 
-  // Pack activo mais recente — usado apenas para a janela da taxa de presença.
-  const latestPack = (latestPackRows as any[]).find(
-    (p) =>
-      p.sessions_remaining > 0 &&
-      (!p.expires_at || new Date(p.expires_at).getTime() >= nowMs),
-  ) as any | undefined;
-
-  // Só o progresso precisa destas consultas; o histórico tem página própria.
-  const [presencaRes, streakRes, lbRows] = await Promise.all([
-    latestPack
-      ? supabase
-          .from("bookings")
-          .select("status")
-          // DUO: a sessão dupla também desconta ao par — conta para a presença.
-          .or(`client_id.eq.${userId},partner_client_id.eq.${userId}`)
-          .gte("starts_at", latestPack.created_at)
-          .lt("starts_at", nowIso)
-          .in("status", ["confirmed", "no_show"])
-      : Promise.resolve({ data: null }),
+  const [attended, missed, streakRes, lbRows] = await Promise.all([
+    countAttendance("confirmed"),
+    countAttendance("no_show"),
     // Sequência LEAP (0149): sequência atual + estado da semana em curso.
     (supabase as any).rpc("get_client_streak", { p_client: userId }),
     // Posição no Ranking LEAP (card): resolve o trainer e busca o rank.
@@ -276,16 +249,10 @@ async function BelowFold({
   const streakWeeks = Number(streakRow?.current_streak ?? 0);
   const myRank = ((lbRows as any[] | null) ?? []).find((r) => r.client_id === userId)?.rank ?? null;
 
-  // Taxa de presença (apenas do pack activo mais recente).
-  let presenca: number | null = null;
-  let faltas = 0;
-  if (latestPack) {
-    const rows = (presencaRes.data ?? []) as any[];
-    const attended = rows.filter((r) => r.status === "confirmed").length;
-    faltas = rows.filter((r) => r.status === "no_show").length;
-    const tot = attended + faltas;
-    presenca = tot > 0 ? Math.round((attended / tot) * 100) : null;
-  }
+  const attendanceError = attended.error || missed.error;
+  const present = attended.count ?? 0;
+  const total = present + (missed.count ?? 0);
+  const presenca = !attendanceError && total ? Math.round((present / total) * 100) : null;
 
   // Barra agregada: proporção de sessões já usadas (marcadas/decrementadas)
   // sobre o total atribuído nos packs activos. Consistente com "X/Y".
@@ -306,18 +273,20 @@ async function BelowFold({
           <div className="grid grid-cols-3 gap-2">
             <div className="rounded-lg bg-bone-50 p-2.5 dark:bg-white/[0.03]">
               <div className="text-[11px] font-semibold text-ink-600 dark:text-bone-100">O teu pack</div>
-              <div className="mt-1 font-display text-lg font-bold tabular-nums">
-                {packTotal > 0 ? `${packRemaining}/${packTotal}` : "0/0"}
-              </div>
-              <div className="text-[11px] text-ink-500">sessões restantes</div>
+              {packTotal > 0 ? (
+                <>
+                  <div className="mt-1 font-display text-lg font-bold tabular-nums">{packRemaining}/{packTotal}</div>
+                  <div className="text-[11px] text-ink-500">sessões restantes</div>
+                </>
+              ) : <p className="mt-1 text-xs text-ink-500">Sem pack ativo</p>}
             </div>
             <div className="rounded-lg bg-bone-50 p-2.5 dark:bg-white/[0.03]">
               <div className="text-[11px] font-semibold text-ink-600 dark:text-bone-100">Taxa de presença</div>
               <div className="mt-1 font-display text-lg font-bold tabular-nums">
-                {presenca !== null ? `${presenca}%` : "—"}
+                {presenca !== null && `${presenca}%`}
               </div>
               <div className="text-[11px] text-ink-500">
-                {presenca === null ? "Sem dados" : faltas === 0 ? "Excelente" : `${faltas} ${pluralize(faltas, "falta", "faltas")}`}
+                {attendanceError ? "Indisponível" : presenca === null ? "Ainda sem presenças registadas" : "No histórico"}
               </div>
             </div>
             <Link
@@ -343,24 +312,5 @@ async function BelowFold({
       </section>
 
     </>
-  );
-}
-
-async function ClientMessagesLink() {
-  const context = await chatContext();
-  if (!context) return <MessagesLink unread={0} />;
-  const { count } = await (context.db as any).from("leap_chat_messages")
-    .select("id", { count: "exact", head: true })
-    .eq("client_id", context.clientId).eq("staff_id", context.staffId)
-    .eq("sender_id", context.staffId).is("read_at", null);
-  return <MessagesLink unread={count ?? 0} />;
-}
-
-function MessagesLink({ unread }: { unread: number }) {
-  return (
-    <Link href="/app/mensagens" className="btn-outline min-h-11 gap-2">
-      <MessageCircle size={16} aria-hidden="true" /> Mensagens
-      {unread > 0 && <span className="chip-gold" aria-label={`${unread} por ler`}>{unread}</span>}
-    </Link>
   );
 }
