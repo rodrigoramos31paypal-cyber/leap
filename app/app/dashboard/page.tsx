@@ -5,20 +5,13 @@ import { redirect } from "next/navigation";
 import { createClient, getSessionUser, getCurrentProfile } from "@/lib/supabase/server";
 import { CardSkeleton } from "@/components/skeleton";
 import { getClientCredits, getClientCreditsByTrainer } from "@/lib/credits";
-import { formatDateTime, pluralize, BOOKING_STATUS } from "@/lib/utils";
-import { Calendar, ShoppingBag, Dumbbell, AlertCircle, ChevronRight, Trophy } from "lucide-react";
+import { formatDateTime, pluralize } from "@/lib/utils";
+import { Calendar, ShoppingBag, AlertCircle, ChevronRight, Trophy } from "lucide-react";
 import { levelForStreak, LEVEL_LABEL } from "@/lib/streak";
 import { getTrainerForClient, getActiveTrainersPublic } from "@/lib/trainer";
 import { PushSubscribeCard } from "@/components/push-subscribe-card";
 import { PromoSlot } from "@/components/promo-slot";
 import { ActivityButtons } from "@/components/activity-buttons";
-
-// Fillers temporários até o cliente fornecer os banners reais.
-const FILLER_BANNERS = [
-  { id: "f1", title: "O teu ebook em destaque", subtitle: "Espaço promocional", button_label: "Saber mais", image_url: null, link_url: null },
-  { id: "f2", title: "Plano de nutrição", subtitle: "Em breve", button_label: "Ver", image_url: null, link_url: null },
-  { id: "f3", title: "Promoção especial", subtitle: "Brevemente", button_label: "Descobrir", image_url: null, link_url: null },
-];
 
 export default async function ClientDashboard() {
   const user = await getSessionUser();
@@ -27,11 +20,7 @@ export default async function ClientDashboard() {
   const supabase = await createClient();
   const nowIso = new Date().toISOString();
 
-  // PERF (audit #3): só a 1ª vaga (above-the-fold: saldo, CTAs, promo,
-  // próxima sessão) bloqueia o 1º byte. As secções de baixo ("O teu
-  // progresso" + "Histórico recente"), que precisam de queries extra, são
-  // streamed via <Suspense> (BelowFold) — o cartão de sessões e os botões
-  // pintam de imediato. recentPast saiu desta vaga para o BelowFold.
+  // Saldo e próxima sessão primeiro; progresso carregado em paralelo abaixo.
   const [
     profile,
     credits,
@@ -80,7 +69,7 @@ export default async function ClientDashboard() {
     : null;
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-4">
       <div className="-mb-1.5">
         <h1 className="font-display text-2xl font-bold tracking-tight">
           Olá, {profile?.full_name?.split(" ")[0] ?? "atleta"}.
@@ -88,19 +77,16 @@ export default async function ClientDashboard() {
         <p className="text-sm text-ink-500">Pronto para mais uma sessão?</p>
       </div>
 
-      <PushSubscribeCard />
-
       {/* Sessões disponíveis */}
-      <div className="rounded-[18px] border border-[#EBD98F] bg-[#FBF4DE] p-[18px] dark:border-gold-400/30 dark:bg-gold-400/10">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-[#8A6D12] dark:text-gold-300">Sessões disponíveis</span>
-          <Dumbbell size={18} className="text-[#B08D2A] dark:text-gold-400" />
+      <div className="rounded-[18px] border border-[#EBD98F] bg-[#FBF4DE] p-3.5 dark:border-gold-400/30 dark:bg-gold-400/10">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-sm font-medium text-[#8A6D12] dark:text-gold-300">Sessões disponíveis</span>
+          <span className="flex items-baseline gap-1.5 text-[#3d3100] dark:text-gold-100">
+            <strong className="font-display text-3xl tabular-nums">{credits.total}</strong>
+            <span className="text-xs">{pluralize(credits.total, "sessão", "sessões")}</span>
+          </span>
         </div>
-        <div className="mt-1 flex items-baseline gap-2">
-          <span className="font-display text-[2.9rem] font-bold leading-none tabular-nums text-[#3d3100] dark:text-gold-100">{credits.total}</span>
-          <span className="text-sm text-[#9a7d22] dark:text-gold-300/70">{pluralize(credits.total, "sessão", "sessões")}</span>
-        </div>
-        <div className="mt-4 flex gap-2.5">
+        <div className="mt-2.5 flex gap-2.5">
           <Link
             href="/app/agenda"
             className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gold-400 px-3 py-3 text-sm font-semibold text-ink-900 transition hover:bg-gold-300 dark:text-bone-50"
@@ -115,10 +101,6 @@ export default async function ClientDashboard() {
           </Link>
         </div>
       </div>
-
-      {/* Atividade extra (treino autónomo / cardio) — pendente de validação.
-          NÃO mexe em saldo/sessões do pack; conta para o Ranking após validar. */}
-      <ActivityButtons />
 
       {/* Avisos de saldo */}
       {noCredits && (
@@ -140,11 +122,6 @@ export default async function ClientDashboard() {
           <p className="mt-1">Considera renovar o teu pack para não interromperes o teu progresso.</p>
         </div>
       )}
-
-      {/* Banners promocionais. PERF (QW-2 audit jun/2026): SSR pinta
-          o 1º slide via PromoBannerStatic (zero JS); o PromoCarousel
-          é dynamic ssr:false e — quando hidrata — substitui-o. */}
-      <PromoSlot banners={(((banners as any[]) ?? []).length ? banners : FILLER_BANNERS) as any} />
 
       {/* Próxima sessão */}
       {nextSession && (
@@ -172,6 +149,10 @@ export default async function ClientDashboard() {
           </Link>
         </section>
       )}
+
+      {/* Atividade extra (treino autónomo / cardio) — pendente de validação.
+          NÃO mexe em saldo/sessões do pack; conta para o Ranking após validar. */}
+      <ActivityButtons />
 
       {/* Bolsas por trainer (multi-trainer) */}
       {multiTrainer && (
@@ -220,7 +201,6 @@ export default async function ClientDashboard() {
         fallback={
           <>
             <CardSkeleton className="h-32" />
-            <CardSkeleton className="h-40" />
           </>
         }
       >
@@ -232,6 +212,8 @@ export default async function ClientDashboard() {
           packTotal={credits.totalAttributed}
         />
       </Suspense>
+      <PromoSlot banners={banners ?? []} />
+      <PushSubscribeCard />
     </div>
   );
 }
@@ -261,17 +243,8 @@ async function BelowFold({
       (!p.expires_at || new Date(p.expires_at).getTime() >= nowMs),
   ) as any | undefined;
 
-  // PERF (audit #3): uma única vaga paralela — histórico + presença.
-  // Toda a secção é streamed, fora do caminho crítico.
-  const [{ data: recentPast }, presencaRes, streakRes, lbRows] = await Promise.all([
-    supabase
-      .from("bookings")
-      .select("id, starts_at, session_type, status")
-      // DUO: inclui sessões partilhadas em que sou o parceiro.
-      .or(`client_id.eq.${userId},partner_client_id.eq.${userId}`)
-      .lt("starts_at", nowIso)
-      .order("starts_at", { ascending: false })
-      .limit(4),
+  // Só o progresso precisa destas consultas; o histórico tem página própria.
+  const [presencaRes, streakRes, lbRows] = await Promise.all([
     latestPack
       ? supabase
           .from("bookings")
@@ -322,8 +295,9 @@ async function BelowFold({
     <>
       {/* O teu progresso */}
       <section>
-        <div className="mb-0.5">
+        <div className="mb-2 flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">O teu progresso</h2>
+          <Link href="/app/progresso" className="text-xs font-medium text-gold-700 dark:text-gold-300">Ver detalhes →</Link>
         </div>
         <div className="card p-4">
           <div className="grid grid-cols-3 gap-2">
@@ -344,7 +318,7 @@ async function BelowFold({
               </div>
             </div>
             <Link
-              href="/app/progresso"
+              href="/app/leaderboard"
               className="block rounded-lg bg-bone-50 p-2.5 transition hover:bg-bone-100 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
             >
               <div className="text-[11px] font-semibold text-ink-600 dark:text-bone-100">Ranking</div>
@@ -365,43 +339,6 @@ async function BelowFold({
         </div>
       </section>
 
-      {/* Histórico recente */}
-      <section>
-        <div className="mb-1.5 flex items-center justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">Histórico recente</h2>
-          <Link href="/app/historico" className="text-xs font-medium text-gold-600 hover:text-gold-700">Ver tudo</Link>
-        </div>
-        {(!recentPast || recentPast.length === 0) ? (
-          <div className="card p-5 text-center text-sm text-ink-500">Ainda sem sessões passadas.</div>
-        ) : (
-          <ul className="space-y-2">
-            {(recentPast as any[]).map((b) => (
-              <li key={b.id}>
-                <Link href={`/app/sessao/${b.id}`} className="card flex items-center justify-between gap-3 p-4 hover:border-gold-400">
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold">{formatDateTime(b.starts_at)}</div>
-                    <div className="text-xs text-ink-500 capitalize">{b.session_type}</div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <StatusChip status={b.status} />
-                    <ChevronRight size={16} className="text-ink-500" />
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
     </>
   );
-}
-
-function StatusChip({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    booked: "chip-gold",
-    confirmed: "chip-ok",
-    cancelled: "chip-mute",
-    no_show: "chip-danger",
-  };
-  return <span className={map[status] ?? "chip-mute"}>{(BOOKING_STATUS as any)[status] ?? status}</span>;
 }
