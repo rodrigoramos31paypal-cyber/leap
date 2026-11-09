@@ -4,10 +4,8 @@ import Link from "next/link";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { eur, formatDateTime, BOOKING_STATUS, PURCHASE_STATUS } from "@/lib/utils";
 import { cancelBookingAction, rebookAction } from "./actions";
-import { CalendarPlus, RefreshCcw, NotebookPen, Users, EyeOff, Eye, ChevronDown } from "lucide-react";
-import { NoteEditor } from "@/components/note-editor";
+import { CalendarPlus, RefreshCcw, MessageCircle, Users, EyeOff, Eye, ChevronDown } from "lucide-react";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
-import { getMyNotesMapForBookings } from "@/lib/notes";
 import { signBookingIcs } from "@/lib/calendar-token";
 import {
   ACTIVITY_TYPE_LABEL,
@@ -218,7 +216,6 @@ async function SessoesTab({ userId, filter, hideCancelled }: { userId: string; f
     );
   }
 
-  const notesMap = await getMyNotesMapForBookings(bookings.map((b) => b.id));
 
   return (
     <ul className="space-y-2">
@@ -287,17 +284,6 @@ async function SessoesTab({ userId, filter, hideCancelled }: { userId: string; f
           </div>
         ) : null;
 
-        const notesBlock = (
-          <details className="border-t border-ink-900/5 pt-3">
-            <summary className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-ink-600 hover:text-ink-900">
-              <NotebookPen size={12} /> As minhas notas
-            </summary>
-            <div className="mt-2">
-              <NoteEditor bookingId={b.id} initialBody={notesMap.get(b.id)?.body} compact sharedWithTrainer />
-            </div>
-          </details>
-        );
-
         return (
           <li key={b.id}>
             <details className="card group overflow-hidden p-0">
@@ -313,7 +299,9 @@ async function SessoesTab({ userId, filter, hideCancelled }: { userId: string; f
               </summary>
               <div className="space-y-3 border-t border-ink-900/[0.06] p-3 dark:border-white/[0.07]">
                 {actionButtons}
-                {notesBlock}
+                <Link href={`/app/mensagens?treino=${b.id}`} className="btn-outline min-h-11 gap-2">
+                  <MessageCircle size={14} aria-hidden="true" /> Enviar mensagem ao PT
+                </Link>
               </div>
             </details>
           </li>
