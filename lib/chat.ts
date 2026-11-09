@@ -9,6 +9,7 @@ export type ChatMessage = {
   body: string;
   created_at: string;
   booking_id: string | null;
+  kind: "message" | "cancellation" | "cancellation_approved" | "cancellation_rejected";
   read_at: string | null;
   booking_starts_at: string | null;
 };
@@ -45,7 +46,7 @@ export async function chatContext(clientId?: string, recipientId?: string) {
   if (recipientId !== undefined) {
     if (!isChatId(recipientId)) return null;
     const { data: incoming } = await (db as any).from("leap_chat_messages").select("id")
-      .eq("client_id", profile.id).eq("staff_id", recipientId).eq("sender_id", recipientId)
+      .eq("client_id", profile.id).eq("staff_id", recipientId)
       .limit(1).maybeSingle();
     if (incoming) staffId = recipientId;
   }
