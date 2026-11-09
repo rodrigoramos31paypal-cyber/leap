@@ -1,3 +1,5 @@
+import { MessageCircle } from "lucide-react";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createClient, getSessionUser, getCurrentProfile } from "@/lib/supabase/server";
@@ -68,7 +70,16 @@ export default async function ClientLayout({ children }: { children: React.React
       <SwNavigator />
       <AppUpdater />
       <PushAutoHeal />
-      <TopBar unread={0} userId={user.id} homeHref="/app/dashboard" />
+      <TopBar
+        unread={0}
+        userId={user.id}
+        homeHref="/app/dashboard"
+        right={
+          <Link href="/app/mensagens" className="btn-outline inline-flex min-h-11 shrink-0 items-center gap-1.5 px-2.5 text-xs" aria-label="Abrir chat com o PT">
+            <MessageCircle size={17} aria-hidden="true" /> Chat
+          </Link>
+        }
+      />
       <ClientTopNav />
       <Toaster initial={flash} />
       <ReminderSync />
