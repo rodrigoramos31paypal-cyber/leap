@@ -4,7 +4,7 @@ import { ArrowLeft, Dumbbell, Flame, Shield, Trophy } from "lucide-react";
 import { createAdminClient, getCurrentProfile } from "@/lib/supabase/server";
 import { getActiveTrainersPublic, getTrainerForClient } from "@/lib/trainer";
 import { displayName, levelForStreak, LEVEL_CHIP, LEVEL_LABEL } from "@/lib/streak";
-import { MedalBadges } from "@/components/medal-badges";
+import { periodLabel } from "@/lib/ranking-periods";
 
 export const metadata = { title: "Perfil de atleta · LEAP", robots: { index: false, follow: false } };
 
@@ -40,7 +40,7 @@ export default async function AthletePage({ params, searchParams }: {
     db.from("activities").select("id", { count: "exact", head: true })
       .eq("client_id", id).eq("status", "validated").lte("activity_date", lisbonDate),
     db.rpc("get_client_streak", { p_client: id }),
-    db.from("ranking_monthly_winners").select("rank").eq("trainer_id", trainerId).eq("client_id", id),
+    db.from("ranking_monthly_winners").select("rank,period").eq("trainer_id", trainerId).eq("client_id", id).order("period", { ascending: false }),
   ]);
   if ([sessions, extras, streak, trophies].some(result => result.error)) {
     return <p role="alert" className="card p-4">Não foi possível carregar o perfil. Atualiza a página para tentar novamente.</p>;
@@ -48,14 +48,17 @@ export default async function AthletePage({ params, searchParams }: {
   const current = Number(streak.data?.[0]?.current_streak ?? 0);
   const best = Number(streak.data?.[0]?.best_streak ?? 0);
   const level = levelForStreak(current);
-  const medalRows = (trophies.data ?? []) as { rank: number }[];
-  const medals = { gold: 0, silver: 0, bronze: 0 };
-  for (const { rank } of medalRows) {
-    if (rank === 1) medals.gold++;
-    if (rank === 2) medals.silver++;
-    if (rank === 3) medals.bronze++;
-  }
-  const total = medals.gold + medals.silver + medals.bronze;
+  const awards = (trophies.data ?? []) as { rank: number; period: string }[];
+  const total = awards.length;
+  const awardDetails = await Promise.all(awards.map(async award => {
+    const { data } = await db.rpc("get_leaderboard_month", {
+      p_trainer: trainerId,
+      p_period: award.period,
+    });
+    const stats = (data as { client_id: string; activities_total: number; pack_pct: number | null }[] | null)
+      ?.find(row => row.client_id === id);
+    return { ...award, stats };
+  }));
   const name = displayName(athlete.full_name);
   const query = new URLSearchParams();
   if (typeof back.month === "string" && /^\d{4}-\d{2}$/.test(back.month)) query.set("month", back.month);
@@ -86,7 +89,32 @@ export default async function AthletePage({ params, searchParams }: {
       </div>
       <section className="card space-y-3 p-4">
         <h2 className="font-display text-lg font-bold">Vitrine de troféus</h2>
-        {total ? <MedalBadges {...medals} size={17} /> : <p className="text-sm text-ink-500">Ainda sem troféus neste ranking.</p>}
+        {total ? (
+          <>
+            <ul className="divide-y divide-ink-900/10 dark:divide-white/10">
+              {awardDetails.map(({ rank, period, stats }) => (
+                <li key={period} className="flex items-start gap-3 py-3">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-gold-400/10 text-gold-700 dark:text-gold-300">
+                    <Trophy size={19} aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold">{rank}.º lugar · {rank === 1 ? "Ouro" : rank === 2 ? "Prata" : "Bronze"}</p>
+                    <Link href={`/app/leaderboard?month=${encodeURIComponent(period)}`} className="text-sm font-semibold text-gold-700 hover:underline dark:text-gold-300">
+                      {periodLabel(period)}
+                    </Link>
+                    {stats && (
+                      <p className="mt-1 text-xs text-ink-500">
+                        {stats.activities_total} {stats.activities_total === 1 ? "atividade" : "atividades"} no mês
+                        {stats.pack_pct != null && ` · ${stats.pack_pct}% de progresso`}
+                      </p>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-ink-500">A posição é a que ficou registada. Os dados do mês são calculados a partir do histórico.</p>
+          </>
+        ) : <p className="text-sm text-ink-500">Ainda sem troféus neste ranking.</p>}
         <p className="text-xs text-ink-500">Sequência atual de {current} {current === 1 ? "semana" : "semanas"}.</p>
       </section>
     </div>
