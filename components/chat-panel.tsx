@@ -11,10 +11,11 @@ const dayKey = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Lisbon", dat
 const dayLabel = new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", dateStyle: "medium" });
 const messageTime = new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", hour: "2-digit", minute: "2-digit" });
 
-export function ChatPanel({ messages, userId, clientId, booking, latest }: {
+export function ChatPanel({ messages, userId, clientId, recipientId, booking, latest }: {
   messages: ChatMessage[];
   userId: string;
   clientId?: string;
+  recipientId?: string;
   booking?: { id: string; starts_at: string } | null;
   latest: boolean;
 }) {
@@ -30,9 +31,9 @@ export function ChatPanel({ messages, userId, clientId, booking, latest }: {
 
   useEffect(() => {
     if (unreadIds && document.visibilityState === "visible") {
-      void markChatRead(clientId, unreadIds.split(",")).catch(() => {});
+      void markChatRead(clientId, unreadIds.split(","), recipientId).catch(() => {});
     }
-  }, [clientId, unreadIds]);
+  }, [clientId, unreadIds, recipientId]);
 
   useEffect(() => {
     if (!latest) return;
@@ -113,6 +114,7 @@ export function ChatPanel({ messages, userId, clientId, booking, latest }: {
           form.set("requestId", requestId.current);
           form.set("body", body);
           if (clientId) form.set("clientId", clientId);
+          if (recipientId) form.set("recipientId", recipientId);
           if (booking) form.set("bookingId", booking.id);
           startTransition(async () => {
             try {
