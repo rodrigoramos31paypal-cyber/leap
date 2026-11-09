@@ -1,8 +1,9 @@
+import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { formatDateTime, BOOKING_STATUS } from "@/lib/utils";
 import { cancelBookingAction, rebookAction } from "@/app/app/historico/actions";
-import { CalendarPlus, RefreshCcw, X, NotebookPen, ChevronRight, Star, Users } from "lucide-react";
+import { CalendarPlus, RefreshCcw, X, NotebookPen, MessageCircle, ChevronRight, Star, Users } from "lucide-react";
 import { BackLink } from "@/components/back-link";
 import { NoteEditor } from "@/components/note-editor";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
@@ -194,6 +195,10 @@ export default async function SessaoPage(props: { params: Promise<{ id: string }
           Esta sessão já não pode ser alterada.
         </div>
       )}
+
+      <Link href={`/app/mensagens?treino=${b.id}`} className="btn-primary min-h-11 gap-2">
+        <MessageCircle size={16} aria-hidden="true" /> Enviar mensagem
+      </Link>
 
       <div>
         <h2 className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-ink-500">
