@@ -1,3 +1,5 @@
+import { groupForBooking, loadGroupInbox } from "@/lib/group-chat";
+import { GroupChatThread } from "@/components/group-chat-thread";
 import { getReactivationAlert, reactivationDraft } from "@/lib/reactivation";
 import Link from "next/link";
 import { Search } from "lucide-react";
@@ -8,14 +10,16 @@ import { ChatThread } from "@/components/chat-thread";
 import { ConversationList, type Conversation } from "@/components/conversation-list";
 
 export default async function StaffMessages({ searchParams }: {
-  searchParams: Promise<{ cliente?: string; antes?: string; nome?: string; reativacao?: string }>;
+  searchParams: Promise<{ cliente?: string; antes?: string; nome?: string; reativacao?: string; grupo?: string; treino?: string }>;
 }) {
   const profile = await getCurrentProfile();
   if (!profile || !["owner", "trainer"].includes(profile.role)) {
     return <p className="card p-4">A caixa de entrada está disponível para os treinadores.</p>;
   }
   const staff = await requireStaff();
-  const { cliente, antes, nome, reativacao } = await searchParams;
+  const { cliente, antes, nome, reativacao, grupo, treino } = await searchParams;
+  const group = grupo || (treino ? await groupForBooking(treino) : null);
+  if (group) return <GroupChatThread id={group} base="/admin/mensagens" />;
   const context = cliente ? await chatContext(cliente) : null;
   const alert = context && reativacao ? await getReactivationAlert(reativacao, context.clientId) : null;
   const draft = alert && context ? await reactivationDraft(alert, context.name) : undefined;
@@ -26,9 +30,10 @@ export default async function StaffMessages({ searchParams }: {
     </div>
   );
   const term = typeof nome === "string" ? nome.trim().slice(0, 80) : "";
-  const [search, inbox] = await Promise.all([
+  const [search, inbox, groups] = await Promise.all([
     term ? searchClients(staff.id, staff.role === "owner", term) : null,
     (createAdminClient() as any).rpc("leap_conversation_list", { p_account: chatStaffId(staff.id), p_is_staff: true }),
+    loadGroupInbox(chatStaffId(staff.id)!, true),
   ]);
   const rows = (inbox.data ?? []) as Conversation[];
   const matched = new Set(search?.clients.map(client => client.id));
@@ -38,7 +43,7 @@ export default async function StaffMessages({ searchParams }: {
     ...search.clients.filter(client => !existing.has(client.id)).map(client => ({
       ...client, unread: 0, last_message: null, preview: null, mine: false,
     })),
-  ] : rows;
+  ] : [...rows, ...groups.rows].sort((a,b) => (b.last_message ?? "").localeCompare(a.last_message ?? ""));
 
   return (
     <div className="space-y-3">
@@ -52,7 +57,7 @@ export default async function StaffMessages({ searchParams }: {
         </button>
       </form>
       {term && <Link href="/admin/mensagens" className="inline-block text-xs font-semibold text-gold-700 dark:text-gold-300">Limpar pesquisa</Link>}
-      {inbox.error || search?.error ? <p role="alert">Não foi possível carregar a caixa de entrada.</p> :
+      {inbox.error || groups.error || search?.error ? <p role="alert">Não foi possível carregar a caixa de entrada.</p> :
         <ConversationList key={term} rows={visible} staff searched={!!term} />}
     </div>
   );
