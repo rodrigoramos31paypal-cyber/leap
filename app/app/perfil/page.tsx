@@ -11,7 +11,7 @@ import { displayName, levelForStreak, LEVEL_LABEL, LEVEL_CHIP } from "@/lib/stre
 import { CalendarSubscribeCard } from "@/components/calendar-subscribe-card";
 import { chatContext } from "@/lib/chat";
 import { ChatThread } from "@/components/chat-thread";
-import { currentPeriodLisbon } from "@/lib/ranking-periods";
+import { currentPeriodLisbon, RANKING_START_DATE, RANKING_START_LISBON } from "@/lib/ranking-periods";
 import { MedalBadges } from "@/components/medal-badges";
 import { getActiveTrainersPublic, getTrainerForClient } from "@/lib/trainer";
 import { listVerifiedFactors } from "@/lib/mfa";
@@ -196,9 +196,9 @@ async function loadAthleteStats(supabase: Awaited<ReturnType<typeof createClient
   const [sessions, extras, ranking] = await Promise.all([
     (supabase as any).from("bookings").select("id", { count: "exact", head: true })
       .or(`client_id.eq.${userId},partner_client_id.eq.${userId},partner2_client_id.eq.${userId}`)
-      .in("status", ["booked", "confirmed"]).lte("ends_at", now.toISOString()),
+      .in("status", ["booked", "confirmed"]).gte("starts_at", RANKING_START_LISBON).lte("ends_at", now.toISOString()),
     (supabase as any).from("activities").select("id", { count: "exact", head: true })
-      .eq("client_id", userId).eq("status", "validated").lte("activity_date", day),
+      .eq("client_id", userId).eq("status", "validated").gte("activity_date", RANKING_START_DATE).lte("activity_date", day),
     (async () => {
       const trainerId = (await getTrainerForClient(userId)) ?? (await getActiveTrainersPublic())[0]?.id;
       if (!trainerId) return { medals: null, rank: null };
