@@ -22,15 +22,17 @@ export default async function SessaoPage(props: { params: Promise<{ id: string }
   const { data: b } = await (supabase as any)
     .from("bookings")
     .select(
-      "id, starts_at, ends_at, session_type, status, client_id, trainer_id, partner_client_id, profiles:client_id(full_name), partner_profiles:partner_client_id(full_name)",
+      "id, starts_at, ends_at, session_type, status, client_id, trainer_id, partner_client_id, partner2_client_id, profiles:client_id(full_name), partner_profiles:partner_client_id(full_name)",
     )
     .eq("id", params.id)
     // DUO: o parceiro também pode abrir a sessão partilhada.
-    .or(`client_id.eq.${user.id},partner_client_id.eq.${user.id}`)
+    .or(`client_id.eq.${user.id},partner_client_id.eq.${user.id},partner2_client_id.eq.${user.id}`)
     .maybeSingle();
   if (!b) notFound();
 
   // Sessão duo: nome do OUTRO participante (relativo a quem está a ver).
+  const sharedChat = (b.session_type === "dupla" && !!b.partner_client_id)
+    || (b.session_type === "tripla" && !!b.partner_client_id && !!b.partner2_client_id);
   const duoPartnerName: string | null = b.partner_client_id
     ? (user.id === b.client_id ? b.partner_profiles?.full_name : b.profiles?.full_name) ?? null
     : null;
@@ -198,9 +200,11 @@ export default async function SessaoPage(props: { params: Promise<{ id: string }
       )}
 
       <Link href={`/app/mensagens?treino=${b.id}`} className="btn-primary min-h-11 gap-2">
-        <MessageCircle size={16} aria-hidden="true" /> Enviar mensagem ao PT
+        <MessageCircle size={16} aria-hidden="true" /> {sharedChat ? "Abrir conversa de grupo" : "Enviar mensagem ao PT"}
       </Link>
-
+      {sharedChat && <Link href={`/app/mensagens?treino=${b.id}&privado=1`} className="btn-outline min-h-11 gap-2">
+        Mensagem privada ao PT
+      </Link>}
 
     </div>
   );
