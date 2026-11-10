@@ -6,12 +6,14 @@ export function chatContactLabel(name: string) {
   return name.trim().toLowerCase() === "admin" ? "PT - João Pedro" : name;
 }
 
-export async function ChatThread({ context, bookingId, before, inProfile, fill }: {
+export async function ChatThread({ context, bookingId, before, inProfile, fill, draft, reactivationId }: {
   context: NonNullable<Awaited<ReturnType<typeof chatContext>>>;
   bookingId?: string;
   before?: string;
   inProfile?: boolean;
   fill?: boolean;
+  draft?: string;
+  reactivationId?: string;
 }) {
   const base = context.staff
     ? `/admin/mensagens?cliente=${context.clientId}`
@@ -49,10 +51,10 @@ export async function ChatThread({ context, bookingId, before, inProfile, fill }
         {before && <Link href={base}>Voltar às mensagens recentes</Link>}
         {rows.length > 50 && <Link href={`${base}${base.includes("?") ? "&" : "?"}antes=${messages[0].id}`}>Ver mensagens anteriores</Link>}
       </div>}
-      <ChatPanel key={`${context.clientId}:${context.staffId}:${booking?.id ?? ""}`}
+      <ChatPanel key={`${context.clientId}:${context.staffId}:${booking?.id ?? ""}:${reactivationId ?? ""}`}
         messages={messages} reviewLinks={reviewLinks} userId={context.userId} clientId={context.staff ? context.clientId : undefined}
         recipientId={context.staff ? undefined : context.staffId}
-        booking={booking} latest={!before} fill={fill} />
+        booking={booking} draft={draft} reactivationId={reactivationId} latest={!before} fill={fill} />
     </div>
   );
 }
