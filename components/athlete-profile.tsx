@@ -105,7 +105,7 @@ export async function renderAthleteProfile(id: string, trainerId: string, admin 
                       <table className="mt-2 w-full table-fixed text-right tabular-nums">
                         <thead className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
                           <tr>
-                            <th scope="col">Progresso</th>
+                            <th scope="col">Pack %</th>
                             <th scope="col"><abbr title="Atividades" className="no-underline">Ativ.</abbr></th>
                             <th scope="col"><abbr title="Sequência" className="no-underline">Seq.</abbr></th>
                           </tr>
