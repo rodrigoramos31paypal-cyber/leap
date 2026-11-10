@@ -1,5 +1,6 @@
 "use server";
 
+import { getReactivationAlert } from "@/lib/reactivation";
 import { requireStaff } from "@/lib/authz";
 import { createAdminClient } from "@/lib/supabase/server";
 import { chatStaffId, chatContext, getChatBooking, isChatId } from "@/lib/chat";
@@ -11,6 +12,7 @@ export async function sendChatMessage(form: FormData) {
   const recipient = form.get("recipientId");
   if (recipient !== null && !isChatId(recipient)) return { error: "Conversa inválida." };
   const bookingId = form.get("bookingId");
+  const reactivationId = form.get("reactivationId");
   const body = form.get("body");
   const requestId = form.get("requestId");
   if ((target !== null && !isChatId(target)) || !isChatId(requestId) ||
@@ -24,6 +26,18 @@ export async function sendChatMessage(form: FormData) {
   }
   const booking = typeof bookingId === "string" && bookingId ? await getChatBooking(context, bookingId) : null;
   if (bookingId && !booking) return { error: "Não foi possível associar este treino." };
+  if (reactivationId !== null) {
+    if (!context.staff || !isChatId(reactivationId) || !await getReactivationAlert(reactivationId, context.clientId)) {
+      return { error: "Este alerta de reativação não está disponível." };
+    }
+    const { data, error } = await (context.db as any).rpc("leap_reactivation_send", {
+      p_alert: reactivationId, p_client: context.clientId, p_staff: context.staffId, p_id: requestId, p_body: body.trim(),
+    });
+    if (error || data) return { error: data || "Não foi possível enviar a mensagem de reativação." };
+    revalidatePath("/admin/dashboard");
+    revalidatePath("/admin/mensagens");
+    return { ok: true };
+  }
   const { error } = await (context.db as any).rpc("leap_send_chat_message", {
     p_id: requestId, p_client: context.clientId, p_staff: context.staffId,
     p_sender: context.userId, p_body: body.trim(), p_booking: booking?.id ?? null,

@@ -12,7 +12,7 @@ const dayKey = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Lisbon", dat
 const dayLabel = new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", dateStyle: "medium" });
 const messageTime = new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", hour: "2-digit", minute: "2-digit" });
 
-export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId, booking, latest, fill }: {
+export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId, booking, latest, fill, draft, reactivationId }: {
   messages: ChatMessage[];
   reviewLinks: Record<string, string>;
   userId: string;
@@ -21,13 +21,16 @@ export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId
   booking?: { id: string; starts_at: string } | null;
   latest: boolean;
   fill?: boolean;
+  draft?: string;
+  reactivationId?: string;
 }) {
   const router = useRouter();
   const history = useRef<HTMLDivElement>(null);
   const followLatest = useRef(true);
   const lastMessageId = messages.at(-1)?.id;
   const requestId = useRef<string | null>(null);
-  const [body, setBody] = useState("");
+  const [body, setBody] = useState(draft ?? "");
+  const [alertId, setAlertId] = useState(reactivationId);
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
   const unreadIds = messages.filter(m => m.sender_id !== userId && !m.read_at).map(m => m.id).join(",");
@@ -135,6 +138,7 @@ export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId
           form.set("body", body);
           if (clientId) form.set("clientId", clientId);
           if (recipientId) form.set("recipientId", recipientId);
+          if (alertId) form.set("reactivationId", alertId);
           if (booking) form.set("bookingId", booking.id);
           startTransition(async () => {
             try {
@@ -143,10 +147,15 @@ export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId
               requestId.current = null;
               followLatest.current = true;
               setBody("");
+              if (alertId && clientId) {
+                setAlertId(undefined);
+                router.replace(`/admin/mensagens?cliente=${clientId}`);
+              }
               router.refresh();
             } catch { setError("Não foi possível enviar. Tenta novamente."); }
           });
         }}>
+          {alertId && <p className="text-xs font-semibold">Rascunho de reativação · podes editar antes de enviar</p>}
           {booking && <p className="text-xs font-semibold">Sobre o treino de {formatDateTime(booking.starts_at)}</p>}
           <div className="flex items-end gap-2">
             <label htmlFor="chat-body" className="sr-only">Mensagem</label>

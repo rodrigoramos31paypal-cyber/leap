@@ -1,3 +1,4 @@
+import { ReactivationDashboard } from "@/components/reactivation-dashboard";
 import Link from "next/link";
 import { Suspense } from "react";
 import { createClient, getCurrentProfile } from "@/lib/supabase/server";
@@ -144,7 +145,6 @@ async function Kpis({ year, month }: { year: number; month: number }) {
 
   let revenue = 0;
   let pendingPaymentsCount: number | null = 0;
-  let sessionsBooked = 0;
   let sessionsConfirmed = 0;
   let sessionsNoShow = 0;
   let activeClients = 0;
@@ -153,7 +153,6 @@ async function Kpis({ year, month }: { year: number; month: number }) {
   if (!kpiRes?.error && kpi) {
     revenue = Number(kpi.revenue_cents) || 0;
     pendingPaymentsCount = Number(kpi.pending_payments) || 0;
-    sessionsBooked = Number(kpi.sessions_booked) || 0;
     sessionsConfirmed = Number(kpi.sessions_confirmed) || 0;
     sessionsNoShow = Number(kpi.sessions_no_show) || 0;
     activeClients = Number(kpi.active_clients) || 0;
@@ -197,7 +196,6 @@ async function Kpis({ year, month }: { year: number; month: number }) {
     const candidateClientIds = new Set<string>();
     for (const b of ((monthBookings ?? []) as any[])) {
       if (b.status !== "cancelled") {
-        sessionsBooked++;
       }
       if (b.status === "confirmed") {
         sessionsConfirmed++;
@@ -256,7 +254,7 @@ async function Kpis({ year, month }: { year: number; month: number }) {
           accent={pendingApprovalCount > 0 ? "gold" : undefined}
           href={pendingApprovalCount > 0 ? "/admin/clientes?tab=pendentes" : "/admin/clientes?tab=todos"}
         />
-        <Stat icon={<Calendar size={16} />} label="Sessões marcadas no mês" value={String(sessionsBooked)} href="/admin/sessoes" />
+        <ReactivationDashboard />
         <Stat icon={<TrendingUp size={16} />} label="Receita média por cliente activo" value={eur(avgRevenuePerClient)} />
         <Stat
           icon={<Activity size={16} />}

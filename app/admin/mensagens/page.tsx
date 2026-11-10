@@ -1,3 +1,4 @@
+import { getReactivationAlert, reactivationDraft } from "@/lib/reactivation";
 import Link from "next/link";
 import { MessageCircle, Search } from "lucide-react";
 import { requireStaff } from "@/lib/authz";
@@ -7,19 +8,21 @@ import { ChatThread } from "@/components/chat-thread";
 import { formatDateTime } from "@/lib/utils";
 
 export default async function StaffMessages({ searchParams }: {
-  searchParams: Promise<{ cliente?: string; antes?: string; nome?: string }>;
+  searchParams: Promise<{ cliente?: string; antes?: string; nome?: string; reativacao?: string }>;
 }) {
   const profile = await getCurrentProfile();
   if (!profile || !["owner", "trainer"].includes(profile.role)) {
     return <p className="card p-4">A caixa de entrada está disponível para os treinadores.</p>;
   }
   const staff = await requireStaff();
-  const { cliente, antes, nome } = await searchParams;
+  const { cliente, antes, nome, reativacao } = await searchParams;
   const context = cliente ? await chatContext(cliente) : null;
+  const alert = context && reativacao ? await getReactivationAlert(reativacao, context.clientId) : null;
+  const draft = alert && context ? await reactivationDraft(alert, context.name) : undefined;
   if (cliente) return (
     <div className="flex h-full min-h-0 flex-col gap-3 md:h-[calc(100dvh-11rem)] md:min-h-[28rem]">
       <Link href="/admin/mensagens" className="shrink-0 text-sm font-semibold text-gold-700 dark:text-gold-300">← Caixa de entrada</Link>
-      {context ? <ChatThread context={context} before={antes} fill /> : <p>Esta conversa não está disponível.</p>}
+      {context ? <ChatThread context={context} before={alert ? undefined : antes} draft={draft} reactivationId={alert?.id} fill /> : <p>Esta conversa não está disponível.</p>}
     </div>
   );
   const term = typeof nome === "string" ? nome.trim().slice(0, 80) : "";

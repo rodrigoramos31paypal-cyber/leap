@@ -1,3 +1,5 @@
+import { setReactivationPreference } from "@/app/admin/reativacao/actions";
+import { reactivationDb } from "@/lib/reactivation";
 import { renderAthleteProfile } from "@/components/athlete-profile";
 import { requireStaff } from "@/lib/authz";
 import { StoreInterestList } from "@/components/store-interest-list";
@@ -80,6 +82,9 @@ export default async function ClientDetail(props: {
 
   const viewer = await getCurrentProfile();
   const canPreview = viewer?.role === "owner" || viewer?.role === "trainer";
+  const { data: reactivation } = tab === "resumo" && canPreview && !isDeleted
+    ? await reactivationDb().from("leap_reactivation_preferences").select("disabled").eq("client_id", profileId).maybeSingle()
+    : { data: null };
   let publicProfile = null;
   if (tab === "perfil-publico" && canPreview && !isDeleted && UUID_PATTERN.test(profileId)) {
     await requireStaff();
@@ -262,6 +267,16 @@ export default async function ClientDetail(props: {
 
       {tab === "resumo" && (
         <>
+          {canPreview && !isDeleted && (
+            <form action={setReactivationPreference} className="card flex flex-wrap items-center justify-between gap-3 p-4">
+              <input type="hidden" name="clientId" value={profileId} />
+              <label className="flex items-center gap-2 text-sm font-semibold">
+                <input type="checkbox" name="disabled" value="true" defaultChecked={reactivation?.disabled ?? false} />
+                Sem alertas
+              </label>
+              <button type="submit" className="btn-outline text-xs">Guardar preferência</button>
+            </form>
+          )}
           <StoreInterestList clientId={profileId} />
           {profile.banned && (
             <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
