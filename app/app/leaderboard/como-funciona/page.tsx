@@ -46,6 +46,8 @@ export default function ComoFuncionaPage() {
           <Trophy size={14} className="text-gold-500" /> Troféus mensais
         </h2>
         <div className="card space-y-3 p-4 text-sm">
+          <p><strong>Pack %</strong> é a maior percentagem concluída num pack, incluindo packs antigos. Um pack concluído pode manter este valor a 100% mesmo após uma pausa.</p>
+          <p><strong>Ativ.</strong> soma as sessões PT e as atividades validadas do mês. Serve de desempate entre atletas com a mesma percentagem de pack.</p>
           <p className="text-[12px] text-ink-500">O ranking reinicia todos os meses. No fim de cada mês, os 3 primeiros ganham uma medalha.</p>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px]">
             <span className="inline-flex items-center gap-1"><Trophy size={14} style={{ color: "#B8860B" }} /> 1.º · Ouro</span>
