@@ -94,7 +94,7 @@ export default async function AdminLeaderboardPage(props: {
           <h1 className="font-display text-[1.75rem] font-bold leading-tight tracking-tight">Ranking LEAP</h1>
           <p className="text-sm text-ink-500">
             {tab === "ranking"
-              ? `${rows.length} ${rows.length === 1 ? "cliente" : "clientes"} · progresso + atividades validadas`
+              ? `${rows.length} ${rows.length === 1 ? "cliente" : "clientes"} · melhor pack e atividades do mês`
               : "Validação de treinos autónomos e cardio submetidos pelos clientes"}
           </p>
         </div>
@@ -152,7 +152,7 @@ export default async function AdminLeaderboardPage(props: {
           <div className="flex items-center gap-3 px-3 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
             <span className="w-6 shrink-0 text-center">#</span>
             <span className="flex-1">Nome</span>
-            <span className="w-16 shrink-0 whitespace-nowrap text-right">Progresso</span>
+            <span title="Maior percentagem concluída num pack, incluindo packs antigos" className="w-16 shrink-0 whitespace-nowrap text-right">Pack %</span>
             <span className="w-9 shrink-0 text-right">Ativ.</span>
             <span className="w-10 shrink-0 text-right">Seq.</span>
           </div>
