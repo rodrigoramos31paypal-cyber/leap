@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "rea
 import { Check, CheckCheck, Send } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { markGroupRead, sendGroupChatMessage } from "@/app/app/mensagens/group-actions";
 import { markChatRead, sendChatMessage } from "@/app/app/mensagens/actions";
 import type { ChatMessage } from "@/lib/chat";
 import { formatDateTime } from "@/lib/utils";
@@ -12,7 +13,7 @@ const dayKey = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Lisbon", dat
 const dayLabel = new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", dateStyle: "medium" });
 const messageTime = new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", hour: "2-digit", minute: "2-digit" });
 
-export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId, booking, latest, fill, draft, reactivationId }: {
+export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId, booking, latest, fill, draft, reactivationId, groupId, senderNames }: {
   messages: ChatMessage[];
   reviewLinks: Record<string, string>;
   userId: string;
@@ -23,6 +24,8 @@ export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId
   fill?: boolean;
   draft?: string;
   reactivationId?: string;
+  groupId?: string;
+  senderNames?: Record<string,string>;
 }) {
   const router = useRouter();
   const history = useRef<HTMLDivElement>(null);
@@ -37,9 +40,10 @@ export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId
 
   useEffect(() => {
     if (unreadIds && document.visibilityState === "visible") {
-      void markChatRead(clientId, unreadIds.split(","), recipientId).catch(() => {});
+      const ids = unreadIds.split(",");
+      void (groupId ? markGroupRead(groupId, ids) : markChatRead(clientId, ids, recipientId)).catch(() => {});
     }
-  }, [clientId, unreadIds, recipientId]);
+  }, [clientId, unreadIds, recipientId, groupId]);
 
   useEffect(() => {
     if (!latest) return;
@@ -95,6 +99,7 @@ export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId
                       ? "ml-auto rounded-br-sm bg-gold-100 text-ink-900 dark:bg-[#3f3314] dark:text-bone-50"
                       : "mr-auto rounded-bl-sm bg-white text-ink-900 dark:bg-ink-800 dark:text-bone-50"
                   }`}>
+                    {groupId && !mine && !grouped && <p className="mb-1 text-xs font-bold text-gold-700 dark:text-gold-300">{senderNames?.[message.sender_id] ?? "LEAP"}</p>}
                     <span className="sr-only">{mine ? "Tu" : clientId ? "Cliente" : "Treinador"}: </span>
                     {message.rescheduled_from && message.booking_starts_at ? (
                       <div className="mb-1 rounded-md border-l-2 border-gold-500 bg-black/5 px-2 py-1 text-xs dark:bg-white/5">
@@ -116,7 +121,7 @@ export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId
                     )}
                     <div className="mt-0.5 flex items-center justify-end gap-1.5 text-[10px] text-ink-600 dark:text-bone-100/70">
                       <time dateTime={message.created_at}>{messageTime.format(date)}</time>
-                      {mine && (message.read_at
+                      {mine && !groupId && (message.read_at
                         ? <CheckCheck size={14} role="img" aria-label="Lida" className="text-gold-700 dark:text-gold-300" />
                         : <Check size={14} role="img" aria-label="Enviada" />)}
                     </div>
@@ -142,7 +147,7 @@ export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId
           if (booking) form.set("bookingId", booking.id);
           startTransition(async () => {
             try {
-              const result = await sendChatMessage(form);
+              const result = groupId ? await sendGroupChatMessage(groupId, requestId.current!, body) : await sendChatMessage(form);
               if (result.error) { setError(result.error); return; }
               requestId.current = null;
               followLatest.current = true;

@@ -569,6 +569,12 @@ function BookingItem({ b, note, isLastCredit = false }: { b: any; note?: { body:
           </form>
         </div>
       )}
+      {b.partner_client_id && (b.session_type === "dupla" || b.partner2_client_id) && (
+        <Link href={`/admin/mensagens?treino=${b.id}&cliente=${b.client_id}`} prefetch={false}
+          className="mt-2 inline-flex min-h-9 items-center text-xs font-semibold text-gold-700 dark:text-gold-300">
+          Abrir conversa de grupo
+        </Link>
+      )}
       </HideFromViewer>
       <details className="mt-2 border-t border-ink-900/10 pt-2">
         <summary className="cursor-pointer inline-flex items-center gap-1 text-[10px] font-semibold text-ink-600 hover:text-ink-900">

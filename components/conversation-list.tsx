@@ -11,6 +11,7 @@ export type Conversation = {
   last_message: string | null;
   preview: string | null;
   mine: boolean;
+  group?: boolean;
 };
 
 const time = new Intl.DateTimeFormat("pt-PT", {
@@ -47,8 +48,8 @@ export function ConversationList({ rows, staff, searched }: {
           const name = row.full_name?.trim() || (staff ? "Cliente" : "Equipa LEAP");
           const initials = name.split(/\s+/).slice(0, 2).map(word => Array.from(word)[0]).join("").toUpperCase();
           return (
-            <li key={row.id}>
-              <Link href={staff ? `/admin/mensagens?cliente=${row.id}` : `/app/mensagens?equipa=${row.id}`}
+            <li key={`${row.group ? "group" : "private"}:${row.id}`}>
+              <Link href={`${staff ? "/admin" : "/app"}/mensagens?${row.group ? "grupo" : staff ? "cliente" : "equipa"}=${row.id}`}
                 className="flex items-center gap-3 rounded-lg px-1 hover:bg-ink-900/5 dark:hover:bg-white/5">
                 <span aria-hidden="true" className="grid size-11 shrink-0 place-items-center rounded-full bg-gold-100 text-sm font-bold text-gold-800 dark:bg-gold-400/15 dark:text-gold-200">{initials}</span>
                 <span className="flex min-h-16 min-w-0 flex-1 items-start gap-2 border-b border-ink-900/10 py-2.5 dark:border-white/10">
