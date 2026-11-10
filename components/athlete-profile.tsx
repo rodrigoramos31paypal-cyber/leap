@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Dumbbell, Flame, Shield, Trophy } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/server";
 import { displayName, levelForStreak, LEVEL_CHIP, LEVEL_LABEL } from "@/lib/streak";
-import { periodLabel } from "@/lib/ranking-periods";
+import { periodLabel, RANKING_START_DATE, RANKING_START_LISBON } from "@/lib/ranking-periods";
 
 export async function renderAthleteProfile(id: string, trainerId: string, admin = false) {
   const rankingHref = admin ? "/admin/leaderboard" : "/app/leaderboard";
@@ -24,9 +24,9 @@ export async function renderAthleteProfile(id: string, trainerId: string, admin 
   const lisbonDate = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
   const [sessions, extras, streak, trophies] = await Promise.all([
     db.from("bookings").select("id", { count: "exact", head: true })
-      .or(participant).in("status", ["booked", "confirmed"]).lte("ends_at", now.toISOString()),
+      .or(participant).in("status", ["booked", "confirmed"]).gte("starts_at", RANKING_START_LISBON).lte("ends_at", now.toISOString()),
     db.from("activities").select("id", { count: "exact", head: true })
-      .eq("client_id", id).eq("status", "validated").lte("activity_date", lisbonDate),
+      .eq("client_id", id).eq("status", "validated").gte("activity_date", RANKING_START_DATE).lte("activity_date", lisbonDate),
     db.rpc("get_client_streak", { p_client: id }),
     db.from("ranking_monthly_winners").select("rank,period,pack_pct_snapshot,activities_total_snapshot,streak_snapshot").eq("trainer_id", trainerId).eq("client_id", id).order("period", { ascending: false }),
   ]);
@@ -105,7 +105,7 @@ export async function renderAthleteProfile(id: string, trainerId: string, admin 
                       <table className="mt-2 w-full table-fixed text-right tabular-nums">
                         <thead className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
                           <tr>
-                            <th scope="col">Progresso</th>
+                            <th scope="col">Pack %</th>
                             <th scope="col"><abbr title="Atividades" className="no-underline">Ativ.</abbr></th>
                             <th scope="col"><abbr title="Sequência" className="no-underline">Seq.</abbr></th>
                           </tr>

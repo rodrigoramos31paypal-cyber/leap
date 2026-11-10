@@ -86,7 +86,7 @@ export default async function LeaderboardPage(props: {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold tracking-tight">Ranking LEAP</h1>
-          <p className="text-sm text-ink-500">Baseado em progresso + atividades validadas.</p>
+          <p className="text-sm text-ink-500">Compara o melhor pack, as atividades do mês e a sequência.</p>
         </div>
         <div className="flex items-center gap-2">
           <MonthSelect
@@ -104,7 +104,7 @@ export default async function LeaderboardPage(props: {
 
       <div className="flex items-start gap-2 rounded-xl border border-ink-900/10 bg-bone-50 px-4 py-3 text-xs text-ink-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-bone-100">
         <Info size={14} className="mt-0.5 shrink-0" />
-        O ranking reinicia todos os meses. Os troféus mostram vitórias anteriores.
+        Ativ. conta as sessões PT e as atividades validadas do mês. Pack % mostra o pack em que mais avançaste, mesmo que seja antigo.
       </div>
 
       {me && isCurrent && (
@@ -129,7 +129,7 @@ export default async function LeaderboardPage(props: {
           <div className="flex items-center gap-3 px-3 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
             <span className="w-6 shrink-0 text-center">#</span>
             <span className="flex-1">Nome</span>
-            <span className="w-16 shrink-0 whitespace-nowrap text-right">Progresso</span>
+            <span className="w-16 shrink-0 whitespace-nowrap text-right">Pack %</span>
             <span className="w-9 shrink-0 text-right">Ativ.</span>
             <span className="w-10 shrink-0 text-right">Seq.</span>
           </div>

@@ -11,7 +11,7 @@ import { displayName, levelForStreak, LEVEL_LABEL, LEVEL_CHIP } from "@/lib/stre
 import { CalendarSubscribeCard } from "@/components/calendar-subscribe-card";
 import { chatContext } from "@/lib/chat";
 import { ChatThread } from "@/components/chat-thread";
-import { currentPeriodLisbon } from "@/lib/ranking-periods";
+import { currentPeriodLisbon, RANKING_START_DATE, RANKING_START_LISBON } from "@/lib/ranking-periods";
 import { MedalBadges } from "@/components/medal-badges";
 import { getActiveTrainersPublic, getTrainerForClient } from "@/lib/trainer";
 import { listVerifiedFactors } from "@/lib/mfa";
@@ -53,8 +53,10 @@ export default async function PerfilPage(
   ]);
 
   return (
-    <div className="space-y-5">
-      <div>
+    <div className={activeTab === "chat" && chat
+      ? "flex h-full min-h-72 flex-col gap-3 md:h-[calc(100dvh-14rem)] md:min-h-96"
+      : "space-y-5"}>
+      <div className="shrink-0">
         <h1 className="font-display text-2xl font-bold tracking-tight">Perfil</h1>
         <p className="text-sm text-ink-500">Os teus dados, notificações e segurança.</p>
       </div>
@@ -82,7 +84,7 @@ export default async function PerfilPage(
         />
       )}
       {activeTab === "chat" && (chat
-        ? <ChatThread context={chat} before={searchParams.antes} inProfile />
+        ? <ChatThread context={chat} before={searchParams.antes} inProfile fill />
         : <p className="card p-4 text-sm">A conversa fica disponível assim que tiveres um treinador associado.</p>
       )}
       {activeTab === "notificacoes" && (
@@ -102,7 +104,7 @@ function TabNav({ active }: { active: TabId }) {
     notificacoes: "Notificações",
   };
   return (
-    <div className="flex gap-1 rounded-xl border border-ink-900/[0.07] bg-bone-100 p-1 dark:border-white/10 dark:bg-ink-900">
+    <div className="flex shrink-0 gap-1 rounded-xl border border-ink-900/[0.07] bg-bone-100 p-1 dark:border-white/10 dark:bg-ink-900">
       {TABS.map((t) => {
         const isActive = t.id === active;
         return (
@@ -196,9 +198,9 @@ async function loadAthleteStats(supabase: Awaited<ReturnType<typeof createClient
   const [sessions, extras, ranking] = await Promise.all([
     (supabase as any).from("bookings").select("id", { count: "exact", head: true })
       .or(`client_id.eq.${userId},partner_client_id.eq.${userId},partner2_client_id.eq.${userId}`)
-      .in("status", ["booked", "confirmed"]).lte("ends_at", now.toISOString()),
+      .in("status", ["booked", "confirmed"]).gte("starts_at", RANKING_START_LISBON).lte("ends_at", now.toISOString()),
     (supabase as any).from("activities").select("id", { count: "exact", head: true })
-      .eq("client_id", userId).eq("status", "validated").lte("activity_date", day),
+      .eq("client_id", userId).eq("status", "validated").gte("activity_date", RANKING_START_DATE).lte("activity_date", day),
     (async () => {
       const trainerId = (await getTrainerForClient(userId)) ?? (await getActiveTrainersPublic())[0]?.id;
       if (!trainerId) return { medals: null, rank: null };

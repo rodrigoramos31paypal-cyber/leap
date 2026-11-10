@@ -5,6 +5,9 @@
 // ════════════════════════════════════════════════════════════════
 
 export const AWARDS_START = "2026-10";
+export const RANKING_START_DATE = `${AWARDS_START}-01`;
+// Lisboa estava em UTC+1 no dia em que o ranking começou.
+export const RANKING_START_LISBON = `${RANKING_START_DATE}T00:00:00+01:00`;
 
 const MONTHS_PT = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
