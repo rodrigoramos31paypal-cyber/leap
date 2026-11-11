@@ -78,10 +78,6 @@ export default async function PerfilPage(
       )}
 
       <TabNav active={activeTab} />
-      {activeTab === "perfil" && <Link href="/app/perfil?tab=evolucao"
-        className="card flex min-h-12 items-center justify-between gap-2 px-4 text-sm font-semibold">
-        A tua evolução <span className="text-gold-700 dark:text-gold-300" aria-hidden="true">→</span>
-      </Link>}
 
       {activeTab === "perfil" && (
         <PerfilTab
@@ -302,6 +298,11 @@ function PerfilTab({
           </div>
         ) : null}
       </section>
+
+      <Link href="/app/perfil?tab=evolucao"
+        className="card flex min-h-12 items-center justify-between gap-2 px-4 text-sm font-semibold">
+        A tua evolução <span className="text-gold-700 dark:text-gold-300" aria-hidden="true">→</span>
+      </Link>
 
       {/* Resumo de consistência (mês corrente) */}
       <div className="card space-y-3 p-5">
