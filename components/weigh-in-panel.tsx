@@ -7,6 +7,14 @@ import { lisbonDate, weighInMetrics, type MetricKey, type WeighIn } from "@/lib/
 
 const number = new Intl.NumberFormat("pt-PT", { maximumFractionDigits: 2 });
 const signed = new Intl.NumberFormat("pt-PT", { maximumFractionDigits: 2, signDisplay: "exceptZero" });
+const percent = new Intl.NumberFormat("pt-PT", {
+  style: "percent", maximumFractionDigits: 1, signDisplay: "exceptZero",
+});
+
+function relativeChange(current: number, baseline: number) {
+  return baseline === 0 ? null : percent.format((current - baseline) / baseline);
+}
+
 const date = new Intl.DateTimeFormat("pt-PT", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 const mainMetrics = weighInMetrics.slice(0, 4);
 
@@ -16,7 +24,7 @@ function displayDate(value: string) {
 
 function Trend({ entries, metric }: { entries: WeighIn[]; metric: MetricKey }) {
   const canvas = useRef<HTMLCanvasElement>(null);
-  const points = entries.filter(entry => entry[metric] !== null).slice(0,12).reverse();
+  const points = entries.filter(entry => entry[metric] !== null).reverse();
 
   useEffect(() => {
     const ctx = canvas.current?.getContext("2d");
@@ -51,13 +59,30 @@ function Trend({ entries, metric }: { entries: WeighIn[]; metric: MetricKey }) {
   const first = points[0];
   const last = points.at(-1)!;
   const unit = weighInMetrics.find(item => item.key === metric)?.unit;
+  const initialValue = Number(first[metric]);
+  const finalValue = Number(last[metric]);
+  const change = relativeChange(finalValue, initialValue);
   return (
-    <figure>
+    <figure className="space-y-3">
+      <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {[
+          { label: "Primeira medição", entry: first, value: initialValue },
+          { label: "Última medição", entry: last, value: finalValue },
+        ].map(({ label, entry, value }) => (
+          <div key={label} className="rounded-lg bg-ink-900/5 p-2.5 dark:bg-white/5">
+            <dt className="text-xs text-ink-500">{label}</dt>
+            <dd className="text-lg font-bold tabular-nums">{number.format(value)} {unit}</dd>
+            <dd className="text-xs text-ink-500">{displayDate(entry.measured_on)}</dd>
+          </div>
+        ))}
+        <div className="col-span-2 rounded-lg bg-gold-50 p-2.5 dark:bg-gold-400/10 sm:col-span-1">
+          <dt className="text-xs text-ink-500">Desde a primeira</dt>
+          <dd className="text-lg font-bold tabular-nums">{change ?? "—"}</dd>
+          <dd className="text-xs text-ink-500">{signed.format(finalValue - initialValue)} {metric === "fat_percent" ? "p.p." : unit}</dd>
+        </div>
+      </dl>
       <canvas ref={canvas} width={640} height={170} className="h-auto w-full" aria-hidden="true" />
-      <figcaption className="flex justify-between gap-3 text-xs text-ink-500">
-        <span>{displayDate(first.measured_on)} · {number.format(first[metric]!)} {unit}</span>
-        <span className="text-right">{displayDate(last.measured_on)} · {number.format(last[metric]!)} {unit}</span>
-      </figcaption>
+      <figcaption className="text-xs text-ink-500">{points.length} medições de {displayDate(first.measured_on)} a {displayDate(last.measured_on)}</figcaption>
     </figure>
   );
 }
@@ -136,11 +161,12 @@ export function WeighInPanel({ entries, clientId }: { entries: WeighIn[]; client
           {mainMetrics.map(item => {
             const value = latest[item.key];
             const before = previous?.[item.key];
+            const change = value != null && before != null ? relativeChange(value, before) : null;
             return <div key={item.key} className="card min-w-0 p-3">
               <h3 className="text-xs font-semibold text-ink-500">{item.label}</h3>
               <p className="mt-1 font-display text-xl font-bold">{value === null ? "—" : `${number.format(value)} ${item.unit}`}</p>
               {value != null && before != null && <p className="mt-1 text-xs text-gold-700 dark:text-gold-300">
-                {signed.format(value-before)} {item.key === "fat_percent" ? "p.p." : item.unit} vs. anterior
+                <strong className="tabular-nums">{change ?? `${signed.format(value - before)} ${item.key === "fat_percent" ? "p.p." : item.unit}`}</strong> vs. anterior
               </p>}
             </div>;
           })}
@@ -178,15 +204,17 @@ export function WeighInPanel({ entries, clientId }: { entries: WeighIn[]; client
         {(reading || notice) && <p role="status" className="text-sm">{reading ? "A ler o relatório…" : notice}</p>}
       </form>}
       {latest ? <>
-        <div className="card space-y-3 p-4">
-          <h3 className="font-display text-lg font-bold">Histórico de medições</h3>
+        <details className="card p-4">
+          <summary className="cursor-pointer font-display text-lg font-bold">Evolução desde o início</summary>
+          <div className="mt-3 space-y-3">
           <div className="flex flex-wrap gap-1.5" aria-label="Indicador no gráfico">
             {mainMetrics.map(item => <button key={item.key} type="button" aria-pressed={metric===item.key}
               className={`rounded-full border px-2.5 py-2 text-xs ${metric===item.key ? "border-gold-400 bg-gold-50 font-semibold" : "border-current/15 text-ink-500"}`}
               onClick={() => setMetric(item.key)}>{item.label}</button>)}
           </div>
           <Trend entries={entries} metric={metric} />
-        </div>
+          </div>
+        </details>
         <div className="card divide-y divide-ink-900/10 px-4 dark:divide-white/10">
           {entries.map(entry => <details key={entry.id} className="py-3">
             <summary className="cursor-pointer text-sm font-semibold">{displayDate(entry.measured_on)} · {entry.source === "starfit" ? "Starfit" : "Registo manual"}</summary>
