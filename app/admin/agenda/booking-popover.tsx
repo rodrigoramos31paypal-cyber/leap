@@ -3,9 +3,8 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { NotebookPen, StickyNote, ExternalLink, Coins, Clock, Users, Cake } from "lucide-react";
+import { NotebookPen, StickyNote, ExternalLink, Coins, Clock, Users, Cake, MessageCircle } from "lucide-react";
 import { formatTime, BOOKING_STATUS } from "@/lib/utils";
-import { NoteEditor } from "@/components/note-editor";
 import { useIsViewer } from "@/components/viewer-mode";
 import {
   confirmAttendanceAction,
@@ -702,25 +701,27 @@ export function BookingBlock({
                 {formatTime(b.starts_at)}
                 {b.ends_at ? `–${formatTime(b.ends_at)}` : ""}
               </div>
-              {b.partner_profiles?.full_name ? (
-                <div className="text-xs text-ink-500 leading-tight">
-                  <span className="block font-bold text-ink-900 dark:text-bone-50">{groupLabel}</span>
-                  <span className="block">{firstNameLong(b.profiles?.full_name)}</span>
-                  <span className="block">{firstNameLong(b.partner_profiles?.full_name)}</span>
-                  {(b as any).partner2_profiles?.full_name && (
-                    <span className="block">{firstNameLong((b as any).partner2_profiles?.full_name)}</span>
-                  )}
-                </div>
-              ) : (
-                <>
-                  <div className="text-xs text-ink-500">{b.profiles?.full_name ?? "—"}</div>
-                  {b.profiles?.email &&
-                    !b.profiles.email.endsWith("@sem-email.leap.local") &&
-                    !b.profiles.email.endsWith("@removido.invalid") && (
-                      <div className="text-[11px] text-ink-400">{b.profiles.email}</div>
-                    )}
-                </>
+              {b.partner_profiles?.full_name && (
+                <div className="text-xs font-bold text-ink-900 dark:text-bone-50">{groupLabel}</div>
               )}
+              <div className="space-y-1 text-xs text-ink-500">
+                {[
+                  { id: b.client_id, name: b.profiles?.full_name ?? "—" },
+                  { id: b.partner_client_id, name: b.partner_profiles?.full_name },
+                  { id: b.partner2_client_id, name: b.partner2_profiles?.full_name },
+                ].map(({ id, name }, index) =>
+                  name && (id ? (
+                    <Link
+                      key={id}
+                      href={`/admin/clientes/${id}`}
+                      onClick={() => setOpen(false)}
+                      className="block w-fit break-words font-medium text-ink-900 underline underline-offset-2 dark:text-bone-50"
+                    >
+                      {name}
+                    </Link>
+                  ) : <div key={index}>{name}</div>)
+                )}
+              </div>
               {b.partner_profiles?.full_name && (
                 <div className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-gold-100 px-2 py-0.5 text-[10px] font-semibold text-gold-700 dark:bg-gold-400/15">
                   <Users size={10} /> {isTrio ? "Sessão de trio" : "Sessão dupla"}
@@ -1018,15 +1019,17 @@ export function BookingBlock({
             </div>
           )}
 
-          {!isViewer && (
-            <details className="border-t border-ink-900/10 pt-3">
-              <summary className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-ink-600 hover:text-ink-900">
-                <NotebookPen size={12} /> Minhas notas{note ? " · ✓" : ""}
-              </summary>
-              <div className="mt-2">
-                <NoteEditor bookingId={b.id} initialBody={note?.body} compact />
-              </div>
-            </details>
+          {!isViewer && b.client_id && (
+            <div className="border-t border-ink-900/10 pt-3 dark:border-white/10">
+              <Link
+                href={`/admin/mensagens?treino=${b.id}&cliente=${b.client_id}`}
+                prefetch={false}
+                onClick={() => setOpen(false)}
+                className="inline-flex min-h-9 items-center gap-1.5 text-xs font-semibold text-gold-700 hover:underline dark:text-gold-300"
+              >
+                <MessageCircle size={14} aria-hidden="true" /> Enviar mensagem
+              </Link>
+            </div>
           )}
           </div>
         </div>,
