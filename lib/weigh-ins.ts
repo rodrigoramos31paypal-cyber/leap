@@ -25,9 +25,18 @@ export async function weighInAccess(clientId?: string) {
 export async function loadWeighIns(clientId?: string): Promise<WeighIn[] | null> {
   const access = await weighInAccess(clientId);
   if (!access) return null;
-  const { data, error } = await access.db.from("leap_weigh_ins").select(
-    "id,measured_on,weight,muscle,fat_mass,fat_percent,total_muscle,water,visceral_fat,note,source"
-  ).eq("client_id",access.clientId).order("measured_on",{ascending:false}).order("created_at",{ascending:false}).limit(250);
-  if (error) throw new Error("Não foi possível carregar as pesagens.");
-  return data ?? [];
+  const entries: WeighIn[] = [];
+  const pageSize = 250;
+  while (true) {
+    const { data, error } = await access.db.from("leap_weigh_ins").select(
+      "id,measured_on,weight,muscle,fat_mass,fat_percent,total_muscle,water,visceral_fat,note,source"
+    ).eq("client_id", access.clientId)
+      .order("measured_on", { ascending: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(entries.length, entries.length + pageSize - 1);
+    if (error) throw new Error("Não foi possível carregar as pesagens.");
+    entries.push(...(data ?? []));
+    if (!data || data.length < pageSize) return entries;
+  }
 }
