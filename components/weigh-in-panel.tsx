@@ -16,7 +16,9 @@ function relativeChange(current: number, baseline: number) {
 }
 
 const date = new Intl.DateTimeFormat("pt-PT", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
-const mainMetrics = weighInMetrics.slice(0, 4);
+const mainMetricKeys: MetricKey[] = ["total_muscle", "fat_mass", "fat_percent", "weight"];
+const mainMetrics = mainMetricKeys.map(key => weighInMetrics.find(item => item.key === key)!);
+const otherMetrics = weighInMetrics.filter(item => !mainMetricKeys.includes(item.key));
 
 function displayDate(value: string) {
   return date.format(new Date(value + "T12:00:00Z"));
@@ -88,7 +90,7 @@ function Trend({ entries, metric }: { entries: WeighIn[]; metric: MetricKey }) {
 }
 
 export function WeighInPanel({ entries, clientId }: { entries: WeighIn[]; clientId?: string }) {
-  const [metric,setMetric] = useState<MetricKey>("muscle");
+  const [metric,setMetric] = useState<MetricKey>("total_muscle");
   const [open,setOpen] = useState(!!clientId);
   const [fields,setFields] = useState<Record<string,string>>({ measured_on: lisbonDate() });
   const [source,setSource] = useState("manual");
@@ -194,7 +196,7 @@ export function WeighInPanel({ entries, clientId }: { entries: WeighIn[]; client
           <div className="grid grid-cols-2 gap-3">{mainMetrics.map(renderField)}</div>
           <details>
             <summary className="cursor-pointer text-sm font-semibold">Outros indicadores</summary>
-            <div className="mt-3 grid grid-cols-2 gap-3">{weighInMetrics.slice(4).map(renderField)}</div>
+            <div className="mt-3 grid grid-cols-2 gap-3">{otherMetrics.map(renderField)}</div>
           </details>
           {clientId && <label className="block text-sm font-medium">Nota para o cliente (opcional)
             <textarea name="note" className="input mt-1 w-full" maxLength={500} rows={2} />
@@ -230,3 +232,4 @@ export function WeighInPanel({ entries, clientId }: { entries: WeighIn[]; client
     </section>
   );
 }
+
