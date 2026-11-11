@@ -1,3 +1,5 @@
+import { loadBroadcastRecipients } from "./broadcast-actions";
+import { BroadcastForm } from "./broadcast-form";
 import { groupForBooking, loadGroupInbox } from "@/lib/group-chat";
 import { GroupChatThread } from "@/components/group-chat-thread";
 import { getReactivationAlert, reactivationDraft } from "@/lib/reactivation";
@@ -10,14 +12,23 @@ import { ChatThread } from "@/components/chat-thread";
 import { ConversationList, type Conversation } from "@/components/conversation-list";
 
 export default async function StaffMessages({ searchParams }: {
-  searchParams: Promise<{ cliente?: string; antes?: string; nome?: string; reativacao?: string; grupo?: string; treino?: string }>;
+  searchParams: Promise<{ cliente?: string; antes?: string; nome?: string; reativacao?: string; grupo?: string; treino?: string; envio?: string }>;
 }) {
   const profile = await getCurrentProfile();
   if (!profile || !["owner", "trainer"].includes(profile.role)) {
     return <p className="card p-4">A caixa de entrada está disponível para os treinadores.</p>;
   }
   const staff = await requireStaff();
-  const { cliente, antes, nome, reativacao, grupo, treino } = await searchParams;
+  const { cliente, antes, nome, reativacao, grupo, treino, envio } = await searchParams;
+  if (envio === "1" && staff.role === "owner") {
+    return (
+      <div className="mx-auto max-w-2xl space-y-4">
+        <Link href="/admin/mensagens" className="text-sm font-semibold text-gold-700 dark:text-gold-300">← Conversas</Link>
+        <h1 className="font-display text-2xl font-bold">Mensagem a clientes</h1>
+        <BroadcastForm clients={await loadBroadcastRecipients()} />
+      </div>
+    );
+  }
   const group = grupo || (treino ? await groupForBooking(treino) : null);
   if (group) return <GroupChatThread id={group} base="/admin/mensagens" />;
   const context = cliente ? await chatContext(cliente) : null;
@@ -47,7 +58,10 @@ export default async function StaffMessages({ searchParams }: {
 
   return (
     <div className="space-y-3">
-      <h1 className="font-display text-3xl font-bold">Conversas</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="font-display text-3xl font-bold">Conversas</h1>
+        {staff.role === "owner" && <Link href="/admin/mensagens?envio=1" className="btn-outline">Mensagem a clientes</Link>}
+      </div>
       <form action="/admin/mensagens" className="relative" role="search">
         <input name="nome" type="search" maxLength={80} defaultValue={term}
           aria-label="Pesquisar cliente por nome" placeholder="Pesquisar cliente por nome"
