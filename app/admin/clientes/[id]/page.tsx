@@ -1,3 +1,5 @@
+import { WeighInPanel } from "@/components/weigh-in-panel";
+import { loadWeighIns } from "@/lib/weigh-ins";
 import { setReactivationPreference } from "@/app/admin/reativacao/actions";
 import { reactivationDb } from "@/lib/reactivation";
 import { renderAthleteProfile } from "@/components/athlete-profile";
@@ -49,7 +51,7 @@ export default async function ClientDetail(props: {
 }) {
   const params = await props.params;
   const { tab: tabParam, hc, f, page: pageParam, review: reviewParam, session: sessionParam } = await props.searchParams;
-  const tab = tabParam === "compras" || tabParam === "sessoes" || tabParam === "perfil-publico" ? tabParam : "resumo";
+  const tab = tabParam === "compras" || tabParam === "sessoes" || tabParam === "perfil-publico" || tabParam === "pesagens" ? tabParam : "resumo";
   const hideCancelled = hc === "1";
   let pageNum = Math.max(1, Math.floor(Number(pageParam)) || 1);
   const nowIso = new Date().toISOString();
@@ -85,6 +87,7 @@ export default async function ClientDetail(props: {
   const { data: reactivation } = tab === "resumo" && canPreview && !isDeleted
     ? await reactivationDb().from("leap_reactivation_preferences").select("disabled").eq("client_id", profileId).maybeSingle()
     : { data: null };
+  const weighIns = tab === "pesagens" && canPreview && !isDeleted ? await loadWeighIns(profileId) : null;
   let publicProfile = null;
   if (tab === "perfil-publico" && canPreview && !isDeleted && UUID_PATTERN.test(profileId)) {
     await requireStaff();
@@ -254,12 +257,16 @@ export default async function ClientDetail(props: {
         <BalanceChip total={credits?.total ?? 0} />
       </div>
 
-      <div className="flex gap-1 rounded-xl border border-ink-900/[0.07] bg-bone-100 p-1 dark:border-white/10 dark:bg-ink-900">
+      <div className="flex flex-wrap gap-1 rounded-xl border border-ink-900/[0.07] bg-bone-100 p-1 dark:border-white/10 dark:bg-ink-900">
         <SegTab href={tabHref("resumo")} active={tab === "resumo"} label="Resumo" />
         <SegTab href={tabHref("compras")} active={tab === "compras"} label="Compras" />
         <SegTab href={tabHref("sessoes")} active={tab === "sessoes"} label="Sessões" />
         {canPreview && <SegTab href={tabHref("perfil-publico")} active={tab === "perfil-publico"} label="Perfil público" />}
+        {canPreview && !isDeleted && <SegTab href={tabHref("pesagens")} active={tab === "pesagens"} label="Pesagens" />}
       </div>
+
+      {tab === "pesagens" && (weighIns ? <WeighInPanel entries={weighIns} clientId={profileId} /> :
+        <p className="card p-4 text-sm text-ink-500">Pesagens indisponíveis para este cliente.</p>)}
 
       {tab === "perfil-publico" && (publicProfile ?? (
         <p className="card p-4 text-sm text-ink-500">Este cliente não tem um perfil visível no ranking.</p>

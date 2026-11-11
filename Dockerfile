@@ -89,6 +89,11 @@ COPY --from=builder /app/.next/static ./.next/static
 RUN --mount=type=cache,target=/root/.npm \
     npm install --no-save sharp@0.33.5
 
+# Leitura local de relatórios Starfit.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends poppler-utils tesseract-ocr tesseract-ocr-por tesseract-ocr-eng \
+    && rm -rf /var/lib/apt/lists/*
+
 # Utilizador não-root.
 RUN groupadd -g 1001 nodejs \
     && useradd -u 1001 -g nodejs -m nextjs \
