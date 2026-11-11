@@ -14,7 +14,7 @@ export function parseStarfit(text: string) {
   const lines = text.normalize("NFD").replace(/\p{Diacritic}/gu,"").toLowerCase().split(/\r?\n/);
   const values: Partial<Record<MetricKey | "measured_on", string>> = {};
   for (const {key,max,zero} of weighInMetrics) {
-    const pattern = new RegExp(`^\\s*(?:${labels[key]})(?:\\s*\\((?:kg|%)\\))?\\s*[:|]?\\s*(\\d{1,3}(?:[.,]\\d{1,2})?)(?=\\s|%|$)`);
+    const pattern = new RegExp(`^\\s*(?:${labels[key]})(?:\\s*\\((?:kg|%)\\))?\\s*[:|=]?\\s*(\\d{1,3}(?:[.,]\\d{1,2})?)(?=\\s|%|$)`);
     for (const line of lines) {
       const match = line.match(pattern);
       if (!match) continue;
