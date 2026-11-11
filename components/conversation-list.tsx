@@ -1,6 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
+import joaoAvatar from "./pt-joao-pedro-avatar.jpg";
 import { CheckCheck } from "lucide-react";
 import { useState } from "react";
 
@@ -51,7 +53,12 @@ export function ConversationList({ rows, staff, searched }: {
             <li key={`${row.group ? "group" : "private"}:${row.id}`}>
               <Link href={`${staff ? "/admin" : "/app"}/mensagens?${row.group ? "grupo" : staff ? "cliente" : "equipa"}=${row.id}`}
                 className="flex items-center gap-3 rounded-lg px-1 hover:bg-ink-900/5 dark:hover:bg-white/5">
-                <span aria-hidden="true" className="grid size-11 shrink-0 place-items-center rounded-full bg-gold-100 text-sm font-bold text-gold-800 dark:bg-gold-400/15 dark:text-gold-200">{initials}</span>
+                {!staff && !row.group && name === "PT - João Pedro" ? (
+                  <Image src={joaoAvatar} alt="" width={44} height={44} unoptimized
+                    className="size-11 shrink-0 rounded-full object-cover" />
+                ) : (
+                  <span aria-hidden="true" className="grid size-11 shrink-0 place-items-center rounded-full bg-gold-100 text-sm font-bold text-gold-800 dark:bg-gold-400/15 dark:text-gold-200">{initials}</span>
+                )}
                 <span className="flex min-h-16 min-w-0 flex-1 items-start gap-2 border-b border-ink-900/10 py-2.5 dark:border-white/10">
                   <span className="min-w-0 flex-1">
                     <strong className="block truncate text-sm sm:text-base">{name}</strong>
@@ -73,3 +80,4 @@ export function ConversationList({ rows, staff, searched }: {
     </>
   );
 }
+

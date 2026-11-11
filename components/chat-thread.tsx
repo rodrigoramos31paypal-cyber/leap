@@ -45,7 +45,13 @@ export async function ChatThread({ context, bookingId, before, inProfile, fill, 
     [row.id, `/admin/clientes/${row.client_id}?tab=sessoes&review=${row.id}`]));
   return (
     <div className={fill ? "flex min-h-0 flex-1 flex-col gap-3" : "space-y-4"}>
-      <h2 className="shrink-0 font-display text-xl font-bold">{context.staff ? context.name : chatContactLabel(context.name ?? "Equipa LEAP")}</h2>
+      <h2 className="shrink-0 font-display text-xl font-bold">
+        {context.staff ? (
+          <Link href={`/admin/clientes/${context.clientId}`} className="underline decoration-gold-500/60 underline-offset-4 hover:decoration-gold-500">
+            {context.name ?? "Cliente"}
+          </Link>
+        ) : chatContactLabel(context.name ?? "Equipa LEAP")}
+      </h2>
       {bookingId && !booking && <p className="text-sm text-ink-500">Este treino não pode ser associado a esta conversa.</p>}
       {(before || rows.length > 50) && <div className="flex shrink-0 flex-wrap gap-3 text-sm font-semibold text-gold-700 dark:text-gold-300">
         {before && <Link href={base}>Voltar às mensagens recentes</Link>}
@@ -58,3 +64,4 @@ export async function ChatThread({ context, bookingId, before, inProfile, fill, 
     </div>
   );
 }
+
