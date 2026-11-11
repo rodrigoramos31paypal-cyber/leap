@@ -1,3 +1,5 @@
+import { WeighInPanel } from "@/components/weigh-in-panel";
+import { loadWeighIns } from "@/lib/weigh-ins";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
@@ -20,9 +22,9 @@ import { unenrollAction } from "./seguranca/actions";
 
 // "seguranca" foi absorvida pela tab "Perfil" — 2FA + mudança de
 // palavra-passe + apagar conta estão agora no mesmo ecrã.
-type TabId = "perfil" | "calendario" | "chat" | "notificacoes";
+type TabId = "perfil" | "calendario" | "chat" | "notificacoes" | "evolucao";
 
-const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
+const TABS: { id: Exclude<TabId, "evolucao">; label: string; icon: React.ReactNode }[] = [
   { id: "perfil",       label: "Perfil",       icon: <User size={14} /> },
   { id: "calendario",   label: "Calendário",   icon: <CalendarDays size={14} /> },
   { id: "chat", label: "Chat com o PT", icon: <MessageCircle size={14} /> },
@@ -43,9 +45,19 @@ export default async function PerfilPage(
   const activeTab: TabId = ((): TabId => {
     const t = searchParams.tab;
     if (t === "notas") redirect("/app/notas");
-    if (t === "calendario" || t === "chat" || t === "notificacoes") return t;
+    if (t === "calendario" || t === "chat" || t === "notificacoes" || t === "evolucao") return t;
     return "perfil";
   })();
+
+  if (activeTab === "evolucao") {
+    const entries = await loadWeighIns();
+    return (
+      <div className="space-y-4">
+        <Link href="/app/perfil" className="text-sm font-semibold text-gold-700 dark:text-gold-300">← Perfil</Link>
+        {entries ? <WeighInPanel entries={entries} /> : <p>As pesagens estão indisponíveis nesta conta.</p>}
+      </div>
+    );
+  }
 
   const [tabData, chat] = await Promise.all([
     loadTabData(activeTab, supabase, user.id),
@@ -66,6 +78,10 @@ export default async function PerfilPage(
       )}
 
       <TabNav active={activeTab} />
+      {activeTab === "perfil" && <Link href="/app/perfil?tab=evolucao"
+        className="card flex min-h-12 items-center justify-between gap-2 px-4 text-sm font-semibold">
+        A tua evolução <span className="text-gold-700 dark:text-gold-300" aria-hidden="true">→</span>
+      </Link>}
 
       {activeTab === "perfil" && (
         <PerfilTab
@@ -97,7 +113,7 @@ export default async function PerfilPage(
 function TabNav({ active }: { active: TabId }) {
   // Barra segmentada em pílulas (design fitnessv2): largura igual, ativa =
   // pílula branca com sombra. Substitui os separadores com sublinhado.
-  const short: Record<TabId, string> = {
+  const short: Record<Exclude<TabId, "evolucao">, string> = {
     perfil: "Perfil",
     calendario: "Calendário",
     chat: "Chat com o PT",
