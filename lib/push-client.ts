@@ -1,6 +1,6 @@
 "use client";
 
-import { savePushSubscription } from "@/lib/notification-actions";
+import { getPushPublicKey, savePushSubscription } from "@/lib/notification-actions";
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -43,8 +43,6 @@ export async function enablePushForToggle(): Promise<boolean> {
   ) {
     return false;
   }
-  const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  if (!key) return false;
   try {
     if (Notification.permission === "default") {
       await Notification.requestPermission();
@@ -52,6 +50,9 @@ export async function enablePushForToggle(): Promise<boolean> {
     if (Notification.permission !== "granted") return false;
 
     const reg = await navigator.serviceWorker.ready;
+    const key = await getPushPublicKey();
+    if (!key) return false;
+
     // Descarta a subscrição antiga (possivelmente morta) e cria uma nova,
     // garantindo um endpoint válido no servidor.
     const old = await reg.pushManager.getSubscription();
@@ -94,13 +95,13 @@ export async function healPushSubscription(): Promise<boolean> {
   ) {
     return false;
   }
-  const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  if (!key) return false;
   if (Notification.permission !== "granted") return false; // sem prompt aqui
   try {
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
     if (!sub) {
+      const key = await getPushPublicKey();
+      if (!key) return false;
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(key),

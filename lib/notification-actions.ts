@@ -79,3 +79,8 @@ export async function savePushSubscription(sub: {
 
   return { ok: !error };
 }
+
+// A chave pública de push vem da mesma configuração que assina o envio.
+export async function getPushPublicKey(): Promise<string | null> {
+  return process.env.VAPID_PUBLIC_KEY?.trim() || process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim() || null;
+}
