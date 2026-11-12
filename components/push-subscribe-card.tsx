@@ -2,42 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { Bell, X } from "lucide-react";
-import { savePushSubscription } from "@/lib/notification-actions";
+import { healPushSubscription } from "@/lib/push-client";
 
 const DISMISS_KEY = "leap-push-dismissed-at";
 const DISMISS_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias
-
-function urlBase64ToUint8Array(base64String: string) {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const raw = atob(base64);
-  const arr = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
-  return arr;
-}
-
-// Garante uma subscrição activa e grava-a. Reutiliza a existente se houver
-// (idempotente: re-grava sempre, o que "auto-cura" a linha no servidor caso
-// tenha sido removida por um envio falhado). Assume permissão concedida.
-async function subscribeAndSave(): Promise<boolean> {
-  const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  if (!key) return false;
-  const reg = await navigator.serviceWorker.ready;
-  let sub = await reg.pushManager.getSubscription();
-  if (!sub) {
-    sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(key),
-    });
-  }
-  const json = sub.toJSON();
-  const r = await savePushSubscription({
-    endpoint: json.endpoint ?? "",
-    p256dh: json.keys?.p256dh ?? "",
-    auth: json.keys?.auth ?? "",
-  });
-  return !!r?.ok;
-}
 
 // Soft prompt + auto-heal:
 //  • permissão 'granted' mas sem subscrição (ex.: re-instalou a PWA) →
@@ -47,6 +15,7 @@ async function subscribeAndSave(): Promise<boolean> {
 export function PushSubscribeCard() {
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -55,7 +24,7 @@ export function PushSubscribeCard() {
     if (!supported) return;
 
     if (Notification.permission === "granted") {
-      subscribeAndSave().catch(() => {});
+      healPushSubscription().then(ok => { if (!ok) setShow(true); }).catch(() => setShow(true));
       return;
     }
     if (Notification.permission !== "default") return; // denied
@@ -66,6 +35,7 @@ export function PushSubscribeCard() {
 
   async function enable() {
     setBusy(true);
+    setError(false);
     try {
       const perm = await Notification.requestPermission();
       if (perm !== "granted") {
@@ -73,10 +43,10 @@ export function PushSubscribeCard() {
         setShow(false);
         return;
       }
-      await subscribeAndSave();
-      setShow(false);
+      if (await healPushSubscription()) setShow(false);
+      else setError(true);
     } catch {
-      setShow(false);
+      setError(true);
     } finally {
       setBusy(false);
     }
@@ -122,6 +92,7 @@ export function PushSubscribeCard() {
       <div className="flex-1">
         <div className="text-sm font-semibold">Ativar notificações</div>
         <div className="text-xs text-ink-500">Recebe lembretes e avisos mesmo com a app fechada.</div>
+        {error && <p role="status" className="mt-1 text-xs text-red-600 dark:text-red-300">Não foi possível ativar. Tenta novamente.</p>}
       </div>
       <button onClick={enable} disabled={busy} className="atua-pulse btn-gold shrink-0 text-xs">
         {busy ? "A ativar…" : "Ativar"}
