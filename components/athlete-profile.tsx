@@ -1,4 +1,6 @@
 import "server-only";
+import { LeapAvatar } from "./leap-profile-avatar";
+import { loadVisiblePortrait } from "./leap-profile-avatar-data";
 import Link from "next/link";
 import { Dumbbell, Flame, Shield, Trophy } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/server";
@@ -22,13 +24,14 @@ export async function renderAthleteProfile(id: string, trainerId: string, admin 
 
   const now = new Date();
   const lisbonDate = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
-  const [sessions, extras, streak, trophies] = await Promise.all([
+  const [sessions, extras, streak, trophies, portrait] = await Promise.all([
     db.from("bookings").select("id", { count: "exact", head: true })
       .or(participant).in("status", ["booked", "confirmed"]).gte("starts_at", RANKING_START_LISBON).lte("ends_at", now.toISOString()),
     db.from("activities").select("id", { count: "exact", head: true })
       .eq("client_id", id).eq("status", "validated").gte("activity_date", RANKING_START_DATE).lte("activity_date", lisbonDate),
     db.rpc("get_client_streak", { p_client: id }),
     db.from("ranking_monthly_winners").select("rank,period,pack_pct_snapshot,activities_total_snapshot,streak_snapshot").eq("trainer_id", trainerId).eq("client_id", id).order("period", { ascending: false }),
+    loadVisiblePortrait(id),
   ]);
   if ([sessions, extras, streak, trophies].some(result => result.error)) {
     return <p role="alert" className="card p-4">Não foi possível carregar o perfil. Atualiza a página para tentar novamente.</p>;
@@ -65,7 +68,7 @@ export async function renderAthleteProfile(id: string, trainerId: string, admin 
       <header className="relative overflow-hidden rounded-2xl border border-gold-400/30 bg-ink-900 p-6 text-bone-50">
         <div className="absolute inset-0 bg-gradient-to-br from-gold-400/20 via-transparent to-transparent" aria-hidden="true" />
         <div className="relative flex flex-wrap items-center gap-4">
-          <div className="grid size-16 shrink-0 place-items-center rounded-2xl border border-gold-400/50 bg-gold-400/10 text-3xl font-bold text-gold-300" aria-hidden="true">{Array.from(name)[0]}</div>
+          <LeapAvatar name={name} choice={portrait} />
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-widest text-gold-300">Atleta LEAP</p>
             <Heading className="mt-1 break-words font-display text-3xl font-bold">{name}</Heading>
