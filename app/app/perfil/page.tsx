@@ -1,3 +1,5 @@
+import { ProfileAvatarPicker } from "@/components/leap-profile-avatar";
+import { loadOwnAvatar, type ProfileAvatar } from "@/components/leap-profile-avatar-data";
 import { WeighInPanel } from "@/components/weigh-in-panel";
 import { loadWeighIns } from "@/lib/weigh-ins";
 import { redirect } from "next/navigation";
@@ -59,9 +61,10 @@ export default async function PerfilPage(
     );
   }
 
-  const [tabData, chat] = await Promise.all([
+  const [tabData, chat, avatar] = await Promise.all([
     loadTabData(activeTab, supabase, user.id),
     activeTab === "chat" ? chatContext() : Promise.resolve(null),
+    activeTab === "perfil" ? loadOwnAvatar(user.id) : Promise.resolve({ choice: null, photo: null }),
   ]);
 
   return (
@@ -86,6 +89,7 @@ export default async function PerfilPage(
           activity={tabData.activity ?? null}
           streak={tabData.streak ?? null}
           athlete={tabData.athlete}
+          avatar={avatar}
         />
       )}
       {activeTab === "calendario" && (
@@ -242,12 +246,14 @@ function PerfilTab({
   activity,
   streak,
   athlete,
+  avatar,
 }: {
   profile: any;
   factors: any[];
   activity: any;
   streak: any;
   athlete: AthleteStats;
+  avatar: ProfileAvatar;
 }) {
   const hasFactor = factors.length > 0;
   const today = new Date().toISOString().slice(0, 10);
@@ -270,7 +276,7 @@ function PerfilTab({
         <div className="relative overflow-hidden rounded-2xl border border-gold-400/30 bg-ink-900 p-5 text-bone-50">
           <div className="absolute inset-0 bg-gradient-to-br from-gold-400/20 via-transparent to-transparent" aria-hidden="true" />
           <div className="relative flex items-center gap-4">
-            <div className="grid size-16 shrink-0 place-items-center rounded-2xl border border-gold-400/50 bg-gold-400/10 text-3xl font-bold text-gold-300" aria-hidden="true">{Array.from(name)[0]}</div>
+            <ProfileAvatarPicker name={name} avatar={avatar} />
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-widest text-gold-300">Atleta LEAP</p>
               <h2 className="break-words font-display text-2xl font-bold">{name}</h2>
