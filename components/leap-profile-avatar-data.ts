@@ -1,6 +1,6 @@
 import "server-only";
 import { createAdminClient, getCurrentProfile } from "@/lib/supabase/server";
-import { isMfaSatisfied } from "@/lib/mfa";
+import { requireStaff } from "@/lib/authz";
 
 export type ProfileAvatar = { choice: string | null; photo: string | null };
 
@@ -14,7 +14,11 @@ export async function getAvatarAccount() {
   const profile = await getCurrentProfile();
   if (!profile || profile.access_blocked) return null;
   if (profile.role === "client") return profile.approval_status === "approved" ? profile : null;
-  return await isMfaSatisfied(profile.id) ? profile : null;
+  try {
+    return await requireStaff();
+  } catch {
+    return null;
+  }
 }
 
 // This table is only accessible to the service role. Its payload never goes
