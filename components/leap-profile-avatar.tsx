@@ -121,7 +121,7 @@ export function ProfileAvatarPicker({ name, avatar, owner, fallback }: {
         <button type="button" aria-label="Alterar avatar" onClick={open} className="rounded-full">
           <LeapAvatar name={name} {...avatar} owner={owner} fallback={fallback} />
         </button>
-        <button type="button" onClick={open} className="text-xs font-semibold underline underline-offset-2">Alterar avatar</button>
+        <button type="button" onClick={open} className="text-[10px] leading-4 font-semibold underline underline-offset-2">Alterar avatar</button>
       </div>
       <dialog ref={dialog} aria-labelledby="leap-avatar-title" className="m-auto max-h-[90dvh] w-[calc(100%_-_2rem)] max-w-md overflow-y-auto rounded-2xl bg-white p-4 text-zinc-900 backdrop:bg-black/65 dark:bg-zinc-900 dark:text-white" onCancel={event => {
         if (pending || preparing) event.preventDefault();
