@@ -1,3 +1,5 @@
+import { ProfileAvatarPicker } from "@/components/leap-profile-avatar";
+import { isMainAvatarOwner, loadOwnAvatar, type ProfileAvatar } from "@/components/leap-profile-avatar-data";
 import { createClient, getCurrentProfile } from "@/lib/supabase/server";
 import {
   saveSettingsAction,
@@ -134,7 +136,7 @@ export default async function DefinicoesPage(
 
       {section === "perfil" && (
         <div className="space-y-5">
-          <PerfilTab trainer={trainer} />
+          <PerfilTab trainer={trainer} avatar={user ? await loadOwnAvatar(user.id) : { choice: null, photo: null }} owner={profile ? isMainAvatarOwner(profile) : false} />
           <SegurancaTab />
         </div>
       )}
@@ -457,7 +459,11 @@ function SlideshowTab() {
 
 function PerfilTab({
   trainer,
+  avatar,
+  owner,
 }: {
+  avatar: ProfileAvatar;
+  owner: boolean;
   trainer: NonNullable<Awaited<ReturnType<typeof getCurrentTrainer>>>;
 }) {
   // Links partilháveis com o teu slug — o cliente que clicar fica logo
@@ -500,6 +506,11 @@ function PerfilTab({
         </div>
         <button className="btn-primary">Guardar perfil</button>
       </form>
+
+      <div className="card flex items-center gap-4 p-5">
+        <ProfileAvatarPicker name={trainer.full_name || "Trainer"} avatar={avatar} owner={owner} fallback={trainer.avatar_url ?? null} />
+        <p className="text-sm font-semibold">Avatar da conta</p>
+      </div>
 
       <div className="card space-y-3 p-5">
         <AvatarUploader
