@@ -137,7 +137,7 @@ export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId
         ) : <p className="py-6 text-center text-sm text-ink-500">Envia uma mensagem para começar a conversa.</p>}
       </div>
       {latest && (
-        <form className="shrink-0 space-y-2 border-t border-ink-900/10 px-1 py-2.5 dark:border-white/10" onSubmit={event => {
+        <form data-chat-composer={fill ? "full" : undefined} className={`shrink-0 space-y-2 border-t border-ink-900/10 py-2.5 dark:border-white/10 ${fill ? "-mx-4 px-4 md:mx-0 md:px-1" : "px-1"}`} onSubmit={event => {
           event.preventDefault();
           if (pending || !body.trim()) return;
           setError("");
@@ -164,6 +164,11 @@ export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId
             } catch { setError("Não foi possível enviar. Tenta novamente."); }
           });
         }}>
+          {fill && <style>{`
+            @media (max-width: 767px) {
+              main:has([data-chat-composer="full"]) { padding-bottom: 0; }
+            }
+          `}</style>}
           {alertId && <p className="text-xs font-semibold">Rascunho de reativação · podes editar antes de enviar</p>}
           {booking && <p className="text-xs font-semibold">Sobre o treino de {formatDateTime(booking.starts_at)}</p>}
           <div className="flex items-end gap-2">
