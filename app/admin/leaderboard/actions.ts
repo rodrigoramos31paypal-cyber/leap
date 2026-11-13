@@ -33,7 +33,7 @@ export async function loadActivityProofAction(id: string) {
     return { error: "Comprovativo indisponível." };
   }
   const { data, error: proofError } = await db.from("activity_proofs")
-    .select("jpeg").eq("activity_id", id).maybeSingle();
+    .select("jpeg, comment").eq("activity_id", id).maybeSingle();
   if (proofError) return { error: "Não foi possível carregar o comprovativo." };
-  return { photo: data ? `data:image/jpeg;base64,${data.jpeg}` : null };
+  return { photo: data ? `data:image/jpeg;base64,${data.jpeg}` : null, comment: data?.comment ?? null };
 }
