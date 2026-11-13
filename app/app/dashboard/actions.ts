@@ -13,6 +13,11 @@ export async function logActivityAction(type: "autonomous" | "cardio", form: For
     return { error: "Tipo de atividade inválido." };
   }
 
+  const comment = form.get("comment");
+  if (comment !== null && (typeof comment !== "string" || comment.trim().length > 300)) {
+    return { error: "O comentário pode ter até 300 caracteres." };
+  }
+
   const file = form.get("proof");
   if (!(file instanceof File) || !file.size || file.size > 512_000) {
     return { error: "Escolhe uma foto válida para o comprovativo." };
@@ -34,6 +39,7 @@ export async function logActivityAction(type: "autonomous" | "cardio", form: For
   const db = createAdminClient() as unknown as import("@supabase/supabase-js").SupabaseClient;
   const { error } = await db.rpc("log_activity_with_proof", {
     p_client: account.id, p_type: type, p_jpeg: jpeg.toString("base64"),
+    p_comment: typeof comment === "string" ? comment.trim() : null,
   });
   if (error) return { error: "Não foi possível registar a atividade. Tenta novamente." };
   revalidatePath("/app/dashboard");
