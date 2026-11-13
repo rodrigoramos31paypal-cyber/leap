@@ -64,8 +64,12 @@ export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId
   }, [lastMessageId, latest]);
 
   const today = dayKey.format(new Date());
+  // Subtract a calendar day from Lisbon's date, even across clock changes.
+  const yesterdayDate = new Date(`${today}T00:00:00Z`);
+  yesterdayDate.setUTCDate(yesterdayDate.getUTCDate() - 1);
+  const yesterday = yesterdayDate.toISOString().slice(0, 10);
   return (
-    <div className={`overflow-hidden rounded-2xl border border-ink-900/10 bg-bone-100 dark:border-white/10 dark:bg-ink-900 ${fill ? "flex min-h-0 flex-1 flex-col" : ""}`}>
+    <div className={fill ? "flex min-h-0 flex-1 flex-col" : undefined}>
       <div ref={history} tabIndex={0} aria-label="Histórico da conversa"
         onScroll={event => {
           const { scrollHeight, scrollTop, clientHeight } = event.currentTarget;
@@ -91,7 +95,7 @@ export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId
                 <li key={message.id} className={grouped ? "mt-1" : "mt-3 first:mt-0"}>
                   {newDay && (
                     <p className="mx-auto mb-3 w-fit rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-ink-600 dark:bg-white/10 dark:text-bone-100">
-                      {day === today ? "Hoje" : dayLabel.format(date)}
+                      {day === today ? "Hoje" : day === yesterday ? "Ontem" : dayLabel.format(date)}
                     </p>
                   )}
                   <div className={`w-fit max-w-[88%] rounded-2xl px-3 py-2 shadow-sm ${
@@ -133,7 +137,7 @@ export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId
         ) : <p className="py-6 text-center text-sm text-ink-500">Envia uma mensagem para começar a conversa.</p>}
       </div>
       {latest && (
-        <form className="shrink-0 space-y-2 border-t border-ink-900/10 bg-bone-50 p-2.5 dark:border-white/10 dark:bg-ink-900" onSubmit={event => {
+        <form className="shrink-0 space-y-2 border-t border-ink-900/10 px-1 py-2.5 dark:border-white/10" onSubmit={event => {
           event.preventDefault();
           if (pending || !body.trim()) return;
           setError("");
