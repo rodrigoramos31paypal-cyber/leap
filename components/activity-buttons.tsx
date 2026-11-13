@@ -32,7 +32,9 @@ export function ActivityButtons() {
 
   function log(form: HTMLFormElement) {
     setError("");
-    const file = new FormData(form).get("proof");
+    const fields = new FormData(form);
+    const file = fields.get("proof");
+    const comment = String(fields.get("comment") ?? "").trim();
     if (!(file instanceof File) || !file.size || file.size > 20_000_000) {
       setError("Escolhe uma foto até 20 MB.");
       return;
@@ -60,6 +62,7 @@ export function ActivityButtons() {
         }
         const payload = new FormData();
         payload.set("proof", jpeg, "comprovativo.jpg");
+        payload.set("comment", comment);
         const res = await logActivityAction(type, payload);
         if (res?.error) {
           setError(res.error);
@@ -80,13 +83,17 @@ export function ActivityButtons() {
   return (
     <div className="rounded-[18px] border border-ink-900/10 bg-white p-4 dark:border-white/10 dark:bg-ink-800">
       <dialog ref={dialog} aria-labelledby="activity-proof-title"
-        className="m-auto w-[calc(100%_-_2rem)] max-w-sm rounded-2xl bg-white p-4 text-ink-900 backdrop:bg-black/60 dark:bg-ink-800 dark:text-bone-50"
+        className="m-auto max-h-[90dvh] overflow-y-auto w-[calc(100%_-_2rem)] max-w-sm rounded-2xl bg-white p-4 text-ink-900 backdrop:bg-black/60 dark:bg-ink-800 dark:text-bone-50"
         onCancel={event => { if (pending) event.preventDefault(); }}>
         <form className="space-y-4" onSubmit={event => { event.preventDefault(); if (!pending) log(event.currentTarget); }}>
-          <h2 id="activity-proof-title" className="font-bold">{type === "cardio" ? "Comprovativo de cardio" : "Comprovativo de treino"}</h2>
+          <h2 id="activity-proof-title" tabIndex={-1} autoFocus className="font-bold outline-none">{type === "cardio" ? "Comprovativo de cardio" : "Comprovativo de treino"}</h2>
           <label className="block text-sm">
-            Foto do comprovativo
+            Foto do teu treino
             <input className="mt-2 block w-full text-sm" name="proof" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" required disabled={pending} />
+          </label>
+          <label className="block text-sm">
+            Comentário (opcional)
+            <textarea className="input mt-2 w-full" name="comment" rows={2} maxLength={300} disabled={pending} />
           </label>
           {error && <p role="alert" className="text-sm text-red-600 dark:text-red-300">{error}</p>}
           <div className="flex justify-end gap-2">
