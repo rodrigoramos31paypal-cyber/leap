@@ -113,7 +113,7 @@ export async function ActivitiesAdmin({
                   </div>
                 </div>
                 {sub === "pendentes" ? (
-                  <ActivityDecide id={r.id} />
+                  <ActivityDecide id={r.id} name={nameById.get(r.client_id) || "Cliente"} activity={`${ACTIVITY_TYPE_LABEL[type]} · ${fmtDate(r.activity_date)}`} />
                 ) : (
                   <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${chip.bg} ${chip.text}`}>
                     {ACTIVITY_STATUS_LABEL[status]}
