@@ -9,7 +9,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { NotebookPen, Plus, EyeOff, Eye, Cake } from "lucide-react";
 import { StreakPill } from "./streak-pill";
-import { createClient, getCurrentProfile } from "@/lib/supabase/server";
+import { MonthlyActivityPill } from "./monthly-activity-pill";
+import { createAdminClient, createClient, getCurrentProfile } from "@/lib/supabase/server";
 import { getClientCredits } from "@/lib/credits";
 import { getDuoPartner } from "@/lib/duo";
 import { getTrioPartners } from "@/lib/trio";
@@ -225,9 +226,14 @@ export default async function ClientDetail(props: {
   const packs = (packsRaw ?? []) as any[];
 
   // Sistema LEAP (0149): sequência do cliente, para o badge no perfil.
-  const { data: streakData } = await (supabase as any).rpc("get_client_streak", {
-    p_client: params.id,
-  });
+  const rankingDb = createAdminClient() as unknown as import("@supabase/supabase-js").SupabaseClient;
+  const [{ data: streakData }, { data: monthly }] = await Promise.all([
+    (supabase as any).rpc("get_client_streak", { p_client: profileId }),
+    viewer && !isDeleted
+      ? rankingDb.rpc("get_admin_client_month_activities", { p_client: profileId, p_actor: viewer.id }).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  const monthlyActivity = monthly as { month_start: string; total: number; editable: boolean } | null;
   const streakWeeks = Number((streakData as any[] | null)?.[0]?.current_streak ?? 0);
 
   return (
@@ -252,9 +258,16 @@ export default async function ClientDetail(props: {
               )}
             </div>
           )}
-          <StreakPill clientId={params.id} weeks={streakWeeks} />
         </div>
         <BalanceChip total={credits?.total ?? 0} />
+      </div>
+
+      <div className="-mt-3 flex flex-wrap items-center gap-x-2 min-[360px]:flex-nowrap">
+        <StreakPill clientId={profileId} weeks={streakWeeks} />
+        {monthlyActivity && (
+          <MonthlyActivityPill clientId={profileId} month={monthlyActivity.month_start}
+            total={monthlyActivity.total} editable={monthlyActivity.editable} />
+        )}
       </div>
 
       <div className="flex flex-wrap gap-1 rounded-xl border border-ink-900/[0.07] bg-bone-100 p-1 dark:border-white/10 dark:bg-ink-900">
