@@ -63,8 +63,8 @@ export function SlotClickLayer({
     const rect = e.currentTarget.getBoundingClientRect();
     const offsetY = e.clientY - rect.top;
     const rawMin = yToMinutes(offsetY);
-    // snap a 15 min, limitado a 23:30 como última hora de início
-    const snapped = Math.max(0, Math.min(24 * 60 - 30, Math.round(rawMin / 15) * 15));
+    // Cada faixa representa o quarto de hora que começa na sua linha superior.
+    const snapped = Math.max(0, Math.min(24 * 60 - 30, Math.floor((rawMin + 1e-7) / 15) * 15));
     const h = Math.floor(snapped / 60);
     const m = snapped % 60;
     const time = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;

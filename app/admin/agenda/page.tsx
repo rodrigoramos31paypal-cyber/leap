@@ -732,15 +732,15 @@ function DayView({
                         <>
                           <div
                             className="pointer-events-none absolute left-0 right-0 border-t border-dashed border-ink-900/10"
-                            style={{ top: top + ht / 2 }}
+                            style={{ top: yForMinutes(layout, h * 60 + 30) }}
                           />
                           <div
                             className="pointer-events-none absolute left-0 right-0 border-t border-dotted border-ink-900/5"
-                            style={{ top: top + ht / 4 }}
+                            style={{ top: yForMinutes(layout, h * 60 + 15) }}
                           />
                           <div
                             className="pointer-events-none absolute left-0 right-0 border-t border-dotted border-ink-900/5"
-                            style={{ top: top + (ht * 3) / 4 }}
+                            style={{ top: yForMinutes(layout, h * 60 + 45) }}
                           />
                         </>
                       )}
@@ -1457,15 +1457,15 @@ function WeekView({
                         <>
                           <div
                             className="pointer-events-none absolute left-0 right-0 border-t border-dashed border-ink-900/10"
-                            style={{ top: top + ht / 2 }}
+                            style={{ top: yForMinutes(layout, h * 60 + 30) }}
                           />
                           <div
                             className="pointer-events-none absolute left-0 right-0 border-t border-dotted border-ink-900/5"
-                            style={{ top: top + ht / 4 }}
+                            style={{ top: yForMinutes(layout, h * 60 + 15) }}
                           />
                           <div
                             className="pointer-events-none absolute left-0 right-0 border-t border-dotted border-ink-900/5"
-                            style={{ top: top + (ht * 3) / 4 }}
+                            style={{ top: yForMinutes(layout, h * 60 + 45) }}
                           />
                         </>
                       )}
