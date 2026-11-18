@@ -176,9 +176,19 @@ export function BookingDialog({
       reset();
       if (detail?.date) {
         setDate(detail.date);
+        setBusyDateFrom(detail.date);
+        setBusyDateTo(detail.date);
         setBusyWeekdays(new Set([weekdayOf(detail.date)]));
       }
-      if (detail?.time) setTime(detail.time);
+      if (detail?.time) {
+        setTime(detail.time);
+        const slot = BUSY_TIMES.indexOf(detail.time);
+        if (slot >= 0 && slot < BUSY_TIMES.length - 1) {
+          setBusyFrom(detail.time);
+          const durationSlots = Math.max(1, Math.round(defaultDuration / 15));
+          setBusyTo(BUSY_TIMES[Math.min(slot + durationSlots, BUSY_TIMES.length - 1)]);
+        }
+      }
       setOpen(true);
     }
     window.addEventListener("agenda:newbooking", onNewBooking as EventListener);

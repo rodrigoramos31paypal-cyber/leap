@@ -3,7 +3,7 @@
 // ════════════════════════════════════════════════════════════════
 // SlotClickLayer · camada transparente sobre uma coluna-dia da grelha
 // da semana. Ao clicar num espaço vazio, calcula a hora a partir da
-// posição vertical do clique (snap a 30 min) e abre o BookingDialog
+// posição vertical do clique (snap a 15 min) e abre o BookingDialog
 // via evento `agenda:newbooking` com { date, time }.
 //
 // Fica POR BAIXO dos blocos de marcação/bloqueio (que vêm depois no
@@ -63,9 +63,8 @@ export function SlotClickLayer({
     const rect = e.currentTarget.getBoundingClientRect();
     const offsetY = e.clientY - rect.top;
     const rawMin = yToMinutes(offsetY);
-    // snap a 30 min, limitado a 23:30 como última hora de início
-    let snapped = Math.round(rawMin / 30) * 30;
-    snapped = Math.max(0, Math.min(24 * 60 - 30, snapped));
+    // snap a 15 min, limitado a 23:30 como última hora de início
+    const snapped = Math.max(0, Math.min(24 * 60 - 30, Math.round(rawMin / 15) * 15));
     const h = Math.floor(snapped / 60);
     const m = snapped % 60;
     const time = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
@@ -78,8 +77,8 @@ export function SlotClickLayer({
     <div
       onClick={onClick}
       className="absolute inset-0 cursor-pointer"
-      title="Clica para marcar uma sessão"
-      aria-label="Marcar sessão neste dia"
+      title="Clica para marcar uma sessão ou bloquear o horário"
+      aria-label="Marcar sessão ou bloquear horário neste dia"
     />
   );
 }
