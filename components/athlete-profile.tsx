@@ -106,7 +106,7 @@ export async function renderAthleteProfile(id: string, trainerId: string, admin 
         </div>
       </section>
       <div className="grid grid-cols-2 gap-2">
-        <Stat icon={<Flame size={18} />} value={best} label="Melhor sequência" detail={best === 1 ? "semana" : "semanas"} />
+        <Stat icon={<Flame size={18} />} value={best} label="Melhor sequência" detail={best === 1 ? "semana seguida" : "semanas seguidas"} />
         <Stat icon={<Trophy size={18} />} value={total} label="Troféus" />
       </div>
       <section className="card space-y-3 p-4">
@@ -115,16 +115,16 @@ export async function renderAthleteProfile(id: string, trainerId: string, admin 
           <ul className="divide-y divide-ink-900/10 dark:divide-white/10">
             {awardDetails.map(({ rank, period, stats, streak_snapshot }) => {
               const medal = rank === 1
-                ? { label: "Ouro", color: "bg-[#FBF1CE] text-[#89630B]" }
+                ? { label: "Ouro", color: "bg-[#FBF1CE]", cup: "#F4CB36", stroke: "#9E7408" }
                 : rank === 2
-                  ? { label: "Prata", color: "bg-[#E9EAEC] text-[#555D69]" }
-                  : { label: "Bronze", color: "bg-[#F3E1D1] text-[#875025]" };
+                  ? { label: "Prata", color: "bg-[#E9EAEC]", cup: "#C3CAD4", stroke: "#616C7A" }
+                  : { label: "Bronze", color: "bg-[#F3E1D1]", cup: "#CD8B50", stroke: "#84502C" };
 
               return (
                 <li key={period} className="py-3">
                   <div className="flex items-start gap-3">
                     <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${medal.color}`}>
-                      <Trophy size={19} aria-hidden="true" />
+                      <Trophy size={22} fill={medal.cup} color={medal.stroke} strokeWidth={1.6} aria-hidden="true" />
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold">{rank}.º lugar · {medal.label}</p>
@@ -164,10 +164,11 @@ export async function renderAthleteProfile(id: string, trainerId: string, admin 
 function Stat({ icon, value, label, detail }: { icon: React.ReactNode; value: number; label: string; detail?: string }) {
   return (
     <div className="card min-w-0 p-3">
-      <span className="text-gold-600 dark:text-gold-300" aria-hidden="true">{icon}</span>
-      <p className="mt-2 font-display text-2xl font-bold tabular-nums">{value}</p>
-      {detail && <p className="text-xs text-ink-500">{detail}</p>}
-      <p className="mt-1 text-xs font-semibold">{label}</p>
+      <p className="flex items-center gap-1.5 text-xs font-semibold">
+        <span className="shrink-0 text-gold-600 dark:text-gold-300" aria-hidden="true">{icon}</span>
+        {label}
+      </p>
+      <p className="mt-2 font-display text-xl font-bold tabular-nums">{value}{detail && <span className="ml-1 text-xs font-normal text-ink-500">{detail}</span>}</p>
     </div>
   );
 }
