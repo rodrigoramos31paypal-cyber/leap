@@ -8,7 +8,7 @@
 // ════════════════════════════════════════════════════════════════
 import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { Dumbbell, Heart, Trophy, ChevronRight } from "lucide-react";
+import { Dumbbell, Heart, Trophy, ChevronRight, Camera, Plus } from "lucide-react";
 import { logActivityAction } from "@/app/app/dashboard/actions";
 import type { Flash } from "@/lib/flash-types";
 
@@ -21,10 +21,18 @@ export function ActivityButtons() {
 
   const dialog = useRef<HTMLDialogElement>(null);
   const [type, setType] = useState<"autonomous" | "cardio">("autonomous");
+  const [minutes, setMinutes] = useState("");
+  const [custom, setCustom] = useState(false);
+  const [filename, setFilename] = useState("");
+  const submission = useRef<string | null>(null);
   const [error, setError] = useState("");
 
   function open(next: typeof type) {
     setType(next);
+    setMinutes("");
+    setCustom(false);
+    setFilename("");
+    submission.current = null;
     setError("");
     dialog.current?.querySelector("form")?.reset();
     dialog.current?.showModal();
@@ -39,6 +47,7 @@ export function ActivityButtons() {
       setError("Escolhe uma foto até 20 MB.");
       return;
     }
+    if (!submission.current) submission.current = crypto.randomUUID();
     startTransition(async () => {
       try {
         const image = await createImageBitmap(file);
@@ -63,6 +72,9 @@ export function ActivityButtons() {
         const payload = new FormData();
         payload.set("proof", jpeg, "comprovativo.jpg");
         payload.set("comment", comment);
+        payload.set("minutes", minutes);
+        payload.set("distance", String(fields.get("distance") ?? ""));
+        payload.set("submission", submission.current!);
         const res = await logActivityAction(type, payload);
         if (res?.error) {
           setError(res.error);
@@ -83,22 +95,64 @@ export function ActivityButtons() {
   return (
     <div className="rounded-[18px] border border-ink-900/10 bg-white p-4 dark:border-white/10 dark:bg-ink-800">
       <dialog ref={dialog} aria-labelledby="activity-proof-title"
-        className="m-auto max-h-[90dvh] overflow-y-auto w-[calc(100%_-_2rem)] max-w-sm rounded-2xl bg-white p-4 text-ink-900 backdrop:bg-black/60 dark:bg-ink-800 dark:text-bone-50"
+        className="m-auto max-h-[90dvh] overflow-y-auto w-[calc(100%_-_2rem)] max-w-md rounded-2xl bg-white p-4 text-ink-900 backdrop:bg-black/60 dark:bg-ink-800 dark:text-bone-50"
         onCancel={event => { if (pending) event.preventDefault(); }}>
         <form className="space-y-4" onSubmit={event => { event.preventDefault(); if (!pending) log(event.currentTarget); }}>
-          <h2 id="activity-proof-title" tabIndex={-1} autoFocus className="font-bold outline-none">{type === "cardio" ? "Comprovativo de cardio" : "Comprovativo de treino"}</h2>
+          <div className={type === "cardio" ? "text-center" : ""}>
+            {type === "cardio" && <Heart className="mx-auto mb-3 text-gold-500" size={32} aria-hidden="true" />}
+            <h2 id="activity-proof-title" tabIndex={-1} autoFocus className="font-display text-xl font-bold outline-none">{type === "cardio" ? "Cardio feito. Bem jogado!" : "Comprovativo de treino"}</h2>
+            {type === "cardio" && <p className="mt-1 text-sm text-ink-500">Regista o esforço de hoje.</p>}
+          </div>
+          {type === "cardio" && <>
+            <fieldset disabled={pending}>
+              <legend className="mb-2 text-sm font-semibold">Quanto tempo fizeste?</legend>
+              <div className="grid grid-cols-5 gap-2">
+                {[20, 30, 45, 60].map(value => (
+                  <button type="button" key={value} aria-pressed={!custom && minutes === String(value)}
+                    onClick={() => { setCustom(false); setMinutes(String(value)); }}
+                    className={`min-h-11 rounded-xl border px-1 text-sm font-semibold ${!custom && minutes === String(value) ? "border-gold-500 bg-gold-400 text-ink-900" : "border-ink-900/20 dark:border-white/20"}`}>
+                    {value} min
+                  </button>
+                ))}
+                <button type="button" aria-label="Outro tempo" aria-expanded={custom}
+                  className="grid min-h-11 place-items-center rounded-xl border border-ink-900/20 dark:border-white/20"
+                  onClick={() => { setCustom(true); setMinutes(""); }}>
+                  <Plus size={18} aria-hidden="true" />
+                </button>
+              </div>
+              {custom && <label className="mt-3 block text-sm">Minutos
+                <input className="input mt-1" type="number" min={1} max={1440} step={1} required
+                  value={minutes} onChange={event => setMinutes(event.target.value)} />
+              </label>}
+            </fieldset>
+            <label className="block text-sm">Distância (opcional)
+              <div className="relative mt-1">
+                <input className="input pr-10" name="distance" inputMode="decimal" placeholder="Ex.: 2,5" disabled={pending} />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-ink-500">km</span>
+              </div>
+            </label>
+          </>}
+          <div className="text-sm">
+            <p className="mb-2 font-semibold">Comprovativo do treino</p>
+            <label className="relative flex cursor-pointer flex-col items-center gap-1 overflow-hidden rounded-xl border border-ink-900/20 p-4 text-center focus-within:ring-2 focus-within:ring-gold-500 dark:border-white/20">
+              <Camera size={25} aria-hidden="true" />
+              <span className="font-semibold">Adicionar foto</span>
+              <span className="text-xs text-ink-500">Escolher da galeria ou tirar foto</span>
+              {filename && <span className="max-w-full break-all text-xs">{filename}</span>}
+              <input className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label="Comprovativo do treino" name="proof" type="file"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif" required disabled={pending}
+                onChange={event => setFilename(event.target.files?.[0]?.name ?? "")} />
+            </label>
+          </div>
           <label className="block text-sm">
-            Foto do teu treino
-            <input className="mt-2 block w-full text-sm" name="proof" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" required disabled={pending} />
-          </label>
-          <label className="block text-sm">
-            Comentário (opcional)
-            <textarea className="input mt-2 w-full" name="comment" rows={2} maxLength={300} disabled={pending} />
+            Comentário
+            <textarea className="input mt-2 w-full" name="comment" rows={2} maxLength={300} placeholder="Como correu?" disabled={pending} />
           </label>
           {error && <p role="alert" className="text-sm text-red-600 dark:text-red-300">{error}</p>}
-          <div className="flex justify-end gap-2">
+          {type === "cardio" && <p className="flex items-center justify-center gap-2 text-xs text-ink-500"><Trophy size={16} className="text-gold-500" aria-hidden="true" /> +1 atividade no ranking após validação</p>}
+          <div className="flex flex-wrap justify-end gap-2">
             <button type="button" className="btn-outline" disabled={pending} onClick={() => dialog.current?.close()}>Cancelar</button>
-            <button className="btn-primary disabled:opacity-50" disabled={pending}>{pending ? "A enviar…" : "Enviar comprovativo"}</button>
+            <button className="btn-primary disabled:opacity-50" disabled={pending || (type === "cardio" && !minutes)}>{pending ? "A enviar…" : type === "cardio" ? "Registar o meu cardio" : "Enviar comprovativo"}</button>
           </div>
         </form>
       </dialog>
