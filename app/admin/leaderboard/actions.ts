@@ -27,7 +27,7 @@ export async function loadActivityProofAction(id: string) {
   const staff = await requireStaff();
   const db = createAdminClient() as unknown as import("@supabase/supabase-js").SupabaseClient;
   const { data: activity, error } = await db.from("activities")
-    .select("trainer_id").eq("id", id).eq("status", "pending").maybeSingle();
+    .select("trainer_id, duration_minutes, distance_km").eq("id", id).eq("status", "pending").maybeSingle();
   if (error) return { error: "Não foi possível carregar o comprovativo." };
   if (!activity || (staff.role !== "owner" && !(await getAccessibleTrainerIds()).includes(activity.trainer_id))) {
     return { error: "Comprovativo indisponível." };
@@ -35,5 +35,5 @@ export async function loadActivityProofAction(id: string) {
   const { data, error: proofError } = await db.from("activity_proofs")
     .select("jpeg, comment").eq("activity_id", id).maybeSingle();
   if (proofError) return { error: "Não foi possível carregar o comprovativo." };
-  return { photo: data ? `data:image/jpeg;base64,${data.jpeg}` : null, comment: data?.comment ?? null };
+  return { photo: data ? `data:image/jpeg;base64,${data.jpeg}` : null, comment: data?.comment ?? null, minutes: activity.duration_minutes, distance: activity.distance_km };
 }
