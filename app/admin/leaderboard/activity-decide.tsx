@@ -15,11 +15,13 @@ export function ActivityDecide({ id, name, activity }: { id: string; name: strin
   const isViewer = useIsViewer();
   const dialog = useRef<HTMLDialogElement>(null);
   const [photo, setPhoto] = useState<string | null>(null);
+  const [details, setDetails] = useState("");
   const [comment, setComment] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   function review() {
     setPhoto(null);
+    setDetails("");
     setComment(null);
     setError("");
     dialog.current?.showModal();
@@ -27,6 +29,7 @@ export function ActivityDecide({ id, name, activity }: { id: string; name: strin
       try {
         const result = await loadActivityProofAction(id);
         setPhoto(result.photo ?? null);
+        setDetails(result.minutes ? result.minutes + " min" + (result.distance ? " · " + result.distance + " km" : "") : "");
         setComment(result.comment ?? null);
         setError(result.error ?? "");
       } catch {
@@ -61,6 +64,7 @@ export function ActivityDecide({ id, name, activity }: { id: string; name: strin
         className="m-auto max-h-[90dvh] w-[calc(100%_-_2rem)] max-w-lg overflow-y-auto rounded-2xl bg-white p-4 text-ink-900 backdrop:bg-black/60 dark:bg-ink-800 dark:text-bone-50"
         onClose={() => { setPhoto(null); setComment(null); }} onCancel={event => { if (pending) event.preventDefault(); }}>
       <h3 className="font-bold">{name}</h3><p className="mb-3 text-sm text-ink-500">{activity}</p>
+      {details && <p className="mb-3 text-sm font-semibold">{details}</p>}
       {pending && !photo ? <p className="text-sm">A carregar…</p> : error ? <p role="alert" className="text-sm">{error}</p> : photo ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={photo} alt="Comprovativo enviado pelo cliente" className="mb-4 max-h-[62dvh] w-full rounded-lg object-contain" />
