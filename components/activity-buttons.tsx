@@ -6,9 +6,9 @@
 // de validação). Feedback imediato via evento leap:toast (Toaster).
 // Reutiliza o estilo dos cards/botões existentes.
 // ════════════════════════════════════════════════════════════════
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { Dumbbell, Heart, Trophy, ChevronRight, Camera, Plus } from "lucide-react";
+import { Dumbbell, Trophy, ChevronRight, Camera, Plus, CheckCircle2 } from "lucide-react";
 import { logActivityAction } from "@/app/app/dashboard/actions";
 import type { Flash } from "@/lib/flash-types";
 
@@ -24,6 +24,8 @@ export function ActivityButtons() {
   const [minutes, setMinutes] = useState("");
   const [custom, setCustom] = useState(false);
   const [filename, setFilename] = useState("");
+  const [preview, setPreview] = useState("");
+  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
   const submission = useRef<string | null>(null);
   const [error, setError] = useState("");
 
@@ -32,6 +34,7 @@ export function ActivityButtons() {
     setMinutes("");
     setCustom(false);
     setFilename("");
+    setPreview("");
     submission.current = null;
     setError("");
     dialog.current?.querySelector("form")?.reset();
@@ -99,8 +102,8 @@ export function ActivityButtons() {
         onCancel={event => { if (pending) event.preventDefault(); }}>
         <form className="space-y-4" onSubmit={event => { event.preventDefault(); if (!pending) log(event.currentTarget); }}>
           <div className={type === "cardio" ? "text-center" : ""}>
-            {type === "cardio" && <Heart className="mx-auto mb-3 text-gold-500" size={32} aria-hidden="true" />}
-            <h2 id="activity-proof-title" tabIndex={-1} autoFocus className="font-display text-xl font-bold outline-none">{type === "cardio" ? "Cardio feito. Bem jogado!" : "Comprovativo de treino"}</h2>
+            {type === "cardio" && <span className="mb-2 block text-2xl" aria-hidden="true">🏃</span>}
+            <h2 id="activity-proof-title" tabIndex={-1} autoFocus className="font-display text-lg font-bold outline-none">{type === "cardio" ? "Cardio feito. Bem jogado!" : "Comprovativo de treino"}</h2>
             {type === "cardio" && <p className="mt-1 text-sm text-ink-500">Regista o esforço de hoje.</p>}
           </div>
           {type === "cardio" && <>
@@ -135,13 +138,20 @@ export function ActivityButtons() {
           <div className="text-sm">
             <p className="mb-2 font-semibold">Comprovativo do treino</p>
             <label className="relative flex cursor-pointer flex-col items-center gap-1 overflow-hidden rounded-xl border border-ink-900/20 p-4 text-center focus-within:ring-2 focus-within:ring-gold-500 dark:border-white/20">
-              <Camera size={25} aria-hidden="true" />
-              <span className="font-semibold">Adicionar foto</span>
-              <span className="text-xs text-ink-500">Escolher da galeria ou tirar foto</span>
-              {filename && <span className="max-w-full break-all text-xs">{filename}</span>}
+              {preview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={preview} alt="Pré-visualização do comprovativo" className="h-20 w-20 rounded-lg object-cover" />
+              ) : <Camera size={22} aria-hidden="true" />}
+              <span className="flex items-center gap-1.5 font-semibold">{filename && <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400" aria-hidden="true" />}{filename ? "Foto adicionada" : "Adicionar foto"}</span>
+              <span className="text-xs text-ink-500">{filename ? "Pronta para enviar · toca para trocar" : "Escolher da galeria ou tirar foto"}</span>
+              {filename && <span role="status" className="max-w-full break-all text-xs">{filename}</span>}
               <input className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label="Comprovativo do treino" name="proof" type="file"
                 accept="image/jpeg,image/png,image/webp,image/heic,image/heif" required disabled={pending}
-                onChange={event => setFilename(event.target.files?.[0]?.name ?? "")} />
+                onChange={event => {
+                  const file = event.target.files?.[0];
+                  setFilename(file?.name ?? "");
+                  setPreview(file ? URL.createObjectURL(file) : "");
+                }} />
             </label>
           </div>
           <label className="block text-sm">
@@ -174,7 +184,7 @@ export function ActivityButtons() {
           onClick={() => open("cardio")}
           className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-ink-900/10 bg-bone-50 px-3 py-3 text-sm font-medium text-ink-900 transition hover:bg-ink-900/5 disabled:opacity-50 dark:border-white/10 dark:bg-white/5 dark:text-bone-50 dark:hover:bg-white/10"
         >
-          <Heart size={16} /> Fiz cardio hoje
+          <span aria-hidden="true">🏃</span> Fiz cardio hoje
         </button>
       </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-ink-900/5 pt-2 dark:border-white/10">

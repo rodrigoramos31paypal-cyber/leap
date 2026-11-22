@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Dumbbell, Flame, Shield, Trophy } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/server";
 import { displayName, levelForStreak, LEVEL_CHIP, LEVEL_LABEL } from "@/lib/streak";
-import { periodLabel, RANKING_START_DATE, RANKING_START_LISBON } from "@/lib/ranking-periods";
+import { currentPeriodLisbon, periodLabel } from "@/lib/ranking-periods";
 
 export async function renderAthleteProfile(id: string, trainerId: string, admin = false) {
   const rankingHref = admin ? "/admin/leaderboard" : "/app/leaderboard";
@@ -22,20 +22,27 @@ export async function renderAthleteProfile(id: string, trainerId: string, admin 
   ]);
   if (!athlete || !membership) return null;
 
-  const now = new Date();
-  const lisbonDate = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
-  const [sessions, extras, streak, trophies, portrait] = await Promise.all([
-    db.from("bookings").select("id", { count: "exact", head: true })
-      .or(participant).in("status", ["booked", "confirmed"]).gte("starts_at", RANKING_START_LISBON).lte("ends_at", now.toISOString()),
-    db.from("activities").select("id", { count: "exact", head: true })
-      .eq("client_id", id).eq("status", "validated").gte("activity_date", RANKING_START_DATE).lte("activity_date", lisbonDate),
+  const period = currentPeriodLisbon();
+  const monthStart = period + "-01";
+  const [year, month] = period.split("-").map(Number);
+  const nextMonth = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10);
+  const [ranking, extras, streak, trophies, portrait] = await Promise.all([
+    db.rpc("get_leaderboard_month", { p_trainer: trainerId, p_period: period }),
+    db.from("activities").select("type,duration_minutes")
+      .eq("client_id", id).eq("status", "validated")
+      .gte("activity_date", monthStart).lt("activity_date", nextMonth),
     db.rpc("get_client_streak", { p_client: id }),
     db.from("ranking_monthly_winners").select("rank,period,pack_pct_snapshot,activities_total_snapshot,streak_snapshot").eq("trainer_id", trainerId).eq("client_id", id).order("period", { ascending: false }),
     loadVisiblePortrait(id),
   ]);
-  if ([sessions, extras, streak, trophies].some(result => result.error)) {
+  if ([ranking, extras, streak, trophies].some(result => result.error)) {
     return <p role="alert" className="card p-4">Não foi possível carregar o perfil. Atualiza a página para tentar novamente.</p>;
   }
+  const monthly = (ranking.data ?? []).find((row: { client_id: string }) => row.client_id === id);
+  const cardio = (extras.data ?? []).filter((row: { type: string }) => row.type === "cardio");
+  const cardioMinutes = cardio.reduce((sum: number, row: { duration_minutes: number | null }) => sum + (row.duration_minutes ?? 0), 0);
+  const unknownMinutes = cardio.filter((row: { duration_minutes: number | null }) => row.duration_minutes == null).length;
+  const workouts = Number(monthly?.pt_done_month ?? 0) + (extras.data ?? []).filter((row: { type: string }) => row.type === "autonomous").length;
   const current = Number(streak.data?.[0]?.current_streak ?? 0);
   const best = Number(streak.data?.[0]?.best_streak ?? 0);
   const level = levelForStreak(current);
@@ -78,8 +85,27 @@ export async function renderAthleteProfile(id: string, trainerId: string, admin 
           </div>
         </div>
       </header>
-      <div className="grid grid-cols-3 gap-2">
-        <Stat icon={<Dumbbell size={18} />} value={(sessions.count ?? 0) + (extras.count ?? 0)} label="Atividades no total" />
+      <section className="card p-3" aria-label="Atividades do mês">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold">Atividades no mês</h2>
+            <p className="text-xs text-ink-500">{periodLabel(period)}</p>
+          </div>
+          <p className="font-display text-2xl font-bold tabular-nums">{monthly?.activities_total ?? 0}</p>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-3 border-t border-ink-900/10 pt-3 dark:border-white/10">
+          <div>
+            <p className="flex items-center gap-1.5 text-xs font-semibold"><Dumbbell size={15} className="text-gold-600 dark:text-gold-300" aria-hidden="true" /> Treinos</p>
+            <p className="mt-1 text-lg font-bold tabular-nums">{workouts}</p>
+          </div>
+          <div>
+            <p className="flex items-center gap-1.5 text-xs font-semibold"><span aria-hidden="true">🏃</span> Cardio</p>
+            <p className="mt-1 text-lg font-bold tabular-nums">{cardioMinutes} <span className="text-xs font-normal">min</span></p>
+            <p className="text-[11px] text-ink-500">{cardio.length} {cardio.length === 1 ? "registo" : "registos"}{unknownMinutes > 0 ? " · " + unknownMinutes + " sem duração" : ""}</p>
+          </div>
+        </div>
+      </section>
+      <div className="grid grid-cols-2 gap-2">
         <Stat icon={<Flame size={18} />} value={best} label="Melhor sequência" detail={best === 1 ? "semana" : "semanas"} />
         <Stat icon={<Trophy size={18} />} value={total} label="Troféus" />
       </div>
