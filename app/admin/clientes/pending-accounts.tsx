@@ -1,3 +1,5 @@
+import { EnrollmentSummary } from "@/components/enrollment/summary";
+import { createAdminClient } from "@/lib/supabase/server";
 import { createClient } from "@/lib/supabase/server";
 import { Pagination } from "@/components/pagination";
 import { PendingActions } from "./pending-actions";
@@ -56,6 +58,10 @@ export async function PendingAccounts({ page }: { page: number }) {
     .order("approval_requested_at", { ascending: true });
   const pending = (pendingData ?? []) as PendingRow[];
 
+  const { data: requests } = pending.length ? await (createAdminClient() as any).from("leap_enrollment_requests")
+    .select("client_id,interest,goal,availability,submitted_at").in("client_id",pending.map(c=>c.id)) : {data:[]};
+  const requestByClient = new Map<string, any>((requests ?? []).map((r: any)=>[r.client_id,r]));
+
   // Histórico — só contas que passaram pelo fluxo de aprovação (têm
   // approval_requested_at). Decisão mais recente primeiro. Paginado.
   const from = (page - 1) * HISTORY_PAGE_SIZE;
@@ -100,7 +106,7 @@ export async function PendingAccounts({ page }: { page: number }) {
         ) : (
           <ul className="space-y-2">
             {pending.map((c) => (
-              <li key={c.id} className="card p-4">
+              <li key={c.id} id={`pedido-${c.id}`} className="card space-y-3 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <div className="text-sm font-semibold">{c.full_name || "(sem nome)"}</div>
@@ -109,8 +115,9 @@ export async function PendingAccounts({ page }: { page: number }) {
                       {c.phone || "sem telefone"} · registou-se {fmtDate(c.approval_requested_at)}
                     </div>
                   </div>
-                  <PendingActions clientId={c.id} />
                 </div>
+                <EnrollmentSummary request={requestByClient.get(c.id)} />
+                <PendingActions clientId={c.id} />
               </li>
             ))}
           </ul>

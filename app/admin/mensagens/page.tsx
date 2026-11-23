@@ -1,3 +1,5 @@
+import { EnrollmentSummary } from "@/components/enrollment/summary";
+import { enrollmentDraft } from "@/lib/enrollment-options";
 import { loadBroadcastRecipients } from "./broadcast-actions";
 import { BroadcastForm } from "./broadcast-form";
 import { groupForBooking, loadGroupInbox } from "@/lib/group-chat";
@@ -12,14 +14,14 @@ import { ChatThread } from "@/components/chat-thread";
 import { ConversationList, type Conversation } from "@/components/conversation-list";
 
 export default async function StaffMessages({ searchParams }: {
-  searchParams: Promise<{ cliente?: string; antes?: string; nome?: string; reativacao?: string; grupo?: string; treino?: string; envio?: string }>;
+  searchParams: Promise<{ cliente?: string; antes?: string; nome?: string; reativacao?: string; grupo?: string; treino?: string; envio?: string; inscricao?: string }>;
 }) {
   const profile = await getCurrentProfile();
   if (!profile || !["owner", "trainer"].includes(profile.role)) {
     return <p className="card p-4">A caixa de entrada está disponível para os treinadores.</p>;
   }
   const staff = await requireStaff();
-  const { cliente, antes, nome, reativacao, grupo, treino, envio } = await searchParams;
+  const { cliente, antes, nome, reativacao, grupo, treino, envio, inscricao } = await searchParams;
   if (envio === "1" && staff.role === "owner") {
     return (
       <div className="mx-auto max-w-2xl space-y-4">
@@ -33,10 +35,13 @@ export default async function StaffMessages({ searchParams }: {
   if (group) return <GroupChatThread id={group} base="/admin/mensagens" />;
   const context = cliente ? await chatContext(cliente) : null;
   const alert = context && reativacao ? await getReactivationAlert(reativacao, context.clientId) : null;
-  const draft = alert && context ? await reactivationDraft(alert, context.name) : undefined;
+  const { data: enrollment } = context?.pending ? await (createAdminClient() as any).from("leap_enrollment_requests").select("interest,goal,availability").eq("client_id",context.clientId).maybeSingle() : {data:null};
+  const draft = alert && context ? await reactivationDraft(alert, context.name) : context?.pending && inscricao === "1" ? enrollmentDraft(context.name ?? "") : undefined;
   if (cliente) return (
     <div className="flex h-full min-h-0 flex-col gap-3 md:h-[calc(100dvh-11rem)] md:min-h-[28rem]">
       <Link href="/admin/mensagens" className="shrink-0 text-sm font-semibold text-gold-700 dark:text-gold-300">← Caixa de entrada</Link>
+      {context?.pending && <details className="shrink-0 text-sm"><summary className="cursor-pointer font-semibold">Pré-inscrição · ver respostas</summary><div className="mt-2"><EnrollmentSummary request={enrollment} /></div></details>}
+      {context?.pending && inscricao === "1" && <p className="shrink-0 text-xs text-ink-500">Mensagem preparada · podes editar. Só é enviada ao tocar em enviar.</p>}
       {context ? <ChatThread context={context} before={alert ? undefined : antes} draft={draft} reactivationId={alert?.id} fill /> : <p>Esta conversa não está disponível.</p>}
     </div>
   );
