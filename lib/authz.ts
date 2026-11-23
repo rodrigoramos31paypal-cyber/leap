@@ -81,7 +81,7 @@ export async function requireOwner() {
 /** 0138: bloqueio de conta por aprovar no BOUNDARY das server actions do
  *  cliente. O gate visual (app/app/layout.tsx) só cobre a navegação; as
  *  server actions são POSTs invocáveis diretamente. Devolve uma mensagem
- *  amigável se o caller for um cliente PENDENTE (para a action abortar com
+ *  amigável se o caller for um cliente sem aprovação (para a action abortar com
  *  um erro claro), ou null caso contrário (staff, cliente aprovado). */
 export async function pendingApprovalBlock(): Promise<string | null> {
   const profile = await getCurrentProfile();
@@ -91,6 +91,9 @@ export async function pendingApprovalBlock(): Promise<string | null> {
   }
   if (profile?.role === "client" && (profile as any).approval_status === "pending") {
     return "A tua conta está a aguardar aprovação. Assim que for aprovada, poderás marcar e comprar.";
+  }
+  if (profile?.role === "client" && profile.approval_status !== "approved") {
+    return "A tua conta não foi aprovada. Contacta a equipa LEAP.";
   }
   return null;
 }
