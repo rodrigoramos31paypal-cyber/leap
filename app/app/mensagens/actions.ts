@@ -44,6 +44,7 @@ export async function sendChatMessage(form: FormData) {
     p_booking_starts: booking?.starts_at ?? null,
   });
   if (error) return { error: "Não foi possível enviar. Tenta novamente." };
+  revalidatePath("/aprovacao-pendente");
   revalidatePath("/app/mensagens");
   revalidatePath("/admin/mensagens");
   return { ok: true };

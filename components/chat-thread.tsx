@@ -17,7 +17,7 @@ export async function ChatThread({ context, bookingId, before, inProfile, fill, 
 }) {
   const base = context.staff
     ? `/admin/mensagens?cliente=${context.clientId}`
-    : inProfile ? "/app/perfil?tab=chat" : `/app/mensagens?equipa=${context.staffId}`;
+    : context.pending ? "/aprovacao-pendente?chat=1" : inProfile ? "/app/perfil?tab=chat" : `/app/mensagens?equipa=${context.staffId}`;
   let query = (context.db as any).from("leap_chat_messages")
     .select("id,sender_id,body,created_at,booking_id,booking_starts_at,rescheduled_from,read_at,kind")
     .eq("client_id", context.clientId).eq("staff_id", context.staffId)
@@ -47,7 +47,7 @@ export async function ChatThread({ context, bookingId, before, inProfile, fill, 
     <div className={fill ? "flex min-h-0 flex-1 flex-col gap-3" : "space-y-4"}>
       <h2 className="shrink-0 font-display text-xl font-bold">
         {context.staff ? (
-          <Link href={`/admin/clientes/${context.clientId}`} className="underline decoration-gold-500/60 underline-offset-4 hover:decoration-gold-500">
+          <Link href={context.pending ? `/admin/clientes?tab=pendentes#pedido-${context.clientId}` : `/admin/clientes/${context.clientId}`} className="underline decoration-gold-500/60 underline-offset-4 hover:decoration-gold-500">
             {context.name ?? "Cliente"}
           </Link>
         ) : chatContactLabel(context.name ?? "Equipa LEAP")}

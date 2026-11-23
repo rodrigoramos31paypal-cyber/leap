@@ -57,7 +57,7 @@ export default async function ClientLayout({ children }: { children: React.React
   // até um admin aprovar — bloqueado da app até lá (ecrã de espera). Contas
   // criadas por admin e as já existentes ficam approved (default), por isso
   // não são afectadas.
-  if (profile?.role === "client" && (profile as any)?.approval_status === "pending") {
+  if (profile?.role === "client" && (profile as any)?.approval_status !== "approved") {
     redirect("/aprovacao-pendente");
   }
 

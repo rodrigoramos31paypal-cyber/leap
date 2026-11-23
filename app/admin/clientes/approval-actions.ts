@@ -132,3 +132,15 @@ export async function rejectAccountAction(formData: FormData): Promise<void> {
   await setFlash("Conta rejeitada e removida");
   revalidatePath("/admin/clientes");
 }
+
+export async function declineEnrollmentAction(formData: FormData): Promise<void> {
+ const actor=await requireStaff();
+ const clientId=String(formData.get("clientId")??"");
+ if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(clientId)) { await setFlash("Pedido inválido", "error"); return; }
+ const {createAdminClient}=await import("@/lib/supabase/server");
+ const {error}=await (createAdminClient() as any).rpc("leap_decline_enrollment",{p_client:clientId,p_actor:actor.id});
+ if(error) {await setFlash("Não foi possível decidir este pedido.","error");return;}
+ await logAudit("account_reject",{targetTable:"profiles",targetId:clientId});
+ await setFlash("Pedido não aprovado. Histórico mantido.");
+ revalidatePath("/admin/clientes");revalidatePath("/aprovacao-pendente");
+}
