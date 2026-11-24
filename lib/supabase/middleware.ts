@@ -93,7 +93,9 @@ export async function updateSession(
     path.startsWith("/api/cron") ||
     path.startsWith("/api/push") ||
     path.startsWith("/api/webhooks") ||
-    path.startsWith("/api/calendar/feed")
+    path.startsWith("/api/calendar/feed") ||
+    // Server-to-server: this exact handler validates a private, expiring LEAP proof.
+    path === "/api/leap-discount/verify"
   ) {
     return response;
   }
