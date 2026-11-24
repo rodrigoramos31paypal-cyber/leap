@@ -1,5 +1,6 @@
 import { EnrollmentSummary } from "@/components/enrollment/summary";
 import { enrollmentDraft } from "@/lib/enrollment-options";
+import { getProspect, prospectDraft } from "@/lib/prospects";
 import { loadBroadcastRecipients } from "./broadcast-actions";
 import { BroadcastForm } from "./broadcast-form";
 import { groupForBooking, loadGroupInbox } from "@/lib/group-chat";
@@ -14,14 +15,14 @@ import { ChatThread } from "@/components/chat-thread";
 import { ConversationList, type Conversation } from "@/components/conversation-list";
 
 export default async function StaffMessages({ searchParams }: {
-  searchParams: Promise<{ cliente?: string; antes?: string; nome?: string; reativacao?: string; grupo?: string; treino?: string; envio?: string; inscricao?: string }>;
+  searchParams: Promise<{ cliente?: string; antes?: string; nome?: string; reativacao?: string; grupo?: string; treino?: string; envio?: string; inscricao?: string; novo?: string; pack?: string }>;
 }) {
   const profile = await getCurrentProfile();
   if (!profile || !["owner", "trainer"].includes(profile.role)) {
     return <p className="card p-4">A caixa de entrada está disponível para os treinadores.</p>;
   }
   const staff = await requireStaff();
-  const { cliente, antes, nome, reativacao, grupo, treino, envio, inscricao } = await searchParams;
+  const { cliente, antes, nome, reativacao, grupo, treino, envio, inscricao, novo, pack } = await searchParams;
   if (envio === "1" && staff.role === "owner") {
     return (
       <div className="mx-auto max-w-2xl space-y-4">
@@ -36,13 +37,36 @@ export default async function StaffMessages({ searchParams }: {
   const context = cliente ? await chatContext(cliente) : null;
   const alert = context && reativacao ? await getReactivationAlert(reativacao, context.clientId) : null;
   const { data: enrollment } = context?.pending ? await (createAdminClient() as any).from("leap_enrollment_requests").select("interest,goal,availability").eq("client_id",context.clientId).maybeSingle() : {data:null};
-  const draft = alert && context ? await reactivationDraft(alert, context.name) : context?.pending && inscricao === "1" ? enrollmentDraft(context.name ?? "") : undefined;
+  const prospect = context && novo === "1" ? await getProspect(context.clientId) : null;
+  const { data: offeredPacks } = prospect?.trainer_id && prospect.completed_sessions > 0
+    ? await createAdminClient().from("packs").select("id,name,price_cents,sessions")
+      .eq("trainer_id", prospect.trainer_id).eq("active", true).gt("sessions", 1).gt("price_cents", 0)
+      .order("sessions")
+    : { data: null };
+  const chosenPack = offeredPacks?.find(row => row.id === pack);
+  let prospectMessage = prospect ? prospectDraft(prospect) : undefined;
+  if (prospect && chosenPack) {
+    const price = new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(chosenPack.price_cents / 100);
+    prospectMessage = `Olá, ${prospect.full_name?.trim().split(/\s+/)[0] || "atleta"}! Como te sentiste depois do treino? 💪 Para continuarmos, tens o ${chosenPack.name}, com ${chosenPack.sessions} sessões por ${price}. Queres que te ajude a escolher os horários? Podes ver e comprar os packs na app: https://leapfitnesstudio.com/app/comprar?trainer=${prospect.trainer_id}`;
+  }
+  const draft = prospectMessage ?? (alert && context ? await reactivationDraft(alert, context.name) : context?.pending && inscricao === "1" ? enrollmentDraft(context.name ?? "") : undefined);
   if (cliente) return (
     <div className="flex h-full min-h-0 flex-col gap-3 md:h-[calc(100dvh-11rem)] md:min-h-[28rem]">
       <Link href="/admin/mensagens" className="shrink-0 text-sm font-semibold text-gold-700 dark:text-gold-300">← Caixa de entrada</Link>
       {context?.pending && <details className="shrink-0 text-sm"><summary className="cursor-pointer font-semibold">Pré-inscrição · ver respostas</summary><div className="mt-2"><EnrollmentSummary request={enrollment} /></div></details>}
       {context?.pending && inscricao === "1" && <p className="shrink-0 text-xs text-ink-500">Mensagem preparada · podes editar. Só é enviada ao tocar em enviar.</p>}
-      {context ? <ChatThread context={context} before={alert ? undefined : antes} draft={draft} reactivationId={alert?.id} fill /> : <p>Esta conversa não está disponível.</p>}
+      {prospect && <div className="shrink-0 space-y-2 rounded-xl border border-gold-400/30 p-3">
+        <Link href="/admin/novos-clientes" className="text-xs font-semibold text-gold-700 dark:text-gold-300">← Novos clientes</Link>
+        <p className="text-xs text-ink-500">Rascunho preparado · revê e edita antes de enviar. Não atribui sessões nem aprova a conta.</p>
+        {!!offeredPacks?.length && <form action="/admin/mensagens" className="flex flex-wrap items-end gap-2">
+          <input type="hidden" name="cliente" value={prospect.client_id} /><input type="hidden" name="novo" value="1" />
+          <label className="min-w-0 flex-1 text-xs font-medium">Pack a apresentar
+            <select name="pack" defaultValue={chosenPack?.id ?? ""} className="input mt-1 w-full"><option value="">Sem pack específico</option>{offeredPacks.map(row => <option key={row.id} value={row.id}>{row.name} · {new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(row.price_cents / 100)}</option>)}</select>
+          </label><button type="submit" className="btn-outline min-h-11 text-xs">Preparar rascunho</button>
+          <p className="w-full text-[11px] text-ink-500">Preparar outro rascunho substitui o texto ainda não enviado.</p>
+        </form>}
+      </div>}
+      {context ? <ChatThread context={context} before={alert || prospect ? undefined : antes} draft={draft} draftKey={prospect ? `prospect:${chosenPack?.id ?? "intro"}` : undefined} reactivationId={alert?.id} fill /> : <p>Esta conversa não está disponível.</p>}
     </div>
   );
   const term = typeof nome === "string" ? nome.trim().slice(0, 80) : "";
