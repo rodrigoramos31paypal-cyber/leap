@@ -8,6 +8,7 @@ import { getClientCredits, getClientCreditsByTrainer } from "@/lib/credits";
 import { formatDateTime, pluralize } from "@/lib/utils";
 import { Calendar, ShoppingBag, AlertCircle, ChevronRight, Trophy } from "lucide-react";
 import { levelForStreak, LEVEL_LABEL } from "@/lib/streak";
+import { currentPeriodLisbon } from "@/lib/ranking-periods";
 import { getTrainerForClient, getActiveTrainersPublic } from "@/lib/trainer";
 import { PushSubscribeCard } from "@/components/push-subscribe-card";
 import { PromoSlot } from "@/components/promo-slot";
@@ -233,14 +234,17 @@ async function BelowFold({
     countAttendance("no_show"),
     // Sequência LEAP (0149): sequência atual + estado da semana em curso.
     (supabase as any).rpc("get_client_streak", { p_client: userId }),
-    // Posição no Ranking LEAP (card): resolve o trainer e busca o rank.
+    // Usa o mesmo cálculo mensal e mês de Lisboa da classificação.
     (async () => {
       const tId =
         (await getTrainerForClient(userId)) ??
         (await getActiveTrainersPublic())[0]?.id ??
         null;
       if (!tId) return null;
-      const { data } = await (supabase as any).rpc("get_leaderboard", { p_trainer: tId });
+      const { data } = await (supabase as any).rpc("get_leaderboard_month", {
+        p_trainer: tId,
+        p_period: currentPeriodLisbon(),
+      });
       return (data as any[] | null) ?? null;
     })(),
   ]);
