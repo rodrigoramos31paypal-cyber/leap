@@ -7,6 +7,7 @@ import { chatStaffId, chatContext, getChatBooking, isChatId } from "@/lib/chat";
 import { rateLimit } from "@/lib/rate-limit";
 import { revalidatePath } from "next/cache";
 import { dispatchProspectEmails } from "@/lib/prospect-email";
+import { emailEnabled } from "@/lib/email";
 
 export async function sendChatMessage(form: FormData) {
   const target = form.get("clientId");
@@ -30,6 +31,7 @@ export async function sendChatMessage(form: FormData) {
   if (bookingId && !booking) return { error: "Não foi possível associar este treino." };
   if (prospectEmail !== null) {
     if (prospectEmail !== "1" || !context.staff || bookingId || reactivationId) return { error: "Convite inválido." };
+    if (!emailEnabled()) return { error: "O envio de emails está indisponível. O convite ainda não foi enviado." };
     const actor = await requireStaff();
     const { data, error } = await (context.db as any).rpc("leap_prospect_send", {
       p_actor: actor.id, p_client: context.clientId, p_staff: context.staffId, p_id: requestId, p_body: body.trim(),

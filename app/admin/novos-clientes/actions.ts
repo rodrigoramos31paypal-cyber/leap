@@ -5,6 +5,7 @@ import { requireStaff, requireOwner } from "@/lib/authz";
 import { randomUUID } from "node:crypto";
 import { adminDeleteClientAction } from "@/app/admin/clientes/[id]/actions";
 import { dispatchProspectEmails } from "@/lib/prospect-email";
+import { emailEnabled } from "@/lib/email";
 import { isChatId } from "@/lib/chat";
 import { createAdminClient } from "@/lib/supabase/server";
 
@@ -25,6 +26,7 @@ export async function setProspectPreference(clientId: string, disposition: "acti
 export async function deleteProspectAccount(clientId: string, confirm: string) {
   const owner = await requireOwner();
   if (!isChatId(clientId) || confirm.trim() !== "APAGAR") return { error: "Escreve APAGAR para confirmar." };
+  if (!emailEnabled()) return { error: "O envio de emails está indisponível. A conta não foi eliminada." };
   const db = createAdminClient() as any;
   const { data: id, error } = await db.rpc("leap_prospect_prepare_deletion", {
     p_actor: owner.id, p_client: clientId, p_id: randomUUID(),

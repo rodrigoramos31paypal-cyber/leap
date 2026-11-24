@@ -12,6 +12,7 @@ function load(file, { denied=false, rows=[], rpcResult='ok' }={}) {
     if(name==='server-only')return {};
     if(name==='react')return {cache:fn=>fn};
     if(name==='next/cache')return {revalidatePath:path=>paths.push(path)};
+    if(name==='@/lib/email')return {emailEnabled:()=>true};
     if(name==='@/lib/prospect-email')return {dispatchProspectEmails:async()=> 'queued'};
     if(name==='@/app/admin/clientes/[id]/actions')return {adminDeleteClientAction:async()=>({ok:true})};
     if(name==='node:crypto')return require('node:crypto');
