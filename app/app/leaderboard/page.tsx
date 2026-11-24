@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Trophy, ChevronLeft, ChevronRight, Info, Flame } from "lucide-react";
+import { ChevronLeft, ChevronRight, Info, Flame } from "lucide-react";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { getTrainerForClient, getActiveTrainersPublic } from "@/lib/trainer";
 import { displayName } from "@/lib/streak";
@@ -26,8 +26,8 @@ type Row = {
 
 type Medals = { gold: number; silver: number; bronze: number };
 
-const PODIUM = ["#F4ECC4", "#E7E7E2", "#FAECE7"]; // ouro, prata, bronze
-const PODIUM_TEXT = ["#65540B", "#5F5E5A", "#993C1D"];
+const PODIUM = ["#D6BD31", "#BFC0C2", "#B47A49"]; // ouro, prata, bronze
+const PODIUM_TEXT = ["#201B06", "#202124", "#24170E"];
 
 function pctLabel(p: number | null | undefined): string {
   return p == null ? "—" : `${p}%`;
@@ -153,10 +153,10 @@ export default async function LeaderboardPage(props: {
               >
                 {podium ? (
                   <span
-                    className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[12px] font-bold"
+                    className="mx-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-semibold"
                     style={{ background: PODIUM[r.rank - 1], color: PODIUM_TEXT[r.rank - 1] }}
                   >
-                    {r.rank === 1 ? <Trophy size={13} /> : r.rank}
+                    {r.rank}
                   </span>
                 ) : (
                   <span className="grid h-6 w-6 shrink-0 place-items-center text-[13px] font-medium text-ink-400">
@@ -169,7 +169,7 @@ export default async function LeaderboardPage(props: {
                     {isMe ? "Tu · " : ""}
                     {displayName(r.full_name)}
                   </span>
-                  {medals && <MedalBadges gold={medals.gold} silver={medals.silver} bronze={medals.bronze} />}
+                  {medals && <MedalBadges variant="ranking" gold={medals.gold} silver={medals.silver} bronze={medals.bronze} />}
                 </div>
 
                 <span className="w-16 shrink-0 text-right text-sm font-semibold tabular-nums">

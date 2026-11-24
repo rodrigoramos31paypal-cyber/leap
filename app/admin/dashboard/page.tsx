@@ -1,4 +1,5 @@
 import { ReactivationDashboard } from "@/components/reactivation-dashboard";
+import { loadProspects } from "@/lib/prospects";
 import Link from "next/link";
 import { Suspense } from "react";
 import { createClient, getCurrentProfile } from "@/lib/supabase/server";
@@ -118,7 +119,7 @@ async function Kpis({ year, month }: { year: number; month: number }) {
   // vazio devolve zeros. FALLBACK: se a RPC falhar (ex.: codigo deployed
   // antes da migracao 0084 ser aplicada), corre o caminho antigo para o
   // dashboard nao partir.
-  const [kpiRes, totalClientsInScope, pendingActivities, pendingApprovalRes] = await Promise.all([
+  const [kpiRes, totalClientsInScope, pendingActivities, pendingApprovalRes, prospects] = await Promise.all([
     (supabase as any).rpc("get_dashboard_kpis", {
       p_trainer_ids: trainerIds,
       p_month_start: monthStart.toISOString(),
@@ -140,6 +141,7 @@ async function Kpis({ year, month }: { year: number; month: number }) {
       .select("id", { count: "exact", head: true })
       .eq("role", "client")
       .eq("approval_status", "pending"),
+    loadProspects().catch(() => null),
   ]);
   const pendingApprovalCount = (pendingApprovalRes as any)?.count ?? 0;
 
@@ -227,7 +229,7 @@ async function Kpis({ year, month }: { year: number; month: number }) {
     <>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat icon={<TrendingUp size={16} />} label="Receita do mês" value={eur(revenue)} href="/admin/pagamentos?tab=confirmados" />
-        <Stat icon={<Users size={16} />} label="Clientes ativos no mês" value={String(activeClients)} />
+        <Stat icon={<Users size={16} />} label="Novos clientes" value={prospects === null ? "—" : String(prospects.filter(row => row.disposition === "active").length)} href="/admin/novos-clientes" />
         <Stat
           icon={<Activity size={16} />}
           label="Atividades por validar"

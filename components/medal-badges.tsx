@@ -10,6 +10,7 @@ type Props = {
   silver?: number;
   bronze?: number;
   size?: number;
+  variant?: "default" | "ranking";
 };
 
 const TIERS = [
@@ -18,7 +19,7 @@ const TIERS = [
   { key: "bronze", label: "bronze", color: "#A96A33", bg: "#F3E1D1" },
 ] as const;
 
-export function MedalBadges({ gold = 0, silver = 0, bronze = 0, size = 11 }: Props) {
+export function MedalBadges({ gold = 0, silver = 0, bronze = 0, size = 11, variant = "default" }: Props) {
   const items = [
     { n: gold, ...TIERS[0] },
     { n: silver, ...TIERS[1] },
@@ -31,8 +32,8 @@ export function MedalBadges({ gold = 0, silver = 0, bronze = 0, size = 11 }: Pro
       {items.map((i) => (
         <span
           key={i.key}
-          className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none tabular-nums"
-          style={{ background: i.bg, color: i.color }}
+          className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none tabular-nums ${variant === "ranking" ? "bg-ink-900/5 dark:bg-white/[0.07]" : ""}`}
+          style={variant === "ranking" ? { color: i.key === "gold" ? "#B99B16" : i.key === "silver" ? "#92969D" : "#AF7546" } : { background: i.bg, color: i.color }}
           title={`${i.n}× ${i.label}`}
         >
           <Trophy size={size} strokeWidth={2.3} />
