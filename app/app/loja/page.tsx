@@ -10,7 +10,7 @@ export default async function LojaPage() {
     .select("id", { count: "exact", head: true }).eq("category", "roupa").eq("active", true);
   const categories = [
     { title: "Packs", detail: "Escolhe as tuas sessões", href: "/app/comprar", icon: Package },
-    { title: "Treino e alimentação", detail: "Apoio à tua rotina fora do estúdio", href: "/app/loja/leap-extra", icon: Dumbbell },
+    { title: "Treino e alimentação", detail: "Com código de desconto exclusivo LEAP", href: "/app/loja/leap-extra", icon: Dumbbell },
     { title: "Suplementos", detail: "Proteína, creatina e mais", href: "/app/loja/suplementos", icon: Pill },
     { title: "E-books", detail: "João Pedro Mendes", href: "https://joaopedromendes.com", icon: BookOpen, external: true },
   ];
