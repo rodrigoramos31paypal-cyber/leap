@@ -4,6 +4,7 @@ import { sendEmail, emailTemplates, emailEnabled } from "@/lib/email";
 import { emailAllowed } from "@/lib/notifications-config";
 import { formatDateTime } from "@/lib/utils";
 import { verifyBearer } from "@/lib/secrets";
+import { dispatchProspectEmails } from "@/lib/prospect-email";
 import { logError } from "@/lib/errors";
 
 // ════════════════════════════════════════════════════════════════
@@ -36,6 +37,8 @@ export async function GET(request: NextRequest) {
   const emailOn = emailEnabled();
 
   const supabase = createAdminClient();
+  // Retry only emails explicitly requested by staff, even when there are no sessions due.
+  await dispatchProspectEmails().catch(() => {});
   const now = new Date();
   const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 

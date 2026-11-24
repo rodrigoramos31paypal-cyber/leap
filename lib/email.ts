@@ -18,6 +18,8 @@ type SendArgs = {
   html: string;
   text?: string;
   replyTo?: string;
+  idempotencyKey?: string;
+  timeoutMs?: number;
 };
 
 export function emailEnabled(): boolean {
@@ -57,7 +59,9 @@ export async function sendEmail(args: SendArgs): Promise<{ ok: boolean; error?: 
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        ...(args.idempotencyKey ? { "Idempotency-Key": args.idempotencyKey } : {}),
       },
+      signal: args.timeoutMs ? AbortSignal.timeout(args.timeoutMs) : undefined,
       body: JSON.stringify({
         from,
         to: args.to,
@@ -93,7 +97,7 @@ const LOGO_SRC = `cid:${EMAIL_LOGO_CID}`;
 // poluía o cabeçalho. Mantém-se hardcoded para garantir consistência.
 const BRAND_NAME = "LEAP Fitness Studio";
 
-function shell(title: string, body: string, cta?: { label: string; href: string }) {
+function shell(title: string, body: string, cta?: { label: string; href: string }, footer?: string) {
   // Botão CTA opcional. Renderizado como bulletproof button (table-based)
   // para Outlook e clientes mais antigos.
   const ctaHtml = cta
@@ -108,7 +112,7 @@ function shell(title: string, body: string, cta?: { label: string; href: string 
 <html><body style="margin:0;padding:0;background:#faf8f4;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;color:#1a1a1a">
 <table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px;background:#faf8f4">
   <tr><td align="center">
-    <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #ece8de;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(26,26,26,0.04)">
+    <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #ece8de;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(26,26,26,0.04)">
       <tr><td align="center" style="padding:28px 28px 8px;background:#ffffff">
         <img src="${LOGO_SRC}" alt="${escapeHtml(BRAND_NAME)}" width="56" height="56" style="display:block;width:56px;height:56px;border:0;outline:none;text-decoration:none" />
         <div style="margin-top:10px;font-weight:700;font-size:13px;letter-spacing:.08em;color:#1a1a1a;text-transform:uppercase">${escapeHtml(BRAND_NAME)}</div>
@@ -120,7 +124,7 @@ function shell(title: string, body: string, cta?: { label: string; href: string 
         ${ctaHtml}
       </td></tr>
       <tr><td style="padding:18px 36px;background:#faf8f4;color:#7a7466;font-size:11px;line-height:1.6;border-top:1px solid #f1ede4">
-        ${escapeHtml(BRAND_NAME)} · este é um email automático. Se tiveres dúvidas responde a esta mensagem.
+        ${escapeHtml(BRAND_NAME)} · ${escapeHtml(footer ?? "este é um email automático. Se tiveres dúvidas responde a esta mensagem.")}
       </td></tr>
     </table>
   </td></tr>
@@ -133,6 +137,27 @@ function escapeHtml(s: string) {
 }
 
 export const emailTemplates = {
+  prospectInvitation(args: { body: string; href: string; continuation: boolean }) {
+    const title = args.continuation ? "Vamos continuar o teu treino?" : "O teu primeiro passo na LEAP 💪";
+    const content = args.body.split(/\n\s*\n/).map(paragraph =>
+      `<p style="margin:0 0 16px;white-space:pre-line;overflow-wrap:anywhere">${escapeHtml(paragraph)}</p>`).join("");
+    return {
+      subject: args.continuation ? "LEAP · Vamos dar continuidade ao teu treino?" : "LEAP · Vamos combinar o teu primeiro treino? 💪",
+      html: shell(title,
+        `<div style="margin:0 0 18px;padding:10px 14px;border-left:3px solid #caa14a;background:#faf8f4;font-size:12px;font-weight:700;letter-spacing:.06em;color:#8b6a22">UMA MENSAGEM DA EQUIPA LEAP</div>${content}<p style="margin:0 0 18px;font-size:13px;color:#7a7466">Abre a LEAP para responderes diretamente no chat. O próximo passo começa por uma conversa.</p>`,
+        { label: "Responder na LEAP", href: `${EMAIL_APP_URL}${args.href}` }, "Abre a app para falar com a equipa."),
+      text: `${args.body}\n\nResponde no chat da LEAP: ${EMAIL_APP_URL}${args.href}`,
+    };
+  },
+  prospectAccountRemoved() {
+    return {
+      subject: "LEAP · A tua conta foi encerrada",
+      html: shell("A tua conta LEAP foi encerrada",
+        `<p style="margin:0 0 14px">Olá,</p><p style="margin:0 0 14px">A equipa LEAP encerrou a conta associada a este email. O acesso a essa conta foi desativado.</p><p style="margin:0 0 18px">Se quiseres voltar a conhecer o estúdio ou treinar connosco, estamos por aqui. Podes iniciar um novo registo e falar com a equipa.</p>`,
+        { label: "Conhecer a LEAP", href: EMAIL_APP_URL }, "Se precisares de ajuda, contacta a equipa LEAP."),
+      text: `A equipa LEAP encerrou a conta associada a este email. O acesso foi desativado. Se quiseres voltar a treinar connosco, visita ${EMAIL_APP_URL}.`,
+    };
+  },
   bookingCreated(args: { clientName: string; when: string; type: string }) {
     return {
       subject: "Sessão marcada",

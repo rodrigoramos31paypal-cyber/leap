@@ -63,7 +63,7 @@ begin
  assert (select count(*) from pg_temp.leap_prospect_list(owner_id))=0,'blocked account visible';
  update pg_temp.profiles set access_blocked=false where id=client_id;
  update pg_temp.profiles set approval_status='pending',approval_notified_at=null where id=client_id;
- assert (select count(*) from pg_temp.leap_prospect_list(owner_id))=0,'unverified pending account visible';
+ assert (select count(*) from pg_temp.leap_prospect_list(owner_id))=1,'abandoned unverified registration missing';
  update pg_temp.profiles set approval_notified_at=now() where id=client_id;
  assert (select count(*) from pg_temp.leap_prospect_list(owner_id))=1,'verified pending account missing';
 end $$;

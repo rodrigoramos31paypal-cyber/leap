@@ -13,7 +13,7 @@ const dayKey = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Lisbon", dat
 const dayLabel = new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", dateStyle: "medium" });
 const messageTime = new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", hour: "2-digit", minute: "2-digit" });
 
-export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId, booking, latest, fill, draft, reactivationId, groupId, senderNames }: {
+export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId, booking, latest, fill, draft, reactivationId, prospectEmail, groupId, senderNames }: {
   messages: ChatMessage[];
   reviewLinks: Record<string, string>;
   userId: string;
@@ -24,6 +24,7 @@ export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId
   fill?: boolean;
   draft?: string;
   reactivationId?: string;
+  prospectEmail?: boolean;
   groupId?: string;
   senderNames?: Record<string,string>;
 }) {
@@ -148,6 +149,7 @@ export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId
           if (clientId) form.set("clientId", clientId);
           if (recipientId) form.set("recipientId", recipientId);
           if (alertId) form.set("reactivationId", alertId);
+          if (prospectEmail) form.set("prospectEmail", "1");
           if (booking) form.set("bookingId", booking.id);
           startTransition(async () => {
             try {
@@ -156,6 +158,14 @@ export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId
               requestId.current = null;
               followLatest.current = true;
               setBody("");
+              if (prospectEmail && clientId && "emailStatus" in result) {
+                const sent = result.emailStatus === "sent";
+                window.dispatchEvent(new CustomEvent("leap:toast", { detail: {
+                  kind: sent ? "success" : "info",
+                  title: sent ? "Mensagem e email enviados" : result.emailStatus === "disabled" ? "Mensagem enviada · email desativado pelo cliente" : "Mensagem enviada · email em fila para envio",
+                } }));
+                router.replace(`/admin/mensagens?cliente=${clientId}`);
+              }
               if (alertId && clientId) {
                 setAlertId(undefined);
                 router.replace(`/admin/mensagens?cliente=${clientId}`);
@@ -170,6 +180,7 @@ export function ChatPanel({ messages, reviewLinks, userId, clientId, recipientId
             }
           `}</style>}
           {alertId && <p className="text-xs font-semibold">Rascunho de reativação · podes editar antes de enviar</p>}
+          {prospectEmail && <p className="text-xs font-semibold text-gold-700 dark:text-gold-300">Este convite será enviado no chat e por email.</p>}
           {booking && <p className="text-xs font-semibold">Sobre o treino de {formatDateTime(booking.starts_at)}</p>}
           <div className="flex items-end gap-2">
             <label htmlFor="chat-body" className="sr-only">Mensagem</label>

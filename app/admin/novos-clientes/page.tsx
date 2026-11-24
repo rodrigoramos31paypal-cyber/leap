@@ -2,6 +2,8 @@ import Link from "next/link";
 import { MessageCircle, CalendarClock } from "lucide-react";
 import { loadProspects } from "@/lib/prospects";
 import { ProspectActions } from "./prospect-actions";
+import { DeleteProspect } from "./delete-prospect";
+import { getCurrentProfile } from "@/lib/supabase/server";
 
 const date = new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", dateStyle: "short" });
 const dateTime = new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", dateStyle: "short", timeStyle: "short" });
@@ -13,6 +15,7 @@ export default async function NewClients({ searchParams }: { searchParams: Promi
     return <div className="space-y-4"><Link href="/admin/dashboard" className="text-sm text-gold-700 dark:text-gold-300">← Dashboard</Link><h1 className="font-display text-2xl font-bold">Novos clientes</h1><p role="alert" className="card p-4">Não foi possível carregar a lista. Atualiza a página.</p></div>;
   }
   const archived = tab === "adiados";
+  const canDelete = (await getCurrentProfile())?.role === "owner";
   const active = rows.filter(row => row.disposition === "active");
   const archive = rows.filter(row => row.disposition !== "active");
   const visible = archived ? archive : active;
@@ -27,7 +30,7 @@ export default async function NewClients({ searchParams }: { searchParams: Promi
       <Link aria-current={!archived ? "page" : undefined} href="/admin/novos-clientes" className={!archived ? "btn-primary" : "btn-outline"}>Por acompanhar · {active.length}</Link>
       <Link aria-current={archived ? "page" : undefined} href="/admin/novos-clientes?tab=adiados" className={archived ? "btn-primary" : "btn-outline"}>Adiados / sem interesse · {archive.length}</Link>
     </div>
-    <p className="text-xs leading-relaxed text-ink-500">Contas aprovadas ou com email verificado, até uma sessão realizada e sem compra confirmada de um pack pago. Inclui registos anteriores a este mês. Compras em processamento ficam fora desta lista. Ao comprar o primeiro pack, o cliente sai automaticamente daqui.</p>
+    <p className="text-xs leading-relaxed text-ink-500">Registos sem compra confirmada de um pack pago, com até uma sessão realizada. Inclui pessoas que se registaram e nunca voltaram, mesmo sem confirmar o email, e registos de meses anteriores. Compras em processamento ficam fora desta lista.</p>
     {sections.map(section => <section key={section.title} className="space-y-3">
       <header><h2 className="text-base font-bold">{section.title} <span className="text-ink-500">· {section.rows.length}</span></h2><p className="text-xs text-ink-500">{section.description}</p></header>
       {!section.rows.length ? <p className="card p-4 text-sm text-ink-500">Sem clientes nesta lista.</p> : <ul className="space-y-3">{section.rows.map(row => <li key={row.client_id} className="card space-y-2 p-4">
@@ -43,8 +46,9 @@ export default async function NewClients({ searchParams }: { searchParams: Promi
         {archived && <p className="text-xs font-medium">{row.disposition === "declined" ? "Sem interesse" : `Adiado até ${date.format(new Date(row.snooze_until!))}`}</p>}
         {!archived && <Link href={`/admin/mensagens?cliente=${row.client_id}&novo=1`} className="btn-outline inline-flex min-h-11 items-center gap-2 text-sm"><MessageCircle size={15} aria-hidden="true" />{row.completed_sessions ? "Apresentar packs" : row.next_session_at ? "Preparar a experiência" : "Convidar para experimentar"}</Link>}
         <ProspectActions clientId={row.client_id} archived={archived} />
+        {canDelete && !row.next_session_at && <DeleteProspect clientId={row.client_id} name={row.full_name || "Cliente"} />}
       </li>)}</ul>}
     </section>)}
-    <p className="text-xs text-ink-500">Os atalhos abrem um rascunho editável no chat. Nenhuma mensagem é enviada e nenhuma sessão é oferecida automaticamente.</p>
+    <p className="text-xs text-ink-500">Os atalhos abrem um rascunho editável. Ao enviares, o convite segue no chat e por email. Eliminar uma conta exige confirmação e envia um aviso por email depois de concluído. Nenhuma sessão é oferecida automaticamente.</p>
   </div>;
 }

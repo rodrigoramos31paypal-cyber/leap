@@ -57,7 +57,7 @@ export default async function StaffMessages({ searchParams }: {
       {context?.pending && inscricao === "1" && <p className="shrink-0 text-xs text-ink-500">Mensagem preparada · podes editar. Só é enviada ao tocar em enviar.</p>}
       {prospect && <div className="shrink-0 space-y-2 rounded-xl border border-gold-400/30 p-3">
         <Link href="/admin/novos-clientes" className="text-xs font-semibold text-gold-700 dark:text-gold-300">← Novos clientes</Link>
-        <p className="text-xs text-ink-500">Rascunho preparado · revê e edita antes de enviar. Não atribui sessões nem aprova a conta.</p>
+        <p className="text-xs text-ink-500">Rascunho preparado · ao enviar, segue no chat e também por email, respeitando as preferências do cliente. Não atribui sessões nem aprova a conta.</p>
         {!!offeredPacks?.length && <form action="/admin/mensagens" className="flex flex-wrap items-end gap-2">
           <input type="hidden" name="cliente" value={prospect.client_id} /><input type="hidden" name="novo" value="1" />
           <label className="min-w-0 flex-1 text-xs font-medium">Pack a apresentar
@@ -66,7 +66,7 @@ export default async function StaffMessages({ searchParams }: {
           <p className="w-full text-[11px] text-ink-500">Preparar outro rascunho substitui o texto ainda não enviado.</p>
         </form>}
       </div>}
-      {context ? <ChatThread context={context} before={alert || prospect ? undefined : antes} draft={draft} draftKey={prospect ? `prospect:${chosenPack?.id ?? "intro"}` : undefined} reactivationId={alert?.id} fill /> : <p>Esta conversa não está disponível.</p>}
+      {context ? <ChatThread context={context} before={alert || prospect ? undefined : antes} draft={draft} draftKey={prospect ? `prospect:${chosenPack?.id ?? "intro"}` : undefined} prospectEmail={!!prospect} reactivationId={alert?.id} fill /> : <p>Esta conversa não está disponível.</p>}
     </div>
   );
   const term = typeof nome === "string" ? nome.trim().slice(0, 80) : "";
