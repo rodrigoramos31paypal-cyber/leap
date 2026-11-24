@@ -6,6 +6,8 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { chatStaffId, chatContext, getChatBooking, isChatId } from "@/lib/chat";
 import { rateLimit } from "@/lib/rate-limit";
 import { revalidatePath } from "next/cache";
+import { dispatchProspectEmails } from "@/lib/prospect-email";
+import { emailEnabled } from "@/lib/email";
 
 export async function sendChatMessage(form: FormData) {
   const target = form.get("clientId");
@@ -13,6 +15,7 @@ export async function sendChatMessage(form: FormData) {
   if (recipient !== null && !isChatId(recipient)) return { error: "Conversa inválida." };
   const bookingId = form.get("bookingId");
   const reactivationId = form.get("reactivationId");
+  const prospectEmail = form.get("prospectEmail");
   const body = form.get("body");
   const requestId = form.get("requestId");
   if ((target !== null && !isChatId(target)) || !isChatId(requestId) ||
@@ -26,6 +29,21 @@ export async function sendChatMessage(form: FormData) {
   }
   const booking = typeof bookingId === "string" && bookingId ? await getChatBooking(context, bookingId) : null;
   if (bookingId && !booking) return { error: "Não foi possível associar este treino." };
+  if (prospectEmail !== null) {
+    if (prospectEmail !== "1" || !context.staff || bookingId || reactivationId) return { error: "Convite inválido." };
+    if (!emailEnabled()) return { error: "O envio de emails está indisponível. O convite ainda não foi enviado." };
+    const actor = await requireStaff();
+    const { data, error } = await (context.db as any).rpc("leap_prospect_send", {
+      p_actor: actor.id, p_client: context.clientId, p_staff: context.staffId, p_id: requestId, p_body: body.trim(),
+    });
+    if (error || !["ok", "email_disabled"].includes(data)) return { error: data === "invalid_email" ? "Esta conta não tem um email válido." : "Este convite já não está disponível. Atualiza a lista de novos clientes." };
+    const emailStatus = data === "email_disabled" ? "disabled" : await dispatchProspectEmails(requestId).catch(() => "queued" as const);
+    revalidatePath("/admin/novos-clientes");
+    revalidatePath("/admin/mensagens");
+    revalidatePath("/app/mensagens");
+    revalidatePath("/aprovacao-pendente");
+    return { ok: true, emailStatus };
+  }
   if (reactivationId !== null) {
     if (!context.staff || !isChatId(reactivationId) || !await getReactivationAlert(reactivationId, context.clientId)) {
       return { error: "Este alerta de reativação não está disponível." };
